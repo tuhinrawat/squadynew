@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Auction, Player, Bidder, PlayerStatus, AuctionStatus } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,24 +68,23 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [players, setPlayers] = useState(auction.players)
 
   // Refresh auction state from server  
-  const refreshAuctionState = async () => {
+  const refreshAuctionState = useCallback(async () => {
     try {
-      // The auction data is already fetched on server side and passed as props
-      // We just need to re-trigger the initialization logic
-      const response = await fetch(`/api/auction/${auction.id}/info`)
-      const updatedAuction = await response.json()
+      // Fetch updated auction data
+      const response = await fetch(`/api/auctions/${auction.id}`)
+      const data = await response.json()
       
-      if (updatedAuction.bidHistory && Array.isArray(updatedAuction.bidHistory)) {
+      if (data.auction?.bidHistory && Array.isArray(data.auction.bidHistory)) {
         // Update full bid history - the useEffect will filter it for current player
-        setFullBidHistory(updatedAuction.bidHistory)
+        setFullBidHistory(data.auction.bidHistory)
       }
     } catch (error) {
       console.error('Failed to refresh auction state:', error)
     }
-  }
+  }, [auction.id])
 
   // Refresh players list from server
-  const refreshPlayersList = async () => {
+  const refreshPlayersList = useCallback(async () => {
     try {
       const response = await fetch(`/api/auctions/${auction.id}`)
       const data = await response.json()
@@ -95,47 +94,30 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     } catch (error) {
       console.error('Failed to refresh players list:', error)
     }
-  }
+  }, [auction.id])
 
   // Helper function to get player-specific bid history
   const getPlayerBidHistory = (playerId: string | null, fullHistory: BidHistoryEntry[]) => {
     if (!playerId) return []
     
-    // Find the player in the full auction bid history
-    // We need to find all bids for this specific player
-    // A player's bid history is from their last sale/unsold event to their previous sale/unsold event
-    
-    // First, find this player's current sale/unsold event (if exists)
-    let currentPlayerSaleEventIndex = -1
+    // Find the last sale/unsold event (for any player)
+    let lastSaleEventIndex = -1
     for (let i = fullHistory.length - 1; i >= 0; i--) {
       const entry = fullHistory[i]
       if (entry.type === 'sold' || entry.type === 'unsold') {
-        // Check if this is for the current player by looking at the player data
-        if (entry.playerId === playerId) {
-          currentPlayerSaleEventIndex = i
-          break
-        }
-      }
-    }
-    
-    // If no sale event found, return empty (fresh player)
-    if (currentPlayerSaleEventIndex === -1) return []
-    
-    // Find the previous sale/unsold event (for the previous player)
-    let previousSaleEventIndex = -1
-    for (let i = currentPlayerSaleEventIndex - 1; i >= 0; i--) {
-      const entry = fullHistory[i]
-      if (entry.type === 'sold' || entry.type === 'unsold') {
-        previousSaleEventIndex = i
+        lastSaleEventIndex = i
         break
       }
     }
     
-    // Extract bids between the two sale events (or from beginning to current sale event)
-    const startIndex = previousSaleEventIndex + 1
-    const endIndex = currentPlayerSaleEventIndex + 1
+    // If no sale event found, return all bids (first player being auctioned)
+    if (lastSaleEventIndex === -1) {
+      return fullHistory.slice().reverse()
+    }
     
-    return fullHistory.slice(startIndex, endIndex).reverse()
+    // Return all bids after the last sale event (current player being auctioned)
+    const recentBids = fullHistory.slice(lastSaleEventIndex + 1)
+    return recentBids.reverse()
   }
 
   // Set client-side rendered flag
@@ -145,23 +127,26 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
   // Filter bid history for current player whenever player changes
   useEffect(() => {
+    console.log('AdminAuctionView: useEffect triggered, currentPlayer:', currentPlayer?.id, 'fullBidHistory length:', fullBidHistory.length)
     if (currentPlayer?.id) {
       const playerBidHistory = getPlayerBidHistory(currentPlayer.id, fullBidHistory)
+      console.log('AdminAuctionView: Filtered playerBidHistory:', playerBidHistory)
       setBidHistory(playerBidHistory)
       
-      // Set current bid if there's a bid for this player
-      const lastBid = playerBidHistory.find(bid => !bid.type || bid.type === 'bid')
-      if (lastBid) {
+      // Get the most recent bid (first item in the reversed array)
+      const latestBid = playerBidHistory[0]
+      console.log('AdminAuctionView: latestBid:', latestBid, 'current bid state:', currentBid)
+      
+      // Only update if we have a bid and it's different from current
+      if (latestBid && !latestBid.type) {
+        console.log('AdminAuctionView: Setting current bid to latest bid')
         setCurrentBid({
-          bidderId: lastBid.bidderId,
-          amount: lastBid.amount,
-          bidderName: lastBid.bidderName,
-          teamName: lastBid.teamName
+          bidderId: latestBid.bidderId,
+          amount: latestBid.amount,
+          bidderName: latestBid.bidderName,
+          teamName: latestBid.teamName
         })
-        setHighestBidderId(lastBid.bidderId)
-      } else {
-        setCurrentBid(null)
-        setHighestBidderId(null)
+        setHighestBidderId(latestBid.bidderId)
       }
     } else {
       setBidHistory([])
@@ -177,85 +162,104 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     }
   }, [currentPlayer?.id, initialPlayer?.id])
 
+  // Memoize callbacks to prevent re-subscription
+  const handleNewBid = useCallback((data: any) => {
+    console.log('AdminAuctionView: handleNewBid called', data)
+    setCurrentBid({
+      bidderId: data.bidderId,
+      amount: data.amount,
+      bidderName: data.bidderName,
+      teamName: data.teamName
+    })
+    setHighestBidderId(data.bidderId)
+    setTimer(data.countdownSeconds || 30)
+    // Add new bid to full history
+    const newBidEntry = {
+      type: 'bid' as const,
+      bidderId: data.bidderId,
+      amount: data.amount,
+      timestamp: new Date(),
+      bidderName: data.bidderName,
+      teamName: data.teamName
+    }
+    setFullBidHistory(prev => [newBidEntry, ...prev])
+    // Also add to current player's filtered history
+    setBidHistory(prev => [newBidEntry, ...prev])
+  }, [])
+
+  const handleBidUndo = useCallback((data: any) => {
+    // Remove last bid from history
+    setBidHistory(prev => prev.slice(1))
+    // Update current bid
+    if (data.currentBid && data.currentBid.amount > 0) {
+      setCurrentBid({
+        bidderId: data.currentBid.bidderId,
+        amount: data.currentBid.amount,
+        bidderName: data.currentBid.bidderName,
+        teamName: data.currentBid.teamName
+      })
+      setHighestBidderId(data.currentBid.bidderId)
+    } else {
+      setCurrentBid(null)
+      setHighestBidderId(null)
+    }
+    const rules = auction.rules as any
+    setTimer(rules?.countdownSeconds || 30)
+  }, [auction.rules])
+
+  const handleSaleUndo = useCallback(() => {
+    // Reload to get updated state
+    window.location.reload()
+  }, [])
+
+  const handleTimerUpdate = useCallback((data: any) => {
+    if (!isPaused) {
+      setTimer(data.seconds)
+    }
+  }, [isPaused])
+
+  const handlePlayerSold = useCallback(() => {
+    setSoldAnimation(true)
+    setTimeout(() => {
+      setSoldAnimation(false)
+      // Don't auto-advance - let admin control it manually
+    }, 3000)
+  }, [])
+
+  const handleNewPlayer = useCallback((data: any) => {
+    setIsImageLoading(true)
+    setCurrentPlayer(data.player)
+    setTimer(30)
+    setBidHistory([]) // Clear bid history for new player
+    // Refresh full bid history from server when new player loads
+    refreshAuctionState()
+  }, [refreshAuctionState])
+
+  const handleAuctionPaused = useCallback(() => setIsPaused(true), [])
+  const handleAuctionResumed = useCallback(() => setIsPaused(false), [])
+  const handlePlayersUpdated = useCallback(() => {
+    refreshPlayersList()
+  }, [refreshPlayersList])
+  const handleAuctionEnded = useCallback(() => {
+    toast.success('Auction ended successfully! Redirecting to results...')
+    setTimeout(() => {
+      // Redirect to the auction page which will show results view
+      window.location.href = `/auction/${auction.id}`
+    }, 1000)
+  }, [auction.id])
+
   // Real-time subscriptions
   usePusher(auction.id, {
-    onNewBid: (data) => {
-      setCurrentBid({
-        bidderId: data.bidderId,
-        amount: data.amount,
-        bidderName: data.bidderName,
-        teamName: data.teamName
-      })
-      setHighestBidderId(data.bidderId)
-      setTimer(data.countdownSeconds || 30)
-      // Add new bid to full history
-      const newBidEntry = {
-        type: 'bid' as const,
-        bidderId: data.bidderId,
-        amount: data.amount,
-        timestamp: new Date(),
-        bidderName: data.bidderName,
-        teamName: data.teamName
-      }
-      setFullBidHistory(prev => [newBidEntry, ...prev])
-      // Also add to current player's filtered history
-      setBidHistory(prev => [newBidEntry, ...prev])
-    },
-    onBidUndo: (data) => {
-      // Remove last bid from history
-      setBidHistory(prev => prev.slice(1))
-      // Update current bid
-      if (data.currentBid && data.currentBid.amount > 0) {
-        setCurrentBid({
-          bidderId: data.currentBid.bidderId,
-          amount: data.currentBid.amount,
-          bidderName: data.currentBid.bidderName,
-          teamName: data.currentBid.teamName
-        })
-        setHighestBidderId(data.currentBid.bidderId)
-      } else {
-        setCurrentBid(null)
-        setHighestBidderId(null)
-      }
-      const rules = auction.rules as any
-      setTimer(rules?.countdownSeconds || 30)
-    },
-    onSaleUndo: (data) => {
-      // Reload to get updated state
-      window.location.reload()
-    },
-    onTimerUpdate: (data) => {
-      if (!isPaused) {
-        setTimer(data.seconds)
-      }
-    },
-    onPlayerSold: () => {
-      setSoldAnimation(true)
-      setTimeout(() => {
-        setSoldAnimation(false)
-        // Don't auto-advance - let admin control it manually
-      }, 3000)
-    },
-    onNewPlayer: (data) => {
-      setIsImageLoading(true)
-      setCurrentPlayer(data.player)
-      setTimer(30)
-      setBidHistory([]) // Clear bid history for new player
-      // Refresh full bid history from server when new player loads
-      refreshAuctionState()
-    },
-    onAuctionPaused: () => setIsPaused(true),
-    onAuctionResumed: () => setIsPaused(false),
-    onPlayersUpdated: () => {
-      refreshPlayersList()
-    },
-    onAuctionEnded: () => {
-      toast.success('Auction ended successfully! Redirecting to results...')
-      setTimeout(() => {
-        // Redirect to the auction page which will show results view
-        window.location.href = `/auction/${auction.id}`
-      }, 1000)
-    },
+    onNewBid: handleNewBid,
+    onBidUndo: handleBidUndo,
+    onSaleUndo: handleSaleUndo,
+    onTimerUpdate: handleTimerUpdate,
+    onPlayerSold: handlePlayerSold,
+    onNewPlayer: handleNewPlayer,
+    onAuctionPaused: handleAuctionPaused,
+    onAuctionResumed: handleAuctionResumed,
+    onPlayersUpdated: handlePlayersUpdated,
+    onAuctionEnded: handleAuctionEnded,
   })
 
   // Countdown timer - don't auto-advance when timer hits 0
