@@ -61,6 +61,14 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
       return
     }
     
+    console.log('Bidder bid validation:', { 
+      currentBid: currentBid?.amount, 
+      minIncrement, 
+      bidAmount, 
+      required: currentBid ? currentBid.amount + minIncrement : 0,
+      check: currentBid ? bidAmount <= currentBid.amount + minIncrement - 1 : false
+    })
+    
     if (currentBid && bidAmount <= currentBid.amount + minIncrement - 1) {
       setError(`Bid must be at least ₹${(currentBid.amount + minIncrement).toLocaleString('en-IN')} (₹${minIncrement.toLocaleString('en-IN')} more than current bid)`)
       return
