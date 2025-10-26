@@ -4,15 +4,15 @@ import { hashPassword } from '../src/lib/auth'
 const prisma = new PrismaClient()
 
 async function main() {
-  // Create an admin user
-  const adminUser = await prisma.user.upsert({
+  // Create a super admin user (can create invitation codes and manage everything)
+  const superAdminUser = await prisma.user.upsert({
     where: { email: 'admin@squady.com' },
     update: {},
     create: {
       email: 'admin@squady.com',
-      name: 'Admin User',
+      name: 'Super Admin',
       password: await hashPassword('admin123'),
-      role: 'ADMIN',
+      role: 'SUPER_ADMIN',
     },
   })
 
@@ -28,7 +28,7 @@ async function main() {
     },
   })
 
-  console.log('Seed data created:', { adminUser, bidderUser })
+  console.log('Seed data created:', { superAdminUser, bidderUser })
 }
 
 main()

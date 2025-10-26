@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,12 +21,20 @@ interface Invitation {
 
 export default function SettingsPage() {
   const { data: session } = useSession()
+  const router = useRouter()
   const [invitations, setInvitations] = useState<Invitation[]>([])
   const [newCode, setNewCode] = useState<string>('')
   const [expiresDays, setExpiresDays] = useState<number>(30)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
+
+  useEffect(() => {
+    // Redirect if not super admin
+    if (session?.user?.role !== 'SUPER_ADMIN') {
+      router.push('/dashboard')
+    }
+  }, [session, router])
 
   useEffect(() => {
     fetchInvitations()
@@ -90,6 +99,11 @@ export default function SettingsPage() {
   const isExpired = (invitation: Invitation) => {
     if (!invitation.expiresAt) return false
     return new Date() > new Date(invitation.expiresAt)
+  }
+
+  // Don't render if not super admin
+  if (session?.user?.role !== 'SUPER_ADMIN') {
+    return null
   }
 
   return (

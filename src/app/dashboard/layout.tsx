@@ -16,8 +16,8 @@ export default async function DashboardLayout({
     redirect('/signin')
   }
 
-  // Check if user has ADMIN role
-  if (session.user?.role !== 'ADMIN') {
+  // Check if user has ADMIN or SUPER_ADMIN role
+  if (session.user?.role !== 'ADMIN' && session.user?.role !== 'SUPER_ADMIN') {
     redirect('/bidder/auctions')
   }
 
