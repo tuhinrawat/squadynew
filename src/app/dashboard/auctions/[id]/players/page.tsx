@@ -243,7 +243,7 @@ export default function PlayerManagement() {
     setColumns(newColumnOrder)
   }
 
-  const handleEditPlayer = async (player: Player) => {
+  const handleEditPlayer = async (player: any) => {
     console.log('Edit button clicked for player:', player)
     // For now, just show an alert with player data
     // TODO: Implement proper edit modal
@@ -277,7 +277,7 @@ export default function PlayerManagement() {
     }
   }
 
-  const handleDeletePlayer = async (player: Player) => {
+  const handleDeletePlayer = async (player: any) => {
     console.log('Delete button clicked for player:', player)
     if (!confirm('Are you sure you want to delete this player?')) return
 
@@ -299,7 +299,7 @@ export default function PlayerManagement() {
     }
   }
 
-  const handleRetirePlayer = async (player: Player) => {
+  const handleRetirePlayer = async (player: any) => {
     const newStatus = player.status === 'RETIRED' ? 'AVAILABLE' : 'RETIRED'
     const action = newStatus === 'AVAILABLE' ? 'unretire' : 'retire'
     
@@ -325,7 +325,7 @@ export default function PlayerManagement() {
     }
   }
 
-  const handleToggleIconPlayer = async (player: Player) => {
+  const handleToggleIconPlayer = async (player: any) => {
     const isIcon = !(player as any).isIcon
     const action = isIcon ? 'mark as icon player' : 'remove icon player status'
     

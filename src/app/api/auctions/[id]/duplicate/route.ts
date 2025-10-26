@@ -37,12 +37,12 @@ export async function POST(
       data: {
         name: `Copy of ${sourceAuction.name}`,
         description: sourceAuction.description,
-        rules: sourceAuction.rules,
+        rules: sourceAuction.rules as any,
         status: 'DRAFT',
         isPublished: false,
         registrationOpen: sourceAuction.registrationOpen,
-        customFields: sourceAuction.customFields,
-        columnOrder: sourceAuction.columnOrder,
+        customFields: sourceAuction.customFields as any,
+        columnOrder: sourceAuction.columnOrder as any,
         createdById: session.user.id
       }
     })
@@ -52,7 +52,7 @@ export async function POST(
       await prisma.player.create({
         data: {
           auctionId: newAuction.id,
-          data: player.data,
+          data: player.data as any,
           status: 'AVAILABLE', // Reset to AVAILABLE
           isIcon: (player as any).isIcon || false
         }

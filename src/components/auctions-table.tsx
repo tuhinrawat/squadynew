@@ -37,6 +37,7 @@ interface Auction {
   id: string
   name: string
   description: string | null
+  rules?: any
   status: AuctionStatus
   isPublished: boolean
   createdAt: Date

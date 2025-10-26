@@ -18,6 +18,9 @@ interface BidHistoryEntry {
   timestamp: Date
   bidderName: string
   teamName?: string
+  type?: 'bid' | 'sold' | 'unsold'
+  playerId?: string
+  playerName?: string
 }
 
 interface Bidder {

@@ -25,6 +25,7 @@ interface BidHistoryEntry {
   teamName?: string
   type?: 'bid' | 'sold' | 'unsold'
   playerId?: string
+  playerName?: string
 }
 
 interface AdminAuctionViewProps {
@@ -893,7 +894,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 >
                   <div className="flex items-center gap-2 sm:gap-3">
                     {bidder.logoUrl && (
-                      <img src={bidder.logoUrl} alt={bidder.teamName} className="w-8 h-8 sm:w-12 sm:h-12 rounded flex-shrink-0" />
+                      <img src={bidder.logoUrl || ''} alt={bidder.teamName || ''} className="w-8 h-8 sm:w-12 sm:h-12 rounded flex-shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-gray-100 truncate">{bidder.teamName || bidder.username}</div>
@@ -921,10 +922,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
 
         {/* Teams Overview */}
-        <TeamsOverview auction={auction} />
+        <TeamsOverview 
+          auction={{
+            ...auction,
+            players: players as any
+          }} 
+        />
 
         {/* Players Sold Table */}
-        <PlayersSoldTable auction={{ ...auction, players, bidHistory }} />
+        <PlayersSoldTable auction={{ ...auction, players: players as any, bidHistory }} />
       </div>
 
       {/* Mobile Bid History Floating Button */}

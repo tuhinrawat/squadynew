@@ -32,14 +32,14 @@ export async function POST(
       return NextResponse.json({ error: 'No sold players to undo' }, { status: 400 })
     }
 
-    // Get the last sold player ordered by when it was sold (not createdAt, need updatedAt)
+    // Get the last sold player ordered by when it was sold
     const lastSoldPlayer = await prisma.player.findFirst({
       where: {
         auctionId: params.id,
         status: 'SOLD'
       },
       orderBy: {
-        updatedAt: 'desc'
+        createdAt: 'desc'
       }
     })
 
@@ -80,8 +80,7 @@ export async function POST(
         data: {
           status: 'AVAILABLE',
           soldTo: null,
-          soldPrice: null,
-          updatedAt: new Date()
+          soldPrice: null
         }
       }),
       prisma.bidder.update({

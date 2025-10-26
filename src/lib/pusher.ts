@@ -19,10 +19,12 @@ export interface AuctionEventData {
     timestamp: Date
     bidderName: string
     teamName?: string
+    countdownSeconds: number
   }
   'bid-undo': {
     bidderId: string
-    previousBid: number
+    previousBid: number | null
+    currentBid: any | null
   }
   'player-sold': {
     playerId: string
@@ -42,6 +44,7 @@ export interface AuctionEventData {
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
+  'players-updated': {}
 }
 
 export type AuctionEventName = keyof AuctionEventData

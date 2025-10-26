@@ -29,6 +29,7 @@ export interface AuctionEventData {
     timestamp: string
     bidderName: string
     teamName?: string
+    countdownSeconds: number
   }
   'bid-undo': {
     bidderId: string

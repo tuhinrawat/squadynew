@@ -150,7 +150,7 @@ export async function POST(
     }
 
     // Broadcast players updated event
-    await triggerAuctionEvent(params.id, 'players-updated', {} as any)
+    await triggerAuctionEvent(params.id, 'players-updated', {})
 
     return NextResponse.json({ 
       success: true,
