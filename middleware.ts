@@ -1,0 +1,59 @@
+import { withAuth } from "next-auth/middleware"
+import { NextResponse } from "next/server"
+
+export default withAuth(
+  function middleware(req) {
+    const pathname = req.nextUrl.pathname
+    const token = req.nextauth.token
+
+    // Protect /dashboard routes - only ADMIN
+    if (pathname.startsWith('/dashboard')) {
+      if (token?.role !== 'ADMIN') {
+        return NextResponse.rewrite(new URL('/403', req.url))
+      }
+    }
+
+    // Protect /bidder routes - only BIDDER
+    if (pathname.startsWith('/bidder')) {
+      if (token?.role !== 'BIDDER') {
+        return NextResponse.rewrite(new URL('/403', req.url))
+      }
+    }
+
+    // Protect /auction/[id] routes - check if user has access
+    if (pathname.startsWith('/auction/')) {
+      // We'll check auction access in the page component
+      // since we need to query the database
+    }
+
+    return NextResponse.next()
+  },
+  {
+    callbacks: {
+      authorized: ({ token, req }) => {
+        // Allow access to public routes
+        const publicRoutes = ['/signin', '/register']
+        if (publicRoutes.includes(req.nextUrl.pathname)) {
+          return true
+        }
+
+        // Require authentication for protected routes
+        return !!token
+      },
+    },
+  }
+)
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     */
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+  ],
+}
+

@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  BIDDER
+}
+
+enum AuctionStatus {
+  DRAFT
+  LIVE
+  PAUSED
+  COMPLETED
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  EMAIL
+  PHONE
+  DATE
+  SELECT
+  MULTISELECT
+  CHECKBOX
+  TEXTAREA
+  URL
+}
+
+enum PlayerStatus {
+  AVAILABLE
+  SOLD
+  UNSOLD
+  RETIRED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+
+  // Relations
+  auctions      Auction[]
+  bidderProfile Bidder?
+
+  @@map("users")
+}
+
+model Auction {
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  rules           Json
+  status          AuctionStatus  @default(DRAFT)
+  isPublished     Boolean        @default(false)
+  customFields    Json?          // Store custom field definitions for public registration
+  columnOrder     Json?          // Store Excel column order as array
+  registrationOpen Boolean        @default(true)
+  createdById     String
+  currentPlayerId String?
+  bidHistory      Json?
+  createdAt       DateTime       @default(now())
+
+  // Relations
+  createdBy User      @relation(fields: [createdById], references: [id])
+  players   Player[]
+  bidders   Bidder[]
+
+  @@map("auctions")
+}
+
+model Player {
+  id        String       @id @default(cuid())
+  auctionId String
+  data      Json
+  status    PlayerStatus @default(AVAILABLE)
+  isIcon    Boolean      @default(false)
+  soldTo    String?
+  soldPrice Float?
+  createdAt DateTime     @default(now())
+
+  // Relations
+  auction Auction @relation(fields: [auctionId], references: [id])
+
+  @@map("players")
+}
+
+model Bidder {
+  id             String  @id @default(cuid())
+  userId         String  @unique
+  auctionId      String
+  teamName       String?
+  username       String
+  purseAmount    Float
+  remainingPurse Float
+  logoUrl        String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id])
+  auction Auction @relation(fields: [auctionId], references: [id])
+
+  @@unique([auctionId, username])
+  @@map("bidders")
+}
