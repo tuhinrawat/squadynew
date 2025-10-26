@@ -4,12 +4,47 @@ import { hashPassword } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password } = await request.json()
+    const { name, email, password, invitationCode } = await request.json()
 
     // Validate input
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: 'Name, email, and password are required' },
+        { status: 400 }
+      )
+    }
+
+    // Check invitation code
+    if (!invitationCode) {
+      return NextResponse.json(
+        { error: 'Invitation code is required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate invitation code
+    const invitation = await prisma.invitation.findUnique({
+      where: { code: invitationCode.toUpperCase() }
+    })
+
+    if (!invitation) {
+      return NextResponse.json(
+        { error: 'Invalid invitation code' },
+        { status: 400 }
+      )
+    }
+
+    if (invitation.used) {
+      return NextResponse.json(
+        { error: 'This invitation code has already been used' },
+        { status: 400 }
+      )
+    }
+
+    // Check if expired
+    if (invitation.expiresAt && new Date() > invitation.expiresAt) {
+      return NextResponse.json(
+        { error: 'This invitation code has expired' },
         { status: 400 }
       )
     }
@@ -53,6 +88,16 @@ export async function POST(request: NextRequest) {
         email,
         password: hashedPassword,
         role: 'ADMIN' // All signups are ADMIN by default
+      }
+    })
+
+    // Mark invitation as used
+    await prisma.invitation.update({
+      where: { id: invitation.id },
+      data: {
+        used: true,
+        usedBy: user.id,
+        usedAt: new Date()
       }
     })
 

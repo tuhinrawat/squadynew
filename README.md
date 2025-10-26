@@ -4,6 +4,7 @@ A modern auction management system built with Next.js 14, TypeScript, Prisma, Po
 
 ## Features
 
+- **Multi-Tenant Admin System**: Each organization gets their own isolated admin account
 - **User Management**: Admin and Bidder roles with authentication
 - **Auction Management**: Create and manage live auctions
 - **Player Management**: Upload and manage player data with flexible JSON storage
@@ -127,6 +128,23 @@ npm run dev
 ```
 
 Visit `http://localhost:3000` to access the application.
+
+## Getting Started
+
+### For New Admins (Organizations)
+
+1. **Sign Up**: Visit the landing page and click "Get Started Free" or "Sign Up"
+2. **Create Account**: Enter your name, email, and password
+3. **You're an Admin!**: You now have access to your own isolated admin dashboard
+4. **Create Auctions**: Start creating and managing your auctions
+5. **Invite Bidders**: Add bidders to your auctions
+6. **Run Live Auctions**: Start and manage real-time bidding
+
+### How It Works
+
+- **Each admin account is completely isolated** - You only see your own auctions, players, and bidders
+- **Bidders are per-auction** - When you create an auction, you add bidders specifically for that auction
+- **No cross-contamination** - Multiple organizations can use the same instance without seeing each other's data
 
 ## Real-time Features
 

@@ -12,7 +12,8 @@ export default function SignUp() {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    invitationCode: ''
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -20,6 +21,10 @@ export default function SignUp() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
+
+    if (!formData.invitationCode.trim()) {
+      newErrors.invitationCode = 'Invitation code is required'
+    }
 
     if (!formData.name.trim()) {
       newErrors.name = 'Name is required'
@@ -66,6 +71,7 @@ export default function SignUp() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
+          invitationCode: formData.invitationCode,
         }),
       })
 
@@ -117,6 +123,26 @@ export default function SignUp() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="invitationCode" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Invitation Code *
+                </label>
+                <Input
+                  id="invitationCode"
+                  name="invitationCode"
+                  type="text"
+                  value={formData.invitationCode}
+                  onChange={handleChange}
+                  className={`mt-1 ${errors.invitationCode ? 'border-red-500' : ''}`}
+                  placeholder="Enter invitation code"
+                  style={{ textTransform: 'uppercase' }}
+                />
+                {errors.invitationCode && (
+                  <p className="mt-1 text-sm text-red-600">{errors.invitationCode}</p>
+                )}
+                <p className="mt-1 text-xs text-gray-500">You need an invitation code to create an account</p>
+              </div>
+
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Full Name

@@ -114,3 +114,16 @@ model Bidder {
   @@unique([auctionId, username])
   @@map("bidders")
 }
+
+model Invitation {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  used       Boolean  @default(false)
+  usedBy     String?
+  usedAt     DateTime?
+  createdBy  String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime?
+
+  @@map("invitations")
+}
