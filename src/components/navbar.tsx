@@ -2,6 +2,7 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 export default function Navbar() {
   const { data: session, status } = useSession()
@@ -24,12 +25,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              Squady
-            </h1>
-            <span className="ml-4 px-2 py-1 text-xs font-medium bg-teal-100 text-teal-800 rounded-full">
-              {session.user.role}
-            </span>
+            <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
           </div>
           
           <div className="flex items-center space-x-4">

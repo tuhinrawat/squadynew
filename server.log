@@ -1,0 +1,14 @@
+
+> squady@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.15
+  - Local:        http://localhost:3000
+  - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 1310ms
+ ✓ Compiled /api/auth/[...nextauth] in 241ms (266 modules)
+ GET /api/auth/session 200 in 530ms
+ ✓ Compiled in 81ms (266 modules)
+[?25h

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
@@ -10,9 +11,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-xl sm:text-2xl font-bold text-teal-600 dark:text-teal-400">
-                Squady
-              </h1>
+              <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 sm:h-10 w-auto" />
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
               <Link href="/register" className="hidden sm:block">

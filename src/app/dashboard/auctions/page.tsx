@@ -14,14 +14,15 @@ export default async function AuctionsList() {
     redirect('/signin')
   }
 
-  if (session.user?.role !== 'ADMIN') {
+  if (session.user?.role !== 'ADMIN' && session.user?.role !== 'SUPER_ADMIN') {
     redirect('/bidder/auctions')
   }
 
+  // SUPER_ADMIN can see all auctions, regular admins see only their own
   const auctions = await prisma.auction.findMany({
-    where: {
-      createdById: session.user.id
-    },
+    where: session.user?.role === 'SUPER_ADMIN' 
+      ? undefined 
+      : { createdById: session.user.id },
     orderBy: {
       createdAt: 'desc'
     },

@@ -6,16 +6,16 @@ export default withAuth(
     const pathname = req.nextUrl.pathname
     const token = req.nextauth.token
 
-    // Protect /dashboard routes - only ADMIN
+    // Protect /dashboard routes - only ADMIN and SUPER_ADMIN
     if (pathname.startsWith('/dashboard')) {
-      if (token?.role !== 'ADMIN') {
+      if (token?.role !== 'ADMIN' && token?.role !== 'SUPER_ADMIN') {
         return NextResponse.rewrite(new URL('/403', req.url))
       }
     }
 
-    // Protect /bidder routes - only BIDDER
+    // Protect /bidder routes - only BIDDER or SUPER_ADMIN (for management)
     if (pathname.startsWith('/bidder')) {
-      if (token?.role !== 'BIDDER') {
+      if (token?.role !== 'BIDDER' && token?.role !== 'SUPER_ADMIN') {
         return NextResponse.rewrite(new URL('/403', req.url))
       }
     }

@@ -35,7 +35,11 @@ export function isAuthenticated(session: any): boolean {
 }
 
 export function isAdmin(session: any): boolean {
-  return session?.user?.role === 'ADMIN'
+  return session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN'
+}
+
+export function isSuperAdmin(session: any): boolean {
+  return session?.user?.role === 'SUPER_ADMIN'
 }
 
 export function isBidder(session: any): boolean {

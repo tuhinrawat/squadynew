@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
@@ -22,10 +23,11 @@ export default async function DashboardLayout({
   }
 
   // Get auction count for the header
+  // SUPER_ADMIN can see all auctions, regular admins see only their own
   const auctionCount = await prisma.auction.count({
-    where: {
-      createdById: session.user.id
-    }
+    where: session.user?.role === 'SUPER_ADMIN' 
+      ? undefined 
+      : { createdById: session.user.id }
   })
 
   return (
@@ -35,8 +37,8 @@ export default async function DashboardLayout({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Link href="/dashboard" className="text-xl font-bold text-teal-600 dark:text-teal-400">
-                Squady Admin
+              <Link href="/dashboard">
+                <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
               </Link>
             </div>
             <div className="flex items-center space-x-4">
