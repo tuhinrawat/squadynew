@@ -41,7 +41,7 @@ export function ResultsView({ auction, userId, userRole }: ResultsViewProps) {
 
     const csvContent = [
       csvHeaders.join(','),
-      ...csvRows.map(row => row.join(','))
+      ...csvRows.map((row: string[]) => row.join(','))
     ].join('\n')
 
     // Download

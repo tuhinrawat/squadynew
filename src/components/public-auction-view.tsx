@@ -525,10 +525,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         </div>
 
         {/* Teams Overview */}
-        <TeamsOverview auction={{ ...auction, bidders: bidders.map(b => ({ ...b, user: { name: b.username } })), players }} />
+        <TeamsOverview auction={{ ...auction, bidders: bidders.map(b => ({ ...b, user: { name: b.username } })), players: players as any }} />
 
         {/* Players Sold Table */}
-        <PlayersSoldTable auction={{ ...auction, players, bidders: bidders.map(b => ({ ...b, user: { name: b.username } })), bidHistory }} />
+        <PlayersSoldTable auction={{ ...auction, players: players as any, bidders: bidders.map(b => ({ ...b, user: { name: b.username } })), bidHistory }} />
       </div>
 
       {/* Mobile Bid History Floating Button */}

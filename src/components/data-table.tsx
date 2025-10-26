@@ -328,7 +328,7 @@ export function DataTable({
             <div className="flex items-center space-x-2">
               {Object.entries(filters).map(([key, filter]) => (
                 <Badge key={key} variant="secondary" className="flex items-center space-x-1">
-                  <span>{columns.find(col => col.key === key)?.label}: {filter.value}</span>
+                  <span>{columns.find(col => col.key === key)?.label}: {typeof filter.value === 'string' ? filter.value : JSON.stringify(filter.value)}</span>
                   <button
                     onClick={() => clearFilter(key)}
                     className="ml-1 hover:text-red-500"
