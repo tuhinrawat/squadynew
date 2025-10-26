@@ -125,16 +125,6 @@ export default function SignIn() {
                 </Link>
               </p>
             </div>
-
-            <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-md">
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                <strong>Test Credentials:</strong>
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-500">
-                Admin: admin@squady.com / admin123<br />
-                Bidder: bidder@squady.com / bidder123
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>
