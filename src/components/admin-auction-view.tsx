@@ -100,24 +100,16 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const getPlayerBidHistory = (playerId: string | null, fullHistory: BidHistoryEntry[]) => {
     if (!playerId) return []
     
-    // Find the last sale/unsold event (for any player)
-    let lastSaleEventIndex = -1
-    for (let i = fullHistory.length - 1; i >= 0; i--) {
-      const entry = fullHistory[i]
-      if (entry.type === 'sold' || entry.type === 'unsold') {
-        lastSaleEventIndex = i
-        break
-      }
-    }
+    console.log('getPlayerBidHistory: filtering for current player:', playerId, 'fullHistory length:', fullHistory.length)
     
-    // If no sale event found, return all bids (first player being auctioned)
-    if (lastSaleEventIndex === -1) {
-      return fullHistory.slice().reverse()
-    }
+    // Filter bids to only include those for the current player
+    const filteredBids = fullHistory.filter(bid => {
+      // Only include bids that have playerId matching current player
+      return bid.playerId === playerId
+    })
     
-    // Return all bids after the last sale event (current player being auctioned)
-    const recentBids = fullHistory.slice(lastSaleEventIndex + 1)
-    return recentBids.reverse()
+    console.log('getPlayerBidHistory: filtered bids count:', filteredBids.length, 'for player:', playerId, filteredBids)
+    return filteredBids.slice().reverse()
   }
 
   // Set client-side rendered flag
@@ -133,20 +125,27 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       console.log('AdminAuctionView: Filtered playerBidHistory:', playerBidHistory)
       setBidHistory(playerBidHistory)
       
-      // Get the most recent bid (first item in the reversed array)
-      const latestBid = playerBidHistory[0]
-      console.log('AdminAuctionView: latestBid:', latestBid, 'current bid state:', currentBid)
+      // Get the most recent bid (last item after filtering, since it's the newest)
+      const latestBid = playerBidHistory.length > 0 ? playerBidHistory[playerBidHistory.length - 1] : null
+      console.log('AdminAuctionView: latestBid:', latestBid, 'current bid state:', currentBid, 'full bidHistory:', playerBidHistory)
       
-      // Only update if we have a bid and it's different from current
-      if (latestBid && !latestBid.type) {
-        console.log('AdminAuctionView: Setting current bid to latest bid')
-        setCurrentBid({
-          bidderId: latestBid.bidderId,
-          amount: latestBid.amount,
-          bidderName: latestBid.bidderName,
-          teamName: latestBid.teamName
-        })
-        setHighestBidderId(latestBid.bidderId)
+      // Update current bid to the latest bid (only if it's a bid event, not a sale event)
+      if (latestBid && (!latestBid.type || latestBid.type === 'bid')) {
+        // Only update if there's actually a valid bid
+        if (latestBid.amount && latestBid.bidderId) {
+          console.log('AdminAuctionView: Setting current bid to:', latestBid.bidderName, latestBid.amount)
+          setCurrentBid({
+            bidderId: latestBid.bidderId,
+            amount: latestBid.amount,
+            bidderName: latestBid.bidderName,
+            teamName: latestBid.teamName
+          })
+          setHighestBidderId(latestBid.bidderId)
+        }
+      } else if (playerBidHistory.length > 0) {
+        console.log('AdminAuctionView: latestBid exists but is not a bid event, type:', latestBid?.type)
+      } else {
+        console.log('AdminAuctionView: No bids found in playerBidHistory')
       }
     } else {
       setBidHistory([])
@@ -180,12 +179,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       amount: data.amount,
       timestamp: new Date(),
       bidderName: data.bidderName,
-      teamName: data.teamName
+      teamName: data.teamName,
+      playerId: currentPlayer?.id // Associate bid with current player
     }
+    console.log('handleNewBid: Adding bid entry with playerId:', newBidEntry.playerId)
     setFullBidHistory(prev => [newBidEntry, ...prev])
     // Also add to current player's filtered history
     setBidHistory(prev => [newBidEntry, ...prev])
-  }, [])
+  }, [currentPlayer?.id])
 
   const handleBidUndo = useCallback((data: any) => {
     // Remove last bid from history
@@ -276,6 +277,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       return () => clearInterval(interval)
     }
   }, [isPaused, timer])
+
 
   const handleStartAuction = async () => {
     await fetch(`/api/auction/${auction.id}/start`, { method: 'POST' })
@@ -763,11 +765,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     }
                     
-                    const increment = index === 0 
+                    const isLatestBid = index === bidHistory.length - 1
+                    const increment = isLatestBid
                       ? bid.amount 
                       : bid.amount - bidHistory[index + 1]?.amount || 0
                     
-                    const commentary = index === 0 
+                    const commentary = isLatestBid
                       ? "🎯 Current Top Bid!"
                       : increment > 50000 
                         ? "🚀 Big Jump!"
@@ -817,10 +820,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       onClick={async () => {
                         if (!selectedBidderForBid) return
                         try {
+                          // Calculate total bid = current bid + increment
+                          const totalBid = (currentBid?.amount || 0) + amount
+                          console.log('Admin placing bid:', {
+                            currentBid: currentBid?.amount,
+                            increment: amount,
+                            totalBid,
+                            bidderId: selectedBidderForBid
+                          })
                           const response = await fetch(`/api/auction/${auction.id}/bid`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bidderId: selectedBidderForBid, amount })
+                            body: JSON.stringify({ bidderId: selectedBidderForBid, amount: totalBid })
                           })
                           if (response.ok) {
                             setSelectedBidderForBid(null)
@@ -980,19 +991,35 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                   }
                   
-                  return (
-                    <div key={index} className="text-sm border-l-2 pl-2 border-green-500 bg-green-50 dark:bg-green-900/10 rounded p-2">
-                      <div className="font-semibold text-green-800 dark:text-green-300">
-                        ✅ {bid.playerName} SOLD!
-                      </div>
-                      <div className="text-xs text-green-700 dark:text-green-400">
-                        To: {bid.bidderName} {bid.teamName && `(${bid.teamName})`} for ₹{bid.amount.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-xs text-green-600 dark:text-green-500 mt-1">
-                        {timeAgo}
-                      </div>
-                    </div>
-                  )
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-sm border-l-4 border-green-500 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 rounded-lg p-3 mb-2 shadow-lg"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">🎉</span>
+                          <div className="font-bold text-lg text-green-800 dark:text-green-300">
+                            {bid.playerName} SOLD!
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1 text-sm">
+                          <span className="text-gray-700 dark:text-gray-300">To:</span>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                          {bid.teamName && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200">({bid.teamName})</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                            ₹{bid.amount.toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
+                        </div>
+                      </motion.div>
+                    )
                 }
                 
                 if (bid.type === 'unsold') {
@@ -1007,17 +1034,26 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   }
                   
                   return (
-                    <div key={index} className="text-sm border-l-2 pl-2 border-orange-500 bg-orange-50 dark:bg-orange-900/10 rounded p-2">
-                      <div className="font-semibold text-orange-800 dark:text-orange-300">
-                        ⏭️ {bid.playerName} - UNSOLD
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-sm border-l-4 border-orange-500 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40 rounded-lg p-3 mb-2 shadow-md"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl">⏭️</span>
+                        <div className="font-bold text-lg text-orange-800 dark:text-orange-300">
+                          {bid.playerName} - UNSOLD
+                        </div>
                       </div>
-                      <div className="text-xs text-orange-700 dark:text-orange-400">
-                        No buyer • Moving to next player
+                      <div className="text-sm text-orange-700 dark:text-orange-400 mb-1">
+                        No buyer found • Moving to next player
                       </div>
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">
-                        {timeAgo}
+                      <div className="text-xs text-orange-600 dark:text-orange-400">
+                        ⏰ {timeAgo}
                       </div>
-                    </div>
+                    </motion.div>
                   )
                 }
                 
@@ -1041,31 +1077,59 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }
                 
-                const increment = index === 0 
+                const isLatestBid = index === bidHistory.length - 1
+                const increment = isLatestBid
                   ? bid.amount 
                   : bid.amount - bidHistory[index + 1]?.amount || 0
                 
-                const commentary = index === 0 
+                const commentary = isLatestBid
                   ? "🎯 Current Top Bid!"
                   : increment > 50000 
                     ? "🚀 Big Jump!"
                     : "💪 Standard Bid"
                 
+                // Enhanced styling for auction-like appearance
+                const bidStyle = isLatestBid 
+                  ? "border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30 rounded-lg p-3 shadow-md animate-pulse"
+                  : increment > 50000
+                    ? "border-l-4 border-purple-500 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg p-3"
+                    : "border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-lg p-3"
+                
                 return (
-                  <div key={index} className="text-sm border-l-2 pl-2 border-blue-500 rounded p-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className={`text-sm ${bidStyle} mb-2`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-lg text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
                       {bid.teamName && (
-                        <span className="text-xs text-gray-600 dark:text-gray-400">({bid.teamName})</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">({bid.teamName})</span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-700 dark:text-gray-300">
-                      {commentary} • ₹{bid.amount.toLocaleString('en-IN')}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        isLatestBid 
+                          ? "bg-emerald-600 text-white" 
+                          : increment > 50000 
+                            ? "bg-purple-600 text-white"
+                            : "bg-blue-600 text-white"
+                      }`}>
+                        {commentary}
+                      </span>
+                      <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                        ₹{bid.amount.toLocaleString('en-IN')}
+                      </span>
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {timeAgo}
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <span>⏰ {timeAgo}</span>
+                      {increment > 0 && !isLatestBid && (
+                        <span className="text-green-600 dark:text-green-400">↑ +₹{increment.toLocaleString('en-IN')}</span>
+                      )}
                     </div>
-                  </div>
+                  </motion.div>
                 )
               })}
             </div>

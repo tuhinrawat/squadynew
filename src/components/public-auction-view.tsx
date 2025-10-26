@@ -75,12 +75,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         return !bid.playerId || bid.playerId === currentPlayer.id
       })
       console.log('PublicAuctionView: Filtered history length:', filteredHistory.length)
-      setBidHistory(filteredHistory)
+      // Reverse to have oldest first, newest last (matching admin view)
+      const reversedHistory = [...filteredHistory].reverse()
+      setBidHistory(reversedHistory)
       
       // Set current bid if there's a bid in the filtered history
-      if (filteredHistory.length > 0) {
-        const latestBid = filteredHistory.find(bid => !bid.type || bid.type === 'bid')
-        if (latestBid) {
+      if (reversedHistory.length > 0) {
+        // Get the latest bid (last item is most recent since we append to end)
+        const latestBid = reversedHistory[reversedHistory.length - 1]
+        if (latestBid && (!latestBid.type || latestBid.type === 'bid')) {
           console.log('PublicAuctionView: Setting initial current bid:', latestBid)
           setCurrentBid({
             bidderId: latestBid.bidderId,
@@ -122,6 +125,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     }
   }, [currentPlayer?.id])
 
+
   // Real-time subscriptions
   usePusher(auction.id, {
     onNewBid: (data) => {
@@ -136,16 +140,39 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setTimer(data.countdownSeconds || 30)
       setBidHistory(prev => {
         console.log('PublicAuctionView: Updating bid history, prev length:', prev.length)
-        return [{
+        // Add newest bid at the end (matching admin view order)
+        return [...prev, {
           bidderId: data.bidderId,
           amount: data.amount,
           timestamp: new Date(),
           bidderName: data.bidderName,
-          teamName: data.teamName
-        }, ...prev]
+          teamName: data.teamName,
+          playerId: currentPlayer?.id, // Associate bid with current player
+          type: 'bid'
+        }]
       })
     },
-    onPlayerSold: () => {
+    onPlayerSold: (data) => {
+      console.log('PublicAuctionView: Player sold', data)
+      
+      // Add sold event to bid history using the latest bid in history
+      setBidHistory(prev => {
+        const latestBid = prev.length > 0 ? prev[prev.length - 1] : null
+        if (latestBid && latestBid.type === 'bid') {
+          return [...prev, {
+            type: 'sold',
+            playerName: data?.playerName || (currentPlayer as any)?.data?.name || 'Player',
+            bidderId: latestBid.bidderId,
+            bidderName: latestBid.bidderName,
+            teamName: latestBid.teamName,
+            amount: latestBid.amount,
+            timestamp: new Date(),
+            playerId: currentPlayer?.id
+          }]
+        }
+        return prev
+      })
+      
       setSoldAnimation(true)
       setTimeout(() => {
         setSoldAnimation(false)
@@ -166,7 +193,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       window.location.reload()
     },
     onBidUndo: (data) => {
-      setBidHistory(prev => prev.slice(1))
+      // Remove last bid (newest) since we append to end
+      setBidHistory(prev => prev.slice(0, -1))
       if (data.currentBid && data.currentBid.amount > 0) {
         setCurrentBid({
           bidderId: data.currentBid.bidderId,
@@ -533,11 +561,13 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     }
                     
-                    const increment = index === 0 
+                    const isLatestBid = index === bidHistory.length - 1
+                    // Calculate increment compared to previous bid (index-1 is older)
+                    const increment = index === 0
                       ? bid.amount 
-                      : bid.amount - bidHistory[index + 1]?.amount || 0
+                      : bid.amount - bidHistory[index - 1]?.amount || 0
                     
-                    const commentary = index === 0 
+                    const commentary = isLatestBid
                       ? "🎯 Current Top Bid!"
                       : increment > 50000 
                         ? "🚀 Big Jump!"
@@ -599,6 +629,69 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             {/* Bid History Content */}
             <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto">
             {bidHistory.map((bid, index) => {
+              // Handle sold/unsold events
+              if (bid.type === 'sold') {
+                const bidTime = new Date(bid.timestamp)
+                let timeAgo = ''
+                if (isClient) {
+                  const now = new Date()
+                  const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                  timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                } else {
+                  timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+                
+                return (
+                  <motion.div 
+                    key={index} 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-sm border-l-2 pl-2 border-green-500 bg-gradient-to-r from-green-50 to-transparent dark:from-green-900/10 rounded p-2"
+                  >
+                    <div className="font-semibold text-green-800 dark:text-green-300">
+                      ✅ {bid.playerName} SOLD!
+                    </div>
+                    <div className="text-xs text-green-700 dark:text-green-400">
+                      To: {bid.bidderName} {bid.teamName && `(${bid.teamName})`} for ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
+                    </div>
+                    <div className="text-xs text-green-600 dark:text-green-500 mt-1">
+                      {timeAgo}
+                    </div>
+                  </motion.div>
+                )
+              }
+              
+              if (bid.type === 'unsold') {
+                const bidTime = new Date(bid.timestamp)
+                let timeAgo = ''
+                if (isClient) {
+                  const now = new Date()
+                  const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                  timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                } else {
+                  timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+                
+                return (
+                  <motion.div 
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-sm border-l-2 pl-2 border-orange-500 bg-gradient-to-r from-orange-50 to-transparent dark:from-orange-900/10 rounded p-2"
+                  >
+                    <div className="font-semibold text-orange-800 dark:text-orange-300">
+                      ⏭️ {bid.playerName} - UNSOLD
+                    </div>
+                    <div className="text-xs text-orange-700 dark:text-orange-400">
+                      No buyer • Moving to next player
+                    </div>
+                    <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">
+                      {timeAgo}
+                    </div>
+                  </motion.div>
+                )
+              }
+              
               const bidTime = new Date(bid.timestamp)
               let timeAgo = ''
               
@@ -617,21 +710,39 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               }
               
+              const isLatestBid = index === bidHistory.length - 1
+              // Calculate increment compared to previous bid (index-1 is older)
+              const increment = index === 0
+                ? bid.amount 
+                : bid.amount - bidHistory[index - 1]?.amount || 0
+              
+              const commentary = isLatestBid
+                ? "🎯 Current Top Bid!"
+                : increment > 50000 
+                  ? "🚀 Big Jump!"
+                  : "💪 Standard Bid"
+              
               return (
-                <div key={index} className="text-sm border-l-2 pl-2 border-blue-500 rounded p-2">
+                <motion.div 
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={`text-sm border-l-2 pl-2 border-blue-500 ${isLatestBid ? 'bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-900/10' : ''} rounded p-2`}
+                >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
                     {bid.teamName && (
                       <span className="text-xs text-gray-600 dark:text-gray-400">({bid.teamName})</span>
                     )}
+                    {isLatestBid && <Badge className="text-xs bg-blue-500">LATEST</Badge>}
                   </div>
                   <div className="text-xs text-gray-700 dark:text-gray-300">
-                    ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
+                    {commentary} • ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {timeAgo}
                   </div>
-                </div>
+                </motion.div>
               )
             })}
             </div>

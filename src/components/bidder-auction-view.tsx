@@ -28,7 +28,7 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Find current user's bidder profile
   const userBidder = auction.bidders.find((b: any) => b.userId === session?.user?.id)
   const rules = auction.rules as any
-  const minIncrement = rules?.minBidIncrement || 50000
+  const minIncrement = rules?.minBidIncrement || 1000
 
   // Calculate next valid bid
   const nextValidBid = currentBid ? currentBid.amount + minIncrement : 0
@@ -225,6 +225,9 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
                 </div>
 
                 <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => quickBid(1000)} disabled={isHighestBidder} className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    +₹1K
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => quickBid(10000)} disabled={isHighestBidder} className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                     +₹10K
                   </Button>

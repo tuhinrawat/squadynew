@@ -58,7 +58,7 @@ export async function POST(
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
     }
 
-    // Parse current bid from bid history
+    // Parse current bid from bid history - only for CURRENT player
     let currentBid = 0
     let bidHistory: any[] = []
     if (auction.bidHistory && typeof auction.bidHistory === 'object') {
@@ -68,14 +68,27 @@ export async function POST(
       }
     }
 
-    if (bidHistory.length > 0) {
-      const lastBid = bidHistory[0]
+    // Filter bids for current player only
+    // Include bids without playerId (legacy bids) as they belong to the current player being auctioned
+    const currentPlayerBidHistory = currentPlayer?.id 
+      ? bidHistory.filter(bid => !bid.playerId || bid.playerId === currentPlayer.id)
+      : []
+    
+    console.log('Filtering bids for current player:', {
+      currentPlayerId: currentPlayer?.id,
+      totalBidHistoryLength: bidHistory.length,
+      filteredLength: currentPlayerBidHistory.length,
+      latestBid: currentPlayerBidHistory[0]
+    })
+
+    if (currentPlayerBidHistory.length > 0) {
+      const lastBid = currentPlayerBidHistory[0]
       currentBid = lastBid.amount || 0
     }
 
     // Validate bid amount
     const rules = auction.rules as any
-    const minIncrement = rules?.minBidIncrement || 50000
+    const minIncrement = rules?.minBidIncrement || 1000
     
     console.log('Bid validation:', { 
       currentBid, 
@@ -97,8 +110,15 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Check if this bidder is already the highest bidder
-    if (bidHistory.length > 0 && bidHistory[0].bidderId === bidderId) {
+    // Check if this bidder is already the highest bidder (for current player only)
+    console.log('Checking if already highest bidder:', {
+      currentPlayerBidHistoryLength: currentPlayerBidHistory.length,
+      latestBidId: currentPlayerBidHistory[0]?.bidderId,
+      biddingBidderId: bidderId,
+      latestBid: currentPlayerBidHistory[0]
+    })
+    
+    if (currentPlayerBidHistory.length > 0 && currentPlayerBidHistory[0].bidderId === bidderId) {
       return NextResponse.json({ 
         error: 'You are already the highest bidder' 
       }, { status: 400 })
@@ -109,6 +129,11 @@ export async function POST(
     const actualBidAmount = amount
 
     // Create new bid entry with player ID to track which player this bid is for
+    console.log('Creating new bid entry:', {
+      currentPlayerId: currentPlayer?.id,
+      currentPlayerName: currentPlayer?.data
+    })
+    
     const newBid = {
       bidderId,
       amount: actualBidAmount,
@@ -118,6 +143,8 @@ export async function POST(
       bidderUsername: bidder.username,
       playerId: currentPlayer?.id // Associate bid with current player
     }
+    
+    console.log('New bid created with playerId:', newBid.playerId)
 
     bidHistory.unshift(newBid)
 
