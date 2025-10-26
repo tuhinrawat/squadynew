@@ -104,14 +104,19 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Create new bid entry
+    // Calculate the actual bid amount (not cumulative, just store the total bid)
+    // The 'amount' parameter is the TOTAL bid amount for the current player
+    const actualBidAmount = amount
+
+    // Create new bid entry with player ID to track which player this bid is for
     const newBid = {
       bidderId,
-      amount,
+      amount: actualBidAmount,
       timestamp: new Date().toISOString(),
       bidderName: bidder.user.name,
       teamName: bidder.teamName,
-      bidderUsername: bidder.username
+      bidderUsername: bidder.username,
+      playerId: currentPlayer?.id // Associate bid with current player
     }
 
     bidHistory.unshift(newBid)

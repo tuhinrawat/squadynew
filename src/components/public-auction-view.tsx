@@ -66,24 +66,41 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   // Initialize bid history and current bid from initial data
   useEffect(() => {
-    console.log('PublicAuctionView: Initializing bid history, length:', initialHistory.length)
-    setBidHistory(initialHistory)
+    console.log('PublicAuctionView: Initializing bid history, length:', initialHistory.length, 'currentPlayer:', currentPlayer?.id)
     
-    // Set current bid if there's a bid in the history
-    if (initialHistory.length > 0) {
-      const latestBid = initialHistory.find(bid => !bid.type || bid.type === 'bid')
-      if (latestBid) {
-        console.log('PublicAuctionView: Setting initial current bid:', latestBid)
-        setCurrentBid({
-          bidderId: latestBid.bidderId,
-          amount: latestBid.amount,
-          bidderName: latestBid.bidderName,
-          teamName: latestBid.teamName
-        })
-        setHighestBidderId(latestBid.bidderId)
+    // Filter bid history to only show bids for the current player
+    if (currentPlayer?.id) {
+      const filteredHistory = initialHistory.filter(bid => {
+        // Show bids that match the current player OR don't have a playerId (legacy bids)
+        return !bid.playerId || bid.playerId === currentPlayer.id
+      })
+      console.log('PublicAuctionView: Filtered history length:', filteredHistory.length)
+      setBidHistory(filteredHistory)
+      
+      // Set current bid if there's a bid in the filtered history
+      if (filteredHistory.length > 0) {
+        const latestBid = filteredHistory.find(bid => !bid.type || bid.type === 'bid')
+        if (latestBid) {
+          console.log('PublicAuctionView: Setting initial current bid:', latestBid)
+          setCurrentBid({
+            bidderId: latestBid.bidderId,
+            amount: latestBid.amount,
+            bidderName: latestBid.bidderName,
+            teamName: latestBid.teamName
+          })
+          setHighestBidderId(latestBid.bidderId)
+        }
+      } else {
+        // No bids for this player
+        setCurrentBid(null)
+        setHighestBidderId(null)
       }
+    } else {
+      setBidHistory([])
+      setCurrentBid(null)
+      setHighestBidderId(null)
     }
-  }, [initialHistory])
+  }, [initialHistory, currentPlayer?.id])
 
   // Refresh players list from server
   const refreshPlayersList = async () => {
@@ -460,7 +477,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                             ✅ {bid.playerName} SOLD!
                           </div>
                           <div className="text-xs text-green-700 dark:text-green-400">
-                            To: {bid.bidderName} {bid.teamName && `(${bid.teamName})`} for ₹{bid.amount.toLocaleString('en-IN')}
+                            To: {bid.bidderName} {bid.teamName && `(${bid.teamName})`} for ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
                           </div>
                           <div className="text-xs text-green-600 dark:text-green-500 mt-1">
                             {timeAgo}
@@ -535,7 +552,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           )}
                         </div>
                         <div className="text-xs text-gray-700 dark:text-gray-300">
-                          {commentary} • ₹{bid.amount.toLocaleString('en-IN')}
+                          {commentary} • ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                           {timeAgo}
@@ -609,7 +626,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     )}
                   </div>
                   <div className="text-xs text-gray-700 dark:text-gray-300">
-                    ₹{bid.amount.toLocaleString('en-IN')}
+                    ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {timeAgo}

@@ -227,10 +227,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   }, [])
 
   const handleNewPlayer = useCallback((data: any) => {
+    console.log('AdminAuctionView: New player loaded', data.player)
     setIsImageLoading(true)
     setCurrentPlayer(data.player)
     setTimer(30)
     setBidHistory([]) // Clear bid history for new player
+    setCurrentBid(null) // Clear current bid
+    setHighestBidderId(null) // Clear highest bidder
+    setSelectedBidderForBid(null) // Clear selected bidder
+    setCustomBidAmount('') // Clear custom bid amount
     // Refresh full bid history from server when new player loads
     refreshAuctionState()
   }, [refreshAuctionState])
