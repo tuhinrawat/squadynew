@@ -212,16 +212,16 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
                 </div>
 
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => quickBid(10000)} disabled={isHighestBidder}>
+                  <Button variant="outline" size="sm" onClick={() => quickBid(10000)} disabled={isHighestBidder} className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                     +₹10K
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => quickBid(25000)} disabled={isHighestBidder}>
+                  <Button variant="outline" size="sm" onClick={() => quickBid(25000)} disabled={isHighestBidder} className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                     +₹25K
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => quickBid(50000)} disabled={isHighestBidder}>
+                  <Button variant="outline" size="sm" onClick={() => quickBid(50000)} disabled={isHighestBidder} className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                     +₹50K
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => quickBid(100000)} disabled={isHighestBidder}>
+                  <Button variant="outline" size="sm" onClick={() => quickBid(100000)} disabled={isHighestBidder} className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                     +₹100K
                   </Button>
                 </div>
@@ -235,7 +235,7 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
                       disabled={isPlacingBid}
                       variant="outline"
                       size="sm"
-                      className="text-xs"
+                      className="text-xs text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
                       Undo My Bid
                     </Button>

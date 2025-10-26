@@ -65,7 +65,7 @@ export function ResultsView({ auction, userId, userRole }: ResultsViewProps) {
           </div>
           <div className="flex gap-4">
             {userId && (
-              <Button variant="outline" asChild>
+              <Button variant="outline" asChild className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                 <Link href={userRole === 'ADMIN' ? '/dashboard/auctions' : '/bidder/auctions'}>
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back

@@ -166,7 +166,7 @@ export default function SettingsPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => handleCopyCode(newCode)}
-                  className="border-green-300 dark:border-green-700"
+                  className="border-green-300 dark:border-green-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   {copiedCode === newCode ? (
                     <Check className="h-4 w-4 text-green-600" />

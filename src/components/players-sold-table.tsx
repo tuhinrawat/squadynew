@@ -428,7 +428,7 @@ export function PlayersSoldTable({ auction }: PlayersSoldTableProps) {
                       <Button 
                         variant="ghost" 
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-6 w-6 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800"
                         onClick={() => {
                           setSelectedPlayer(player)
                           setDialogOpen(true)

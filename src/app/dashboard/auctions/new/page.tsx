@@ -148,7 +148,9 @@ export default function NewAuction() {
     <div className="space-y-6">
       <div className="flex items-center space-x-4">
         <Link href="/dashboard/auctions">
-          <Button variant="outline" size="sm">← Back to Auctions</Button>
+          <Button variant="outline" size="sm" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+            ← Back to Auctions
+          </Button>
         </Link>
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Create New Auction</h1>
@@ -355,7 +357,9 @@ export default function NewAuction() {
 
             <div className="flex justify-end space-x-4">
               <Link href="/dashboard/auctions">
-                <Button type="button" variant="outline">Cancel</Button>
+                <Button type="button" variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+                  Cancel
+                </Button>
               </Link>
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? 'Creating...' : 'Create Auction'}

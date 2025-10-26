@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -69,28 +70,34 @@ export default function PlayerRegistration() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-teal-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Navigation */}
       <nav className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Link href="/" className="text-2xl font-bold text-teal-600 dark:text-teal-400">
-                Squady
+              <Link href="/">
+                <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-10 w-auto" />
               </Link>
             </div>
             <div className="flex items-center space-x-4">
               <Link href="/">
-                <Button variant="ghost">Home</Button>
+                <Button variant="ghost" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                  Home
+                </Button>
               </Link>
               <Link href="/signin">
-                <Button variant="outline">Sign In</Button>
+                <Button variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+                  Sign In
+                </Button>
               </Link>
             </div>
           </div>
         </div>
       </nav>
 
+      {/* Main Content */}
+      <div className="flex-1">
       {/* Hero Section */}
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
@@ -189,9 +196,10 @@ export default function PlayerRegistration() {
           )}
         </div>
       </section>
+      </div>
 
       {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-black text-white py-12 px-4 sm:px-6 lg:px-8">
+      <footer className="bg-gray-900 dark:bg-black text-white py-12 px-4 sm:px-6 lg:px-8 mt-auto">
         <div className="max-w-7xl mx-auto text-center">
           <h3 className="text-xl font-bold text-teal-400 mb-4">Squady</h3>
           <p className="text-gray-400 mb-4">

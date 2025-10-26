@@ -555,7 +555,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowAllPlayerDetails(!showAllPlayerDetails)}
-                        className="w-full text-xs sm:text-sm"
+                        className="w-full text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800"
                       >
                         {showAllPlayerDetails ? (
                           <>

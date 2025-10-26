@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -266,7 +267,9 @@ export default function PlayerRegistrationForm() {
             <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
             <div className="flex space-x-4">
               <Link href="/register">
-                <Button variant="outline">Back to Auctions</Button>
+                <Button variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+                  Back to Auctions
+                </Button>
               </Link>
               <Button onClick={fetchAuctionDetails}>Try Again</Button>
             </div>
@@ -303,12 +306,12 @@ export default function PlayerRegistrationForm() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <Link href="/" className="text-2xl font-bold text-teal-600 dark:text-teal-400">
-                Squady
+              <Link href="/">
+                <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-10 w-auto" />
               </Link>
             </div>
             <Link href="/register">
-              <Button variant="ghost">
+              <Button variant="ghost" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Auctions
               </Button>

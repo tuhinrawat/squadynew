@@ -347,6 +347,7 @@ export default function BidderManagement() {
                 type="button"
                 variant="outline"
                 onClick={() => setCreateDialogOpen(false)}
+                className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Cancel
               </Button>
