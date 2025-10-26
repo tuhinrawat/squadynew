@@ -11,7 +11,7 @@ import { formatCurrency } from '@/lib/currency'
 interface ResultsViewProps {
   auction: any
   userId: string
-  userRole: 'ADMIN' | 'BIDDER'
+  userRole: 'ADMIN' | 'BIDDER' | 'SUPER_ADMIN'
 }
 
 export function ResultsView({ auction, userId, userRole }: ResultsViewProps) {
