@@ -58,11 +58,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [isImageLoading, setIsImageLoading] = useState(false)
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
   const [players, setPlayers] = useState(auction.players)
+  const [biddersState, setBiddersState] = useState(bidders)
 
   // Set client-side rendered flag
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Sync biddersState with bidders prop when it changes
+  useEffect(() => {
+    setBiddersState(bidders)
+  }, [bidders])
 
   // Initialize bid history and current bid from initial data
   useEffect(() => {
@@ -105,13 +111,26 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     }
   }, [initialHistory, currentPlayer?.id])
 
-  // Refresh players list from server
+  // Refresh players and bidders list from server
   const refreshPlayersList = async () => {
     try {
       const response = await fetch(`/api/auctions/${auction.id}`)
       const data = await response.json()
-      if (data.auction?.players) {
-        setPlayers(data.auction.players)
+      if (data.auction) {
+        if (data.auction.players) {
+          setPlayers(data.auction.players)
+        }
+        if (data.auction.bidders) {
+          // Update bidders state
+          const updatedBidders = data.auction.bidders.map((b: any) => ({
+            id: b.id,
+            teamName: b.teamName,
+            username: b.username,
+            remainingPurse: b.remainingPurse,
+            logoUrl: b.logoUrl
+          }))
+          setBiddersState(updatedBidders)
+        }
       }
     } catch (error) {
       console.error('Failed to refresh players list:', error)
@@ -172,6 +191,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         }
         return prev
       })
+      
+      // Refresh players and bidders list immediately
+      refreshPlayersList()
       
       setSoldAnimation(true)
       setTimeout(() => {
@@ -597,10 +619,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         </div>
 
         {/* Teams Overview */}
-        <TeamsOverview auction={{ ...auction, bidders: bidders.map(b => ({ ...b, user: { name: b.username } })), players: players as any }} />
+        <TeamsOverview auction={{ ...auction, bidders: biddersState.map(b => ({ ...b, user: { name: b.username } })), players: players as any }} />
 
         {/* Players Sold Table */}
-        <PlayersSoldTable auction={{ ...auction, players: players as any, bidders: bidders.map(b => ({ ...b, user: { name: b.username } })), bidHistory }} />
+        <PlayersSoldTable auction={{ ...auction, players: players as any, bidders: biddersState.map(b => ({ ...b, user: { name: b.username } })), bidHistory }} />
       </div>
 
       {/* Mobile Bid History Floating Button */}
