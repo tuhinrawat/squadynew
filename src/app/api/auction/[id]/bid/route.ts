@@ -76,6 +76,14 @@ export async function POST(
     // Validate bid amount
     const rules = auction.rules as any
     const minIncrement = rules?.minBidIncrement || 50000
+    
+    console.log('Bid validation:', { 
+      currentBid, 
+      minIncrement, 
+      amount, 
+      required: currentBid + minIncrement,
+      check: amount <= currentBid + minIncrement - 1
+    })
 
     if (amount <= currentBid + minIncrement - 1) {
       return NextResponse.json({ 
