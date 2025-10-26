@@ -7,7 +7,10 @@ export async function GET(request: NextRequest) {
     const auctions = await prisma.auction.findMany({
       where: {
         isPublished: true,
-        registrationOpen: true
+        registrationOpen: true,
+        status: {
+          not: 'COMPLETED' // Exclude completed auctions
+        }
       },
       orderBy: {
         createdAt: 'desc'
