@@ -56,8 +56,13 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
   })
 
   const handlePlaceBid = async () => {
-    if (!userBidder || bidAmount < nextValidBid) {
-      setError(`Minimum bid is ₹${nextValidBid.toLocaleString('en-IN')}`)
+    if (!userBidder) {
+      setError('Please log in to place a bid')
+      return
+    }
+    
+    if (currentBid && bidAmount <= currentBid.amount + minIncrement - 1) {
+      setError(`Bid must be at least ₹${(currentBid.amount + minIncrement).toLocaleString('en-IN')} (₹${minIncrement.toLocaleString('en-IN')} more than current bid)`)
       return
     }
 

@@ -64,6 +64,27 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setIsClient(true)
   }, [])
 
+  // Initialize bid history and current bid from initial data
+  useEffect(() => {
+    console.log('PublicAuctionView: Initializing bid history, length:', initialHistory.length)
+    setBidHistory(initialHistory)
+    
+    // Set current bid if there's a bid in the history
+    if (initialHistory.length > 0) {
+      const latestBid = initialHistory.find(bid => !bid.type || bid.type === 'bid')
+      if (latestBid) {
+        console.log('PublicAuctionView: Setting initial current bid:', latestBid)
+        setCurrentBid({
+          bidderId: latestBid.bidderId,
+          amount: latestBid.amount,
+          bidderName: latestBid.bidderName,
+          teamName: latestBid.teamName
+        })
+        setHighestBidderId(latestBid.bidderId)
+      }
+    }
+  }, [initialHistory])
+
   // Refresh players list from server
   const refreshPlayersList = async () => {
     try {
@@ -87,6 +108,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Real-time subscriptions
   usePusher(auction.id, {
     onNewBid: (data) => {
+      console.log('PublicAuctionView: onNewBid called', data)
       setCurrentBid({
         bidderId: data.bidderId,
         amount: data.amount,
@@ -95,13 +117,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       })
       setHighestBidderId(data.bidderId)
       setTimer(data.countdownSeconds || 30)
-      setBidHistory(prev => [{
-        bidderId: data.bidderId,
-        amount: data.amount,
-        timestamp: new Date(),
-        bidderName: data.bidderName,
-        teamName: data.teamName
-      }, ...prev])
+      setBidHistory(prev => {
+        console.log('PublicAuctionView: Updating bid history, prev length:', prev.length)
+        return [{
+          bidderId: data.bidderId,
+          amount: data.amount,
+          timestamp: new Date(),
+          bidderName: data.bidderName,
+          teamName: data.teamName
+        }, ...prev]
+      })
     },
     onPlayerSold: () => {
       setSoldAnimation(true)

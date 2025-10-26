@@ -77,9 +77,9 @@ export async function POST(
     const rules = auction.rules as any
     const minIncrement = rules?.minBidIncrement || 50000
 
-    if (amount < currentBid + minIncrement) {
+    if (amount <= currentBid + minIncrement - 1) {
       return NextResponse.json({ 
-        error: `Bid must be at least ₹${(currentBid + minIncrement).toLocaleString('en-IN')}` 
+        error: `Bid must be at least ₹${(currentBid + minIncrement).toLocaleString('en-IN')} (₹${minIncrement.toLocaleString('en-IN')} more than current bid)` 
       }, { status: 400 })
     }
 
