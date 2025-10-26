@@ -39,11 +39,13 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
 
   // If user is logged in, check access
   let isAdmin = false
+  let isSuperAdmin = false
   let isCreator = false
   let isParticipant = false
 
   if (session) {
     isAdmin = session.user?.role === 'ADMIN'
+    isSuperAdmin = session.user?.role === 'SUPER_ADMIN'
     isCreator = auction.createdById === session.user?.id
     isParticipant = auction.bidders.some(b => b.userId === session.user?.id)
   }
@@ -103,7 +105,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     redirect('/signin')
   }
 
-  if (!isAdmin && !isCreator && !isParticipant && !auction.isPublished) {
+  if (!isSuperAdmin && !isAdmin && !isCreator && !isParticipant && !auction.isPublished) {
     redirect('/dashboard')
   }
 
@@ -161,7 +163,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     return <ResultsView auction={auction} userId={session.user.id} userRole={session.user.role} />
   }
 
-  return isAdmin && isCreator ? (
+  return isSuperAdmin || (isAdmin && isCreator) ? (
     <AdminAuctionView 
       auction={auction}
       currentPlayer={currentPlayer}
