@@ -58,7 +58,17 @@ export async function POST(
     }
 
     const highestBid = bidHistory[0]
-    const winningBidder = auction.bidders.find(b => b.id === highestBid.bidderId)
+    const winningBidderId = auction.bidders.find(b => b.id === highestBid.bidderId)?.id
+
+    if (!winningBidderId) {
+      return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })
+    }
+
+    // Fetch winning bidder with user relation
+    const winningBidder = await prisma.bidder.findUnique({
+      where: { id: winningBidderId },
+      include: { user: true }
+    })
 
     if (!winningBidder) {
       return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })

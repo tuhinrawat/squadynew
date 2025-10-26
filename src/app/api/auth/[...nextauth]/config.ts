@@ -69,8 +69,13 @@ export const authOptions: NextAuthOptions = {
       return session
     },
     async redirect({ url, baseUrl }) {
-      // If redirecting after signin, go to dashboard
-      if (url === baseUrl || url.startsWith(baseUrl + '/')) {
+      // If redirecting after signout, go to home
+      if (url === baseUrl || url === `${baseUrl}/` || url.startsWith(baseUrl + '/')) {
+        // Check if this is a signout (url is baseUrl)
+        if (url === baseUrl || url === `${baseUrl}/`) {
+          return baseUrl
+        }
+        // Otherwise, default signin goes to dashboard
         return baseUrl + '/dashboard'
       }
       return url
