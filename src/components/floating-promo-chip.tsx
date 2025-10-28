@@ -37,19 +37,20 @@ export default function FloatingPromoChip({ variant = 'purple', sessionKey = 'pr
 
   return (
     <>
-      {/* Floating Chip - Mobile only */}
+      {/* Floating Chip - Subtle & Curiosity-Driven */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`sm:hidden fixed bottom-20 right-4 z-50 px-3 py-2 rounded-full text-xs font-semibold ${chipClasses}`}
-        aria-label="What is Professio AI?"
+        className={`fixed bottom-6 left-4 z-40 px-3 py-2 rounded-full text-[10px] sm:text-xs font-medium shadow-md hover:shadow-xl transition-all hover:scale-110 ${chipClasses} flex items-center gap-1.5 animate-pulse`}
+        aria-label="What is Professio AI"
       >
-        What is Professio AI?
+        <span>✨</span>
+        <span>Professio AI?</span>
       </button>
 
-      {/* Bottom Sheet */}
+      {/* Bottom Sheet - Mobile */}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="sm:hidden h-[70vh] p-0 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <SheetContent side="bottom" className="sm:max-w-md h-[70vh] sm:h-auto p-0 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
           <SheetHeader className="px-4 pt-4">
             <SheetTitle className="text-left text-gray-900 dark:text-white">Your career AI best friend</SheetTitle>
             <SheetDescription className="text-left text-gray-700 dark:text-gray-300">Professio AI helps you plan, upskill, and land roles faster.</SheetDescription>
