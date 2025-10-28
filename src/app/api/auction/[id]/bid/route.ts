@@ -110,9 +110,12 @@ export async function POST(
       currentBid = lastBid.amount || 0
     }
 
-    // Validate bid amount
+    // Validate bid amount and roster constraints
     const rules = auction.rules as any
     const minIncrement = rules?.minBidIncrement || 1000
+    const mandatoryTeamSize = Number(rules?.mandatoryTeamSize) || null
+    const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
+    const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || Number(minIncrement) || 0
     
     logger.log('Bid validation', { 
       currentBid, 
@@ -132,6 +135,31 @@ export async function POST(
       return NextResponse.json({ 
         error: 'Insufficient remaining purse' 
       }, { status: 400 })
+    }
+
+    // Enforce roster-size financial feasibility: ensure enough purse remains
+    // to reach mandatoryTeamSize with at least minPerPlayerReserve per remaining slot
+    if (mandatoryTeamSize) {
+      // Count players already bought by this bidder in this auction
+      const playersBoughtByBidder = await prisma.player.count({
+        where: { auctionId: params.id, soldTo: bidder.id }
+      })
+
+      // If maxTeamSize is set, prevent bidding that would exceed it after winning
+      if (maxTeamSize && playersBoughtByBidder + 1 > maxTeamSize) {
+        return NextResponse.json({
+          error: `Team size limit reached (max ${maxTeamSize}). Cannot acquire more players.`
+        }, { status: 400 })
+      }
+
+      const remainingSlotsAfterThis = Math.max(mandatoryTeamSize - (playersBoughtByBidder + 1), 0)
+      const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
+      const remainingAfterBid = bidder.remainingPurse - amount
+      if (remainingAfterBid < requiredReserve) {
+        return NextResponse.json({
+          error: `This bid would leave insufficient purse to complete the mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after bid: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`
+        }, { status: 400 })
+      }
     }
 
     // Check if this bidder is already the highest bidder (for current player only)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 
 export async function POST(
@@ -74,6 +75,34 @@ export async function POST(
       return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })
     }
 
+    // Enforce purse and squad-size feasibility at sale time as a safety net
+    const rules = auction.rules as any
+    const mandatoryTeamSize = Number(rules?.mandatoryTeamSize) || null
+    const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
+    const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || Number(rules?.minBidIncrement) || 0
+
+    // Count already-bought players
+    const playersBoughtByBidder = await prisma.player.count({
+      where: { auctionId: params.id, soldTo: winningBidder.id }
+    })
+
+    if (maxTeamSize && playersBoughtByBidder + 1 > maxTeamSize) {
+      return NextResponse.json({
+        error: `Team size limit reached (max ${maxTeamSize}). Cannot acquire more players.`
+      }, { status: 400 })
+    }
+
+    if (mandatoryTeamSize) {
+      const remainingSlotsAfterThis = Math.max(mandatoryTeamSize - (playersBoughtByBidder + 1), 0)
+      const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
+      const remainingAfterBid = winningBidder.remainingPurse - highestBid.amount
+      if (remainingAfterBid < requiredReserve) {
+        return NextResponse.json({
+          error: `Sale would leave insufficient purse to complete mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after sale: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`
+        }, { status: 400 })
+      }
+    }
+
     // Mark player as sold
     await prisma.player.update({
       where: { id: playerId },
@@ -141,8 +170,7 @@ export async function POST(
         player: nextPlayer
       } as any)
 
-      // Reset timer
-      const rules = auction.rules as any
+    // Reset timer
       const countdownSeconds = rules?.countdownSeconds || 30
       await triggerAuctionEvent(params.id, 'timer-update', {
         seconds: countdownSeconds
