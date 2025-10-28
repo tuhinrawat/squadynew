@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuChe
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { ChevronDown, Search, Filter, ArrowUpDown, Eye, EyeOff, GripVertical } from 'lucide-react'
+import { logger } from '@/lib/logger'
 
 export interface DataTableColumn {
   key: string
@@ -62,8 +63,7 @@ export function DataTable({
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
     new Set(columns.slice(0, 6).map(col => col.key))
   )
-  console.log('Available columns:', columns.map(col => col.key))
-  console.log('Initial visible columns:', Array.from(new Set(columns.slice(0, 6).map(col => col.key))))
+  logger.log('DataTable columns init')
   const [filters, setFilters] = useState<FilterConfig>({})
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
   const [columnOrder, setColumnOrder] = useState<string[]>(columns.map(col => col.key))
@@ -133,17 +133,17 @@ export function DataTable({
   }
 
   const toggleColumnVisibility = (key: string) => {
-    console.log('Toggling column:', key, 'Current visible columns:', Array.from(visibleColumns))
+    logger.log('Toggling column visibility', { key })
     setVisibleColumns(prev => {
       const newSet = new Set(prev)
       if (newSet.has(key)) {
         newSet.delete(key)
-        console.log('Removed column:', key)
+        logger.log('Removed column', key)
       } else {
         newSet.add(key)
-        console.log('Added column:', key)
+        logger.log('Added column', key)
       }
-      console.log('New visible columns:', Array.from(newSet))
+      logger.log('New visible columns size', newSet.size)
       return newSet
     })
   }
@@ -249,7 +249,7 @@ export function DataTable({
                           type="checkbox"
                           checked={visibleColumns.has(column.key)}
                           onChange={(e) => {
-                            console.log('Checkbox clicked for column:', column.key, 'Checked:', e.target.checked)
+                            logger.log('Column checkbox toggled', { key: column.key, checked: e.target.checked })
                             e.stopPropagation()
                             toggleColumnVisibility(column.key)
                           }}

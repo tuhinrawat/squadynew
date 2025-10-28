@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { logger } from '@/lib/logger'
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,7 +36,7 @@ This message was sent from the Squady contact form.
 
     // For now, we'll just return success
     // In production, implement actual email sending with nodemailer or a service like SendGrid
-    console.log('Contact form submission:', { name, email, phone, subject, message })
+    logger.log('Contact form submission received')
 
     return NextResponse.json({
       success: true,
@@ -49,7 +50,7 @@ This message was sent from the Squady contact form.
     })
 
   } catch (error) {
-    console.error('Error processing contact form:', error)
+    logger.error('Error processing contact form:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

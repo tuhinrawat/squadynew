@@ -10,6 +10,7 @@ import { Clock, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
+import { logger } from '@/lib/logger'
 import { TeamsOverview } from '@/components/teams-overview'
 import { PlayersSoldTable } from '@/components/players-sold-table'
 
@@ -73,7 +74,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   // Initialize bid history and current bid from initial data
   useEffect(() => {
-    console.log('PublicAuctionView: Initializing bid history, length:', initialHistory.length, 'currentPlayer:', currentPlayer?.id)
+    logger.log('PublicAuctionView init', { historyLength: initialHistory.length, currentPlayerId: currentPlayer?.id })
     
     // Filter bid history to only show bids for the current player
     if (currentPlayer?.id) {
@@ -81,7 +82,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         // Show bids that match the current player OR don't have a playerId (legacy bids)
         return !bid.playerId || bid.playerId === currentPlayer.id
       })
-      console.log('PublicAuctionView: Filtered history length:', filteredHistory.length)
+      logger.log('PublicAuctionView filtered history', { length: filteredHistory.length })
       // Reverse to have oldest first, newest last (matching admin view)
       const reversedHistory = [...filteredHistory].reverse()
       setBidHistory(reversedHistory)
@@ -91,7 +92,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         // Get the latest bid (last item is most recent since we append to end)
         const latestBid = reversedHistory[reversedHistory.length - 1]
         if (latestBid && (!latestBid.type || latestBid.type === 'bid')) {
-          console.log('PublicAuctionView: Setting initial current bid:', latestBid)
+          logger.log('PublicAuctionView initial current bid', latestBid)
           setCurrentBid({
             bidderId: latestBid.bidderId,
             amount: latestBid.amount,
@@ -134,7 +135,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         }
       }
     } catch (error) {
-      console.error('Failed to refresh players list:', error)
+      logger.error('Failed to refresh players list:', error)
     }
   }
 
@@ -149,7 +150,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Real-time subscriptions
   usePusher(auction.id, {
     onNewBid: (data) => {
-      console.log('PublicAuctionView: onNewBid called', data)
+      logger.log('PublicAuctionView onNewBid')
       setCurrentBid({
         bidderId: data.bidderId,
         amount: data.amount,
@@ -159,7 +160,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setHighestBidderId(data.bidderId)
       setTimer(data.countdownSeconds || 30)
       setBidHistory(prev => {
-        console.log('PublicAuctionView: Updating bid history, prev length:', prev.length)
+        logger.log('PublicAuctionView updating bid history', { prevLength: prev.length })
         // Add newest bid at the end (matching admin view order)
         return [...prev, {
           bidderId: data.bidderId,
@@ -173,7 +174,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       })
     },
     onPlayerSold: (data) => {
-      console.log('PublicAuctionView: Player sold', data)
+      logger.log('PublicAuctionView player sold')
       
       // Add sold event to bid history using the latest bid in history
       setBidHistory(prev => {
@@ -344,7 +345,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       playerData['profile_photo'] || playerData['Profile_Photo'] || playerData['PHOTO']
                     
                     if (!profilePhotoLink) {
-                      console.log('No profile photo found. Available fields:', Object.keys(playerData))
+                      logger.log('No profile photo found')
                       // Show placeholder avatar instead of nothing
                       return (
                         <div className="flex flex-col items-center gap-2">
@@ -358,7 +359,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       )
                     }
                     
-                    console.log('Profile photo link found:', profilePhotoLink)
+                    logger.log('Profile photo link found')
                     
                     // Extract file ID from the Google Drive URL
                     const fileId = profilePhotoLink.includes('/file/d/') 
@@ -388,7 +389,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                                 className="rounded-full object-cover w-full h-full"
                                 onError={(e) => {
                                   setIsImageLoading(false)
-                                  console.error('Image failed to load, showing initial')
+                                  logger.error('Image failed to load, showing initial')
                                   const img = e.currentTarget
                                   img.style.display = 'none'
                                   const parent = img.parentElement
@@ -402,7 +403,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                                 }}
                                 onLoad={() => {
                                   setIsImageLoading(false)
-                                  console.log('✅ Image loaded successfully via proxy')
+                                  logger.log('Image loaded successfully via proxy')
                                 }}
                               />
                             </>

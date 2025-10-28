@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resetTimer } from '@/lib/auction-timer'
 
@@ -96,8 +97,8 @@ export async function POST(
     const currentPlayerBidHistory = currentPlayer?.id 
       ? bidHistory.filter(bid => !bid.playerId || bid.playerId === currentPlayer.id)
       : []
-    
-    console.log('Filtering bids for current player:', {
+  
+    logger.log('Filtering bids for current player', {
       currentPlayerId: currentPlayer?.id,
       totalBidHistoryLength: bidHistory.length,
       filteredLength: currentPlayerBidHistory.length,
@@ -113,7 +114,7 @@ export async function POST(
     const rules = auction.rules as any
     const minIncrement = rules?.minBidIncrement || 1000
     
-    console.log('Bid validation:', { 
+    logger.log('Bid validation', { 
       currentBid, 
       minIncrement, 
       amount, 
@@ -134,7 +135,7 @@ export async function POST(
     }
 
     // Check if this bidder is already the highest bidder (for current player only)
-    console.log('Checking if already highest bidder:', {
+    logger.log('Checking if already highest bidder', {
       currentPlayerBidHistoryLength: currentPlayerBidHistory.length,
       latestBidId: currentPlayerBidHistory[0]?.bidderId,
       biddingBidderId: bidderId,
@@ -152,7 +153,7 @@ export async function POST(
     const actualBidAmount = amount
 
     // Create new bid entry with player ID to track which player this bid is for
-    console.log('Creating new bid entry:', {
+    logger.log('Creating new bid entry', {
       currentPlayerId: currentPlayer?.id,
       currentPlayerName: currentPlayer?.data
     })
@@ -167,7 +168,7 @@ export async function POST(
       playerId: currentPlayer?.id // Associate bid with current player
     }
     
-    console.log('New bid created with playerId:', newBid.playerId)
+    logger.log('New bid created with playerId', newBid.playerId)
 
     bidHistory.unshift(newBid)
 
@@ -195,7 +196,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, bid: newBid })
   } catch (error) {
-    console.error('Error placing bid:', error)
+    logger.error('Error placing bid:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

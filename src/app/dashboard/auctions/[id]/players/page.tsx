@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable, DataTableColumn } from '@/components/data-table'
 import { parseExcelFile, ParsedPlayerData, validatePlayerData, cleanPlayerData } from '@/lib/excel-parser'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus } from 'lucide-react'
+import { logger } from '@/lib/logger'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 
@@ -59,7 +60,7 @@ export default function PlayerManagement() {
         }
       }
     } catch (error) {
-      console.error('Error fetching auction details:', error)
+      logger.error('Error fetching auction details:', error)
     }
   }
 
@@ -244,7 +245,7 @@ export default function PlayerManagement() {
   }
 
   const handleEditPlayer = async (player: any) => {
-    console.log('Edit button clicked for player:', player)
+    logger.log('Edit player clicked')
     // For now, just show an alert with player data
     // TODO: Implement proper edit modal
     const playerData = Object.entries(player.data)
@@ -278,7 +279,7 @@ export default function PlayerManagement() {
   }
 
   const handleDeletePlayer = async (player: any) => {
-    console.log('Delete button clicked for player:', player)
+    logger.log('Delete player clicked')
     if (!confirm('Are you sure you want to delete this player?')) return
 
     try {
