@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, ReactElement } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -13,8 +13,8 @@ type TutorialStep = {
   id: string
   title: string
   description: string
-  icon: JSX.Element
-  content: JSX.Element
+  icon: ReactElement
+  content: ReactElement
 }
 
 const tutorialSteps: TutorialStep[] = [
