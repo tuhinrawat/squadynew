@@ -1,4 +1,4 @@
-# Dashboard Design Analysis - Squady Auction Platform
+i# Dashboard Design Analysis - Squady Auction Platform
 
 ## Current Dashboard Structure
 

@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { MobileNavigation } from '@/components/mobile-navigation'
 import { DashboardSidebar } from '@/components/dashboard-sidebar'
+import FloatingPromoChip from '@/components/floating-promo-chip'
 
 export default async function DashboardLayout({
   children,
@@ -83,6 +84,8 @@ export default async function DashboardLayout({
           </div>
         </main>
       </div>
+      {/* Floating Promo Chip - Mobile only for dashboard */}
+      <FloatingPromoChip sessionKey="professio_promo_seen_dashboard" />
     </div>
   )
 }
