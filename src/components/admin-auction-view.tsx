@@ -981,27 +981,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                                     aria-label="Unpin"
                                   >✕</button>
                                 </div>
-                                <div className="mt-2 grid grid-cols-3 gap-1">
-                                  {[1, 5, 10].map(k => (
-                                    <Button key={k} size="sm" className={`h-7 text-[11px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
-                                      onClick={async () => {
-                                        try {
-                                          const rules = auction.rules as AuctionRules | undefined
-                                          const minInc = rules?.minBidIncrement || 1000
-                                          const totalBid = (currentBid?.amount || 0) + k * minInc
-                                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                                          })
-                                          if (!response.ok) {
-                                            const err = await response.json(); alert(err.error || 'Failed to place bid')
-                                          }
-                                        } catch {
-                                          alert('Failed to place bid')
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                  <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                                    onClick={async () => {
+                                      try {
+                                        const rules = auction.rules as AuctionRules | undefined
+                                        const minInc = rules?.minBidIncrement || 1000
+                                        const totalBid = (currentBid?.amount || 0) + minInc
+                                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                                          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                                        })
+                                        if (!response.ok) {
+                                          const err = await response.json(); alert(err.error || 'Failed to place bid')
                                         }
-                                      }}>
-                                      +{k}k
-                                    </Button>
-                                  ))}
+                                      } catch {
+                                        alert('Failed to place bid')
+                                      }
+                                    }}>
+                                    Raise (+1K)
+                                  </Button>
+                                  <Button size="sm" className="h-8 text-[12px] bg-blue-600 hover:bg-blue-700 text-white" disabled={bidder.id === highestBidderId}
+                                    onClick={() => setSelectedBidderForBid(bidder.id)}>
+                                    Custom
+                                  </Button>
                                 </div>
                               </div>
                             ))}
@@ -1031,27 +1033,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                               aria-label={pinnedBidderIds.includes(bidder.id) ? 'Unpin' : 'Pin'}
                             >📌</button>
                           </div>
-                          <div className="mt-2 grid grid-cols-3 gap-1">
-                            {[1, 5, 10].map(k => (
-                              <Button key={k} size="sm" className={`h-7 text-[11px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
-                                onClick={async () => {
-                                  try {
-                                    const rules = auction.rules as AuctionRules | undefined
-                                    const minInc = rules?.minBidIncrement || 1000
-                                    const totalBid = (currentBid?.amount || 0) + k * minInc
-                                    const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                                      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                                    })
-                                    if (!response.ok) {
-                                      const err = await response.json(); alert(err.error || 'Failed to place bid')
-                                    }
-                                  } catch {
-                                    alert('Failed to place bid')
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                              onClick={async () => {
+                                try {
+                                  const rules = auction.rules as AuctionRules | undefined
+                                  const minInc = rules?.minBidIncrement || 1000
+                                  const totalBid = (currentBid?.amount || 0) + minInc
+                                  const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                                  })
+                                  if (!response.ok) {
+                                    const err = await response.json(); alert(err.error || 'Failed to place bid')
                                   }
-                                }}>
-                                +{k}k
-                              </Button>
-                            ))}
+                                } catch {
+                                  alert('Failed to place bid')
+                                }
+                              }}>
+                              Raise (+1K)
+                            </Button>
+                            <Button size="sm" className="h-8 text-[12px] bg-emerald-600 hover:bg-emerald-700 text-white" disabled={bidder.id === highestBidderId}
+                              onClick={() => setSelectedBidderForBid(bidder.id)}>
+                              Custom
+                            </Button>
                           </div>
                         </div>
                       ))}
