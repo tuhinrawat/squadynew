@@ -74,9 +74,10 @@ model Auction {
   createdAt        DateTime      @default(now())
 
   // Relations
-  createdBy User     @relation(fields: [createdById], references: [id])
-  players   Player[]
-  bidders   Bidder[]
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  players      Player[]
+  bidders      Bidder[]
+  chatMessages ChatMessage[]
 
   // Performance indexes
   @@index([createdById])
@@ -140,4 +141,19 @@ model Invitation {
   expiresAt DateTime?
 
   @@map("invitations")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  auctionId String
+  username  String
+  message   String   @db.Text
+  createdAt DateTime @default(now())
+
+  // Relations
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  // Performance indexes
+  @@index([auctionId, createdAt])
+  @@map("chat_messages")
 }

@@ -6,13 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Clock, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
+import { Clock, ChevronDown, ChevronUp, TrendingUp, Eye } from 'lucide-react'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { TeamsOverview } from '@/components/teams-overview'
 import { PlayersSoldTable } from '@/components/players-sold-table'
+import { useViewerCount } from '@/hooks/use-viewer-count'
+import { PublicChat } from '@/components/public-chat'
 
 interface BidHistoryEntry {
   bidderId: string
@@ -58,6 +60,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [isClient, setIsClient] = useState(false)
   const [showAllPlayerDetails, setShowAllPlayerDetails] = useState(false)
   const [isImageLoading, setIsImageLoading] = useState(false)
+  
+  // Track live viewer count
+  const viewerCount = useViewerCount(auction.id, true)
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
   const [players, setPlayers] = useState(auction.players)
   const [biddersState, setBiddersState] = useState(bidders)
@@ -267,23 +272,33 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
         {/* Stats */}
         <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 shadow border border-gray-200 dark:border-gray-700">
-          <div className="flex flex-wrap gap-4 sm:gap-6">
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Players:</span>
-              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{initialStats.total}</span>
+          <div className="flex flex-wrap items-center justify-between gap-4 sm:gap-6">
+            <div className="flex flex-wrap gap-4 sm:gap-6">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Players:</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{initialStats.total}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Sold:</span>
+                <span className="text-lg font-bold text-green-600">{initialStats.sold}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Unsold:</span>
+                <span className="text-lg font-bold text-yellow-600">{initialStats.unsold}</span>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Remaining:</span>
+                <span className="text-lg font-bold text-blue-600">{initialStats.remaining}</span>
+              </div>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Sold:</span>
-              <span className="text-lg font-bold text-green-600">{initialStats.sold}</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Unsold:</span>
-              <span className="text-lg font-bold text-yellow-600">{initialStats.unsold}</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Remaining:</span>
-              <span className="text-lg font-bold text-blue-600">{initialStats.remaining}</span>
-            </div>
+            {/* Live Viewer Count */}
+            {viewerCount > 0 && (
+              <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm animate-pulse">
+                <Eye className="h-4 w-4 text-red-500" />
+                <span className="font-semibold">{viewerCount}</span>
+                <span className="text-gray-600 dark:text-gray-400">watching</span>
+              </Badge>
+            )}
           </div>
         </div>
 
@@ -877,6 +892,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Public Chat */}
+      <PublicChat auctionId={auction.id} />
     </div>
   )
 }

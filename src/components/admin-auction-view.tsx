@@ -15,6 +15,7 @@ import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TeamsOverview } from '@/components/teams-overview'
 import { PlayersSoldTable } from '@/components/players-sold-table'
+import { PublicChat } from '@/components/public-chat'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
@@ -1949,6 +1950,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         </div>
       </div>
     )}
+
+    {/* Public Chat */}
+    <PublicChat auctionId={auction.id} />
     </>
   )
 }
