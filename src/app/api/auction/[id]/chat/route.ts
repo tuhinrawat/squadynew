@@ -37,6 +37,7 @@ export async function GET(
       select: {
         id: true,
         username: true,
+        userId: true,
         message: true,
         createdAt: true
       }
@@ -59,7 +60,7 @@ export async function POST(
 ) {
   try {
     const auctionId = params.id
-    const { username, message } = await request.json()
+    const { username, userId, message } = await request.json()
 
     if (!username || !message) {
       return NextResponse.json(
@@ -70,6 +71,7 @@ export async function POST(
 
     // Trim and validate
     const trimmedUsername = username.trim().slice(0, 50)
+    const trimmedUserId = userId?.trim() || null
     const trimmedMessage = message.trim().slice(0, 500)
 
     if (!trimmedUsername || !trimmedMessage) {
@@ -79,8 +81,8 @@ export async function POST(
       )
     }
 
-    // Rate limiting check
-    const userKey = `${auctionId}-${trimmedUsername}`
+    // Rate limiting check - use userId if available, otherwise username
+    const userKey = `${auctionId}-${trimmedUserId || trimmedUsername}`
     const now = Date.now()
     const userTimestamps = messageTimestamps.get(userKey) || []
     
@@ -124,6 +126,7 @@ export async function POST(
       data: {
         auctionId,
         username: trimmedUsername,
+        userId: trimmedUserId,
         message: trimmedMessage
       }
     })
@@ -132,6 +135,7 @@ export async function POST(
     await pusher.trigger(`auction-${auctionId}`, 'new-chat-message', {
       id: chatMessage.id,
       username: chatMessage.username,
+      userId: chatMessage.userId,
       message: chatMessage.message,
       createdAt: chatMessage.createdAt
     })

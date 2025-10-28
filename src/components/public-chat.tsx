@@ -14,6 +14,7 @@ interface ChatMessage {
   username: string
   message: string
   createdAt: Date | string
+  userId?: string // Optional unique identifier
 }
 
 interface PublicChatProps {
@@ -21,12 +22,13 @@ interface PublicChatProps {
 }
 
 // Memoized Message Component for performance
-const ChatMessageItem = memo(({ msg, username, isFirstInGroup }: { 
+const ChatMessageItem = memo(({ msg, userId, isFirstInGroup }: { 
   msg: ChatMessage; 
-  username: string; 
+  userId: string; 
   isFirstInGroup: boolean;
 }) => {
-  const isOwnMessage = msg.username === username
+  // Check if this message is from the current user by userId (more reliable than username)
+  const isOwnMessage = msg.userId === userId
   
   return (
     <motion.div
@@ -66,6 +68,7 @@ export function PublicChat({ auctionId }: PublicChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [username, setUsername] = useState('')
+  const [userId, setUserId] = useState('')
   const [message, setMessage] = useState('')
   const [hasSetUsername, setHasSetUsername] = useState(false)
   const [isSending, setIsSending] = useState(false)
@@ -77,8 +80,17 @@ export function PublicChat({ auctionId }: PublicChatProps) {
   // Quick reaction emojis
   const quickEmojis = ['❤️', '🔥', '👏', '😂', '🎉', '😍']
 
-  // Load username from session storage
+  // Load or generate unique user ID and username
   useEffect(() => {
+    // Get or create unique user ID for this browser
+    let storedUserId = sessionStorage.getItem('chat-user-id')
+    if (!storedUserId) {
+      storedUserId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      sessionStorage.setItem('chat-user-id', storedUserId)
+    }
+    setUserId(storedUserId)
+
+    // Load username if previously set
     const savedUsername = sessionStorage.getItem(`chat-username-${auctionId}`)
     if (savedUsername) {
       setUsername(savedUsername)
@@ -194,7 +206,11 @@ export function PublicChat({ auctionId }: PublicChatProps) {
       const response = await fetch(`/api/auction/${auctionId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, message: messageToSend })
+        body: JSON.stringify({ 
+          username, 
+          userId,
+          message: messageToSend 
+        })
       })
 
       if (!response.ok) {
@@ -210,7 +226,7 @@ export function PublicChat({ auctionId }: PublicChatProps) {
     } finally {
       setIsSending(false)
     }
-  }, [message, isSending, auctionId, username])
+  }, [message, isSending, auctionId, username, userId])
 
   const sendEmojiReaction = useCallback((emoji: string) => {
     // Create flying emoji - just visual, not saved to chat
@@ -350,7 +366,7 @@ export function PublicChat({ auctionId }: PublicChatProps) {
                                <ChatMessageItem 
                                  key={msg.id} 
                                  msg={msg} 
-                                 username={username} 
+                                 userId={userId} 
                                  isFirstInGroup={isFirstInGroup}
                                />
                              )

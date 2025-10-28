@@ -147,6 +147,7 @@ model ChatMessage {
   id        String   @id @default(cuid())
   auctionId String
   username  String
+  userId    String?  // Optional unique identifier for anonymous users
   message   String   @db.Text
   createdAt DateTime @default(now())
 
