@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "@/components/providers";
+import { JsonLd } from "@/components/json-ld";
 
 export const metadata: Metadata = {
   title: "Squady - Auction Management System",
@@ -49,36 +50,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'WebApplication',
-    name: 'Squady',
-    description: 'Professional auction management system for live player auctions',
-    url: 'https://squady.auction',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Any',
-    offers: {
-      '@type': 'Offer',
-      price: '0',
-      priceCurrency: 'USD',
-    },
-    featureList: [
-      'Live Bidding',
-      'Real-time Updates',
-      'Automated Timers',
-      'Team Management',
-      'Player Management',
-      'Bid History Tracking',
-    ],
-  };
-
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        <JsonLd />
         <Providers>
           {children}
         </Providers>

@@ -272,37 +272,37 @@ const tutorialSteps: TutorialStep[] = [
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <Button size="sm" className="bg-green-600">▶ Start</Button>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">▶ Start</Button>
                 <span className="text-sm">Begin the auction</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">⏸ Pause</Button>
+                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">⏸ Pause</Button>
                 <span className="text-sm">Temporarily pause</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">⏭ Next</Button>
+                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">⏭ Next</Button>
                 <span className="text-sm">Move to next player</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="destructive">⏹ End</Button>
+                <Button size="sm" variant="destructive" className="text-white">⏹ End</Button>
                 <span className="text-sm">End auction</span>
               </div>
             </div>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <Button size="sm" className="bg-purple-600">✓ Mark Sold</Button>
+                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white">✓ Mark Sold</Button>
                 <span className="text-sm">Confirm sale</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">❌ Mark Unsold</Button>
+                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">❌ Mark Unsold</Button>
                 <span className="text-sm">Mark as unsold</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">↶ Undo</Button>
+                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">↶ Undo</Button>
                 <span className="text-sm">Undo last bid</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">↶ Undo Sale</Button>
+                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">↶ Undo Sale</Button>
                 <span className="text-sm">Undo last sale</span>
               </div>
             </div>
