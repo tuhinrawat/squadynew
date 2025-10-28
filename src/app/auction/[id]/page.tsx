@@ -100,7 +100,11 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
                 <Link href="/" className="flex items-center">
                   <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
                 </Link>
-                <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4">
+                <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30">
+                  <span className="hidden sm:inline">Powered by</span>
+                  <span className="font-semibold">Professio AI</span>
+                </a>
                   <Link href="/register">
                     <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300">
                       Register
@@ -115,6 +119,15 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
               </div>
             </div>
           </header>
+          {/* Mobile promo banner */}
+          <div className="sm:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <div className="px-4 py-2 flex justify-center">
+              <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm">
+                <span>Powered by</span>
+                <span className="font-semibold">Professio AI</span>
+              </a>
+            </div>
+          </div>
           
           {/* Breadcrumbs */}
           <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -228,6 +241,10 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             
             {/* User Info */}
             <div className="flex items-center gap-4">
+              <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30">
+                <span className="hidden sm:inline">Powered by</span>
+                <span className="font-semibold">Professio AI</span>
+              </a>
               <div className="hidden sm:flex items-center gap-2 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">Welcome,</span>
                 <span className="font-semibold text-gray-900 dark:text-gray-100">{session.user.name}</span>
@@ -244,6 +261,15 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
           </div>
         </div>
       </header>
+      {/* Mobile promo banner */}
+      <div className="sm:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-2 flex justify-center">
+          <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm">
+            <span>Powered by</span>
+            <span className="font-semibold">Professio AI</span>
+          </a>
+        </div>
+      </div>
       
       {/* Breadcrumbs */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">

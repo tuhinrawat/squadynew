@@ -533,11 +533,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       <Play className="h-4 w-4 mr-2" />
                       <span className="hidden sm:inline">Start</span>
             </Button>
-                    <Button onClick={handlePauseResume} variant="outline" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <Button onClick={handlePauseResume} disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 bg-gray-700 hover:bg-gray-800 text-white">
                       {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
                       <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
             </Button>
-                    <Button onClick={handleNextPlayer} variant="outline" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <Button onClick={handleNextPlayer} disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 bg-blue-600 hover:bg-blue-700 text-white">
                       <SkipForward className="h-4 w-4 mr-2" />
                       <span className="hidden sm:inline">Next</span>
                     </Button>

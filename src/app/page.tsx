@@ -14,6 +14,10 @@ export default function Home() {
               <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 sm:h-10 w-auto" />
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
+              <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30">
+                <span className="hidden sm:inline">Powered by</span>
+                <span className="font-semibold">Professio AI</span>
+              </a>
               <Link href="/tutorial">
                 <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
                   Tutorial
@@ -147,7 +151,7 @@ export default function Home() {
             Simple, Transparent Pricing
           </h2>
           <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300 mb-8">
-            Contact us for custom pricing based on your organization's needs
+            Contact us for custom pricing based on your organization&apos;s needs
           </p>
           <Card className="max-w-md mx-auto">
             <CardHeader>
