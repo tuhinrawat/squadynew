@@ -125,6 +125,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [error, setError] = useState('')
   const [bidders, setBidders] = useState(auction.bidders)
   const [pinnedBidderIds, setPinnedBidderIds] = useState<string[]>([])
+  const [isBidConsoleOpen, setIsBidConsoleOpen] = useState(false)
 
   // Find current user's bidder profile (for bidder view)
   const userBidder = bidders.find((b) => b.userId === session?.user?.id)
@@ -530,6 +531,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 
                 {viewMode === 'admin' && (
                   <div className="flex gap-2">
+                    <Button
+                      onClick={() => setIsBidConsoleOpen(true)}
+                      size="sm"
+                      className="text-sm px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      title="Open Bidding Console"
+                    >
+                      Bidding Console
+            </Button>
                     <Button onClick={handleStartAuction} disabled={auction.status === 'LIVE'} size="sm" className="text-sm px-3 disabled:opacity-50">
                       <Play className="h-4 w-4 mr-2" />
                       <span className="hidden sm:inline">Start</span>
@@ -950,120 +959,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </Card>
           </div>
 
-          {/* Right Sidebar: Admin Bid Console + Bid History (sticky) */}
+          {/* Right Sidebar: Bid History (sticky) */}
           <div className="order-2 lg:order-1 hidden lg:block space-y-4">
-            {viewMode === 'admin' && (
-              <div className="lg:sticky lg:top-4 space-y-4">
-                {/* Bid Console */}
-                <Card className="shadow-lg border-2 border-emerald-100 dark:border-emerald-900">
-                  <CardHeader className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20">
-                    <CardTitle className="text-base font-bold text-gray-900 dark:text-gray-100">Bid Console</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3 sm:p-4 space-y-3">
-                    {/* Pinned row */}
-                    {pinnedBidderIds.length > 0 && (
-                      <div>
-                        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Pinned</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          {pinnedBidderIds
-                            .map(id => bidders.find(b => b.id === id))
-                            .filter((b): b is BidderWithUser => Boolean(b))
-                            .map((bidder) => (
-                              <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
-                                    <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
-                                  </div>
-                                  <button
-                                    className="text-[10px] text-gray-500 hover:text-red-600"
-                                    onClick={() => setPinnedBidderIds(prev => prev.filter(x => x !== bidder.id))}
-                                    aria-label="Unpin"
-                                  >✕</button>
-                                </div>
-                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                  <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
-                                    onClick={async () => {
-                                      try {
-                                        const rules = auction.rules as AuctionRules | undefined
-                                        const minInc = rules?.minBidIncrement || 1000
-                                        const totalBid = (currentBid?.amount || 0) + minInc
-                                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                                          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                                        })
-                                        if (!response.ok) {
-                                          const err = await response.json(); alert(err.error || 'Failed to place bid')
-                                        }
-                                      } catch {
-                                        alert('Failed to place bid')
-                                      }
-                                    }}>
-                                    Raise (+1K)
-                                  </Button>
-                                  <Button size="sm" className="h-8 text-[12px] bg-blue-600 hover:bg-blue-700 text-white" disabled={bidder.id === highestBidderId}
-                                    onClick={() => setSelectedBidderForBid(bidder.id)}>
-                                    Custom
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* All bidders compact grid */}
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">All Bidders</div>
-                      <div className="text-[11px] text-gray-500">Sorted by purse</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
-                      {bidders
-                        .slice()
-                        .sort((a, b) => b.remainingPurse - a.remainingPurse)
-                        .map((bidder) => (
-                        <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
-                              <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
-                            </div>
-                            <button
-                              className={`text-[10px] ${pinnedBidderIds.includes(bidder.id) ? 'text-amber-600' : 'text-gray-500 hover:text-amber-600'}`}
-                              onClick={() => setPinnedBidderIds(prev => prev.includes(bidder.id) ? prev.filter(x => x !== bidder.id) : [...prev.slice(0, 5), bidder.id])}
-                              aria-label={pinnedBidderIds.includes(bidder.id) ? 'Unpin' : 'Pin'}
-                            >📌</button>
-                          </div>
-                          <div className="mt-2 grid grid-cols-2 gap-2">
-                            <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
-                              onClick={async () => {
-                                try {
-                                  const rules = auction.rules as AuctionRules | undefined
-                                  const minInc = rules?.minBidIncrement || 1000
-                                  const totalBid = (currentBid?.amount || 0) + minInc
-                                  const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                                  })
-                                  if (!response.ok) {
-                                    const err = await response.json(); alert(err.error || 'Failed to place bid')
-                                  }
-                                } catch {
-                                  alert('Failed to place bid')
-                                }
-                              }}>
-                              Raise (+1K)
-                            </Button>
-                            <Button size="sm" className="h-8 text-[12px] bg-emerald-600 hover:bg-emerald-700 text-white" disabled={bidder.id === highestBidderId}
-                              onClick={() => setSelectedBidderForBid(bidder.id)}>
-                              Custom
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
+            {/* Bid console moved to sliding drawer */}
             {/* Bidder Controls - Show at top of sidebar for bidders */}
             {viewMode === 'bidder' && userBidder && auction.status === 'LIVE' && (
               <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 shadow-lg">
@@ -1858,6 +1756,102 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         </DialogContent>
       </Dialog>
     </div>
+
+    {/* Sliding Bidding Console (Admin only) */}
+    {viewMode === 'admin' && (
+      <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50`}>
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-black/30"
+          onClick={() => setIsBidConsoleOpen(false)}
+        />
+        {/* Panel */}
+        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-1/5 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-2xl flex flex-col">
+          <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="text-sm font-semibold">Bidding Console</div>
+            <button className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-100" onClick={() => setIsBidConsoleOpen(false)}>Close</button>
+          </div>
+          {/* Pinned */}
+          {pinnedBidderIds.length > 0 && (
+            <div className="p-3 border-b border-gray-100 dark:border-gray-800">
+              <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Pinned</div>
+              <div className="grid grid-cols-2 gap-2">
+                {pinnedBidderIds
+                  .map(id => bidders.find(b => b.id === id))
+                  .filter((b): b is BidderWithUser => Boolean(b))
+                  .map(bidder => (
+                    <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                      <div className="text-xs font-semibold truncate">{bidder.teamName || bidder.username}</div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                          onClick={async () => {
+                            try {
+                              const rules = auction.rules as AuctionRules | undefined
+                              const minInc = rules?.minBidIncrement || 1000
+                              const totalBid = (currentBid?.amount || 0) + minInc
+                              const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                              })
+                              if (!response.ok) { const err = await response.json(); alert(err.error || 'Failed to place bid') }
+                            } catch { alert('Failed to place bid') }
+                          }}>
+                          Raise (+1K)
+                        </Button>
+                        <Button size="sm" className="h-8 text-[12px] bg-blue-600 hover:bg-blue-700 text-white" disabled={bidder.id === highestBidderId}
+                          onClick={() => setSelectedBidderForBid(bidder.id)}>
+                          Custom
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+          {/* All bidders */}
+          <div className="p-3 flex-1 overflow-y-auto">
+            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">All Bidders</div>
+            <div className="grid grid-cols-2 gap-2">
+              {bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse).map(bidder => (
+                <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold truncate">{bidder.teamName || bidder.username}</div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                    </div>
+                    <button
+                      className={`text-[10px] ${pinnedBidderIds.includes(bidder.id) ? 'text-amber-600' : 'text-gray-500 hover:text-amber-600'}`}
+                      onClick={() => setPinnedBidderIds(prev => prev.includes(bidder.id) ? prev.filter(x => x !== bidder.id) : [...prev.slice(0, 5), bidder.id])}
+                      aria-label={pinnedBidderIds.includes(bidder.id) ? 'Unpin' : 'Pin'}
+                    >📌</button>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                      onClick={async () => {
+                        try {
+                          const rules = auction.rules as AuctionRules | undefined
+                          const minInc = rules?.minBidIncrement || 1000
+                          const totalBid = (currentBid?.amount || 0) + minInc
+                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                          })
+                          if (!response.ok) { const err = await response.json(); alert(err.error || 'Failed to place bid') }
+                        } catch { alert('Failed to place bid') }
+                      }}>
+                      Raise (+1K)
+                    </Button>
+                    <Button size="sm" className="h-8 text-[12px] bg-emerald-600 hover:bg-emerald-700 text-white" disabled={bidder.id === highestBidderId}
+                      onClick={() => setSelectedBidderForBid(bidder.id)}>
+                      Custom
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
   )
 }
 
