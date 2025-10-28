@@ -533,11 +533,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       <Play className="h-4 w-4 mr-2" />
                       <span className="hidden sm:inline">Start</span>
             </Button>
-                    <Button onClick={handlePauseResume} variant="outline" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3">
+                    <Button onClick={handlePauseResume} variant="outline" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                       {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
                       <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
             </Button>
-                    <Button onClick={handleNextPlayer} variant="outline" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3">
+                    <Button onClick={handleNextPlayer} variant="outline" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
                       <SkipForward className="h-4 w-4 mr-2" />
                       <span className="hidden sm:inline">Next</span>
                     </Button>
@@ -895,7 +895,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         <Button 
                           variant="default"
                           size="sm" 
-                          className="text-xs sm:text-sm bg-green-600 hover:bg-green-700"
+                          className="text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white"
                           onClick={handleMarkSold}
                         >
                           <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
@@ -936,7 +936,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700">
+                        <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700 text-white">
                           Undo Sale
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -1571,7 +1571,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     Cancel
                   </Button>
                   <Button
-                    className="flex-1 bg-green-600 hover:bg-green-700"
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                     onClick={async () => {
                       if (!userBidder || !bidAmount) return
 
