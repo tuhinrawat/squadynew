@@ -225,22 +225,23 @@ export function PublicChat({ auctionId }: PublicChatProps) {
                       Pick a fun name and join the conversation 🎉
                     </p>
                   </div>
-                  <div className="space-y-3 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border-2 border-teal-200 dark:border-teal-800">
-                    <Input
-                      placeholder="Your awesome name ✨"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleSetUsername()}
-                      maxLength={50}
-                      className="text-center text-lg font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-12"
-                    />
-                    <Button
-                      onClick={handleSetUsername}
-                      className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold text-lg h-12 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105"
-                    >
-                      🚀 Let's Chat!
-                    </Button>
-                  </div>
+                         <div className="space-y-3 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-xl border-2 border-teal-200 dark:border-teal-800">
+                           <Input
+                             placeholder="Your awesome name ✨"
+                             value={username}
+                             onChange={(e) => setUsername(e.target.value)}
+                             onKeyPress={(e) => e.key === 'Enter' && handleSetUsername()}
+                             maxLength={50}
+                             className="text-center text-lg font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-12"
+                             style={{ fontSize: '16px' }}
+                           />
+                           <Button
+                             onClick={handleSetUsername}
+                             className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white font-bold text-lg h-12 rounded-xl shadow-lg hover:shadow-xl transition-all hover:scale-105"
+                           >
+                             🚀 Let's Chat!
+                           </Button>
+                         </div>
                 </div>
               </div>
             ) : (
@@ -320,19 +321,20 @@ export function PublicChat({ auctionId }: PublicChatProps) {
                   onSubmit={handleSendMessage}
                   className="p-3 border-t-2 border-teal-200 dark:border-teal-800 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 shadow-lg"
                 >
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <Input
                       placeholder="Type something fun... 💭"
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       maxLength={500}
                       disabled={isSending}
-                      className="flex-1 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-10 text-sm"
+                      className="flex-1 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-10 text-base px-3"
+                      style={{ fontSize: '16px' }}
                     />
                     <Button
                       type="submit"
                       disabled={!message.trim() || isSending}
-                      className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl px-4 h-10 shadow-md hover:shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                      className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl px-4 h-10 shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex-shrink-0"
                     >
                       <Send className="h-4 w-4" />
                     </Button>
