@@ -30,11 +30,11 @@ interface BidHistoryEntry {
 }
 
 interface BidderWithUser extends Bidder {
-  user: {
-    id: string
-    name: string
-    email: string
-  }
+      user: {
+        id: string
+        name: string
+        email: string
+      }
 }
 
 interface PusherBidData {
@@ -124,6 +124,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [isPlacingBid, setIsPlacingBid] = useState(false)
   const [error, setError] = useState('')
   const [bidders, setBidders] = useState(auction.bidders)
+  const [pinnedBidderIds, setPinnedBidderIds] = useState<string[]>([])
 
   // Find current user's bidder profile (for bidder view)
   const userBidder = bidders.find((b) => b.userId === session?.user?.id)
@@ -949,8 +950,116 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </Card>
           </div>
 
-          {/* Bid History Sidebar */}
+          {/* Right Sidebar: Admin Bid Console + Bid History (sticky) */}
           <div className="order-2 lg:order-1 hidden lg:block space-y-4">
+            {viewMode === 'admin' && (
+              <div className="lg:sticky lg:top-4 space-y-4">
+                {/* Bid Console */}
+                <Card className="shadow-lg border-2 border-emerald-100 dark:border-emerald-900">
+                  <CardHeader className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20">
+                    <CardTitle className="text-base font-bold text-gray-900 dark:text-gray-100">Bid Console</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3 sm:p-4 space-y-3">
+                    {/* Pinned row */}
+                    {pinnedBidderIds.length > 0 && (
+                      <div>
+                        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Pinned</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {pinnedBidderIds
+                            .map(id => bidders.find(b => b.id === id))
+                            .filter((b): b is BidderWithUser => Boolean(b))
+                            .map((bidder) => (
+                              <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
+                                    <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                                  </div>
+                                  <button
+                                    className="text-[10px] text-gray-500 hover:text-red-600"
+                                    onClick={() => setPinnedBidderIds(prev => prev.filter(x => x !== bidder.id))}
+                                    aria-label="Unpin"
+                                  >✕</button>
+                                </div>
+                                <div className="mt-2 grid grid-cols-3 gap-1">
+                                  {[1, 5, 10].map(k => (
+                                    <Button key={k} size="sm" className={`h-7 text-[11px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                                      onClick={async () => {
+                                        try {
+                                          const rules = auction.rules as AuctionRules | undefined
+                                          const minInc = rules?.minBidIncrement || 1000
+                                          const totalBid = (currentBid?.amount || 0) + k * minInc
+                                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                                          })
+                                          if (!response.ok) {
+                                            const err = await response.json(); alert(err.error || 'Failed to place bid')
+                                          }
+                                        } catch {
+                                          alert('Failed to place bid')
+                                        }
+                                      }}>
+                                      +{k}k
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* All bidders compact grid */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400">All Bidders</div>
+                      <div className="text-[11px] text-gray-500">Sorted by purse</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
+                      {bidders
+                        .slice()
+                        .sort((a, b) => b.remainingPurse - a.remainingPurse)
+                        .map((bidder) => (
+                        <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
+                              <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                            </div>
+                            <button
+                              className={`text-[10px] ${pinnedBidderIds.includes(bidder.id) ? 'text-amber-600' : 'text-gray-500 hover:text-amber-600'}`}
+                              onClick={() => setPinnedBidderIds(prev => prev.includes(bidder.id) ? prev.filter(x => x !== bidder.id) : [...prev.slice(0, 5), bidder.id])}
+                              aria-label={pinnedBidderIds.includes(bidder.id) ? 'Unpin' : 'Pin'}
+                            >📌</button>
+                          </div>
+                          <div className="mt-2 grid grid-cols-3 gap-1">
+                            {[1, 5, 10].map(k => (
+                              <Button key={k} size="sm" className={`h-7 text-[11px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                                onClick={async () => {
+                                  try {
+                                    const rules = auction.rules as AuctionRules | undefined
+                                    const minInc = rules?.minBidIncrement || 1000
+                                    const totalBid = (currentBid?.amount || 0) + k * minInc
+                                    const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                                      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                                    })
+                                    if (!response.ok) {
+                                      const err = await response.json(); alert(err.error || 'Failed to place bid')
+                                    }
+                                  } catch {
+                                    alert('Failed to place bid')
+                                  }
+                                }}>
+                                +{k}k
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
             {/* Bidder Controls - Show at top of sidebar for bidders */}
             {viewMode === 'bidder' && userBidder && auction.status === 'LIVE' && (
               <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 shadow-lg">
@@ -1106,9 +1215,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 </CardContent>
               </Card>
             )}
-            
-            {/* Bid History */}
-            <Card className="shadow-lg border-2 border-blue-100 dark:border-blue-900">
+
+          {/* Bid History */}
+            <Card className="shadow-lg border-2 border-blue-100 dark:border-blue-900 lg:sticky lg:top-[calc(theme(spacing.4)+theme(spacing.4)+theme(spacing.4))]">
               <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
                 <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   <span>📋</span> Live Bidding Activity
@@ -1358,82 +1467,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           </Card>
         )}
 
-        {/* Bidders Grid - Only for admin */}
-        {viewMode === 'admin' && (
-        <Card>
-          <CardHeader className="p-3 sm:p-6">
-            <CardTitle className="text-sm sm:text-base text-gray-900 dark:text-gray-100">Bidders - Admin Bid Control</CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
-              {auction.bidders.map((bidder) => (
-                <motion.div
-                  key={bidder.id}
-                  animate={bidder.id === highestBidderId ? { scale: 1.05 } : { scale: 1 }}
-                  className={`p-2 sm:p-4 rounded-lg border-2 ${
-                    bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    {bidder.logoUrl && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={bidder.logoUrl || ''} alt={bidder.teamName || ''} className="w-8 h-8 sm:w-12 sm:h-12 rounded flex-shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-gray-100 truncate">{bidder.teamName || bidder.username}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
-                      <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
-                        ₹{bidder.remainingPurse.toLocaleString('en-IN')} remaining
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                  <Button
-                    size="sm"
-                      className="flex-1 text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white"
-                      onClick={async () => {
-                        if (bidder.id === highestBidderId) {
-                          alert('This bidder already has the highest bid')
-                          return
-                        }
-                        try {
-                          // Calculate total bid = current bid + 1000
-                          const totalBid = (currentBid?.amount || 0) + 1000
-                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                          })
-                          if (!response.ok) {
-                            const error = await response.json()
-                            alert(error.error || 'Failed to place bid')
-                          }
-                        } catch (error) {
-                          console.error('Error placing bid:', error)
-                          alert('Failed to place bid')
-                        }
-                      }}
-                      disabled={bidder.id === highestBidderId}
-                    >
-                      Raise Bid (+1K)
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="flex-1 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => {
-                      setSelectedBidderForBid(bidder.id)
-                    }}
-                    disabled={bidder.id === highestBidderId}
-                  >
-                      {bidder.id === highestBidderId ? 'Highest' : 'Custom'}
-                  </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        )}
+        {/* Bidders Grid moved into right-side Bid Console for admin */}
 
         {/* Teams Overview */}
         <TeamsOverview 
@@ -1508,7 +1542,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             >
               <span className="font-semibold text-sm">Custom</span>
             </Button>
-          </div>
+                      </div>
           
           {/* Custom Bid Modal */}
           <Dialog open={customBidModalOpen} onOpenChange={setCustomBidModalOpen}>
@@ -1522,8 +1556,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   <div className="text-sm text-gray-700 dark:text-gray-300">Remaining Purse</div>
                   <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                     ₹{userBidder.remainingPurse.toLocaleString('en-IN')}
+                    </div>
                   </div>
-                </div>
                 
                 {/* Current Bid */}
                 {currentBid && (
@@ -1623,13 +1657,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   >
                     {isPlacingBid ? 'Placing...' : 'Place Bid'}
                   </Button>
-                </div>
+      </div>
               </div>
             </DialogContent>
           </Dialog>
         </>
       )}
-      
+
       {/* Mobile Bid History Floating Button */}
       <div className="lg:hidden fixed bottom-4 right-4 z-50">
         <Button 
