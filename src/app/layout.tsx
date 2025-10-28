@@ -4,7 +4,8 @@ import Providers from "@/components/providers";
 
 export const metadata: Metadata = {
   title: "Squady - Auction Management System",
-  description: "A modern auction management system built with Next.js, Prisma, and PostgreSQL",
+  description: "Create, manage, and run live player auctions with real-time bidding, automated timers, and comprehensive team management. Everything you need for professional auction events.",
+  keywords: "auction management, live bidding, player auction, team management, auction platform, sports auction",
 };
 
 export default function RootLayout({
