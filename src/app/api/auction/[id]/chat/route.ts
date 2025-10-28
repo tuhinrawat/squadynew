@@ -2,10 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { pusher } from '@/lib/pusher'
 
+export const dynamic = 'force-dynamic' // Ensure dynamic rendering
+
 // Simple in-memory rate limiter (in production, use Redis)
 const messageTimestamps = new Map<string, number[]>()
 const RATE_LIMIT_WINDOW = 10000 // 10 seconds
 const MAX_MESSAGES_PER_WINDOW = 3 // Max 3 messages per 10 seconds
+
+// Cleanup old entries periodically to prevent memory leak
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, timestamps] of messageTimestamps.entries()) {
+    const recent = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW)
+    if (recent.length === 0) {
+      messageTimestamps.delete(key)
+    } else {
+      messageTimestamps.set(key, recent)
+    }
+  }
+}, 60000) // Clean every minute
 
 export async function GET(
   request: NextRequest,

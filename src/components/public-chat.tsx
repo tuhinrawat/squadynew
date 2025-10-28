@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
@@ -20,6 +20,48 @@ interface PublicChatProps {
   auctionId: string
 }
 
+// Memoized Message Component for performance
+const ChatMessageItem = memo(({ msg, username, isFirstInGroup }: { 
+  msg: ChatMessage; 
+  username: string; 
+  isFirstInGroup: boolean;
+}) => {
+  const isOwnMessage = msg.username === username
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: isOwnMessage ? 20 : -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.2 }}
+      className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}
+    >
+      <div
+        className={`max-w-[75%] ${
+          isOwnMessage
+            ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl rounded-br-sm'
+            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl rounded-bl-sm shadow-sm border border-gray-200 dark:border-gray-700'
+        } px-2.5 py-1.5`}
+      >
+        {isFirstInGroup && (
+          <span className={`text-[10px] font-bold block mb-0.5 ${
+            isOwnMessage 
+              ? 'text-white/80' 
+              : 'text-teal-600 dark:text-teal-400'
+          }`}>
+            {isOwnMessage ? 'You' : msg.username}
+          </span>
+        )}
+        <p className={`text-xs leading-relaxed break-words ${
+          isOwnMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+        }`}>
+          {msg.message}
+        </p>
+      </div>
+    </motion.div>
+  )
+})
+ChatMessageItem.displayName = 'ChatMessageItem'
+
 export function PublicChat({ auctionId }: PublicChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -29,6 +71,8 @@ export function PublicChat({ auctionId }: PublicChatProps) {
   const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [flyingEmojis, setFlyingEmojis] = useState<Array<{ id: string; emoji: string; left: number }>>([])
+  const messageCountRef = useRef(0)
+  const lastScrollHeightRef = useRef(0)
   
   // Quick reaction emojis
   const quickEmojis = ['❤️', '🔥', '👏', '😂', '🎉', '😍']
@@ -62,30 +106,69 @@ export function PublicChat({ auctionId }: PublicChatProps) {
     fetchMessages()
   }, [auctionId])
 
-  // Subscribe to new messages via Pusher
+  // Subscribe to new messages via Pusher with throttling
   useEffect(() => {
     if (!auctionId) return
 
     const pusher = initializePusher()
     const channel = pusher.subscribe(`auction-${auctionId}`)
 
-    channel.bind('new-chat-message', (data: ChatMessage) => {
+    // Batch message updates to avoid excessive re-renders
+    let messageQueue: ChatMessage[] = []
+    let flushTimeout: NodeJS.Timeout | null = null
+
+    const flushMessages = () => {
+      if (messageQueue.length === 0) return
+      
       setMessages((prev) => {
+        const updated = [...prev, ...messageQueue]
+        messageQueue = []
         // Keep only last 50 messages for performance
-        const updated = [...prev, data]
         return updated.length > 50 ? updated.slice(-50) : updated
       })
+    }
+
+    channel.bind('new-chat-message', (data: ChatMessage) => {
+      messageQueue.push(data)
+      messageCountRef.current++
+      
+      // Flush immediately if queue is small, batch if high traffic
+      if (messageQueue.length >= 5) {
+        if (flushTimeout) clearTimeout(flushTimeout)
+        flushMessages()
+      } else {
+        if (flushTimeout) clearTimeout(flushTimeout)
+        flushTimeout = setTimeout(flushMessages, 100)
+      }
     })
 
     return () => {
+      if (flushTimeout) clearTimeout(flushTimeout)
+      flushMessages() // Flush remaining messages
       channel.unbind('new-chat-message')
       pusher.unsubscribe(`auction-${auctionId}`)
     }
   }, [auctionId])
 
-  // Auto-scroll to bottom
+  // Optimized auto-scroll - only scroll if user is at bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!messagesEndRef.current) return
+    
+    const container = messagesEndRef.current.parentElement
+    if (!container) return
+    
+    const scrollHeight = container.scrollHeight
+    const clientHeight = container.clientHeight
+    const scrollTop = container.scrollTop
+    
+    // Only auto-scroll if user is within 100px of bottom
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+    
+    if (isNearBottom) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+    
+    lastScrollHeightRef.current = scrollHeight
   }, [messages])
 
   const handleSetUsername = () => {
@@ -98,36 +181,38 @@ export function PublicChat({ auctionId }: PublicChatProps) {
     setHasSetUsername(true)
   }
 
-  const handleSendMessage = async (e: React.FormEvent) => {
+  const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!message.trim() || isSending) return
 
+    const messageToSend = message
+    setMessage('') // Clear immediately for better UX
     setIsSending(true)
 
     try {
       const response = await fetch(`/api/auction/${auctionId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, message })
+        body: JSON.stringify({ username, message: messageToSend })
       })
 
       if (!response.ok) {
         const error = await response.json()
         toast.error(error.error || 'Failed to send message')
+        setMessage(messageToSend) // Restore message on error
         return
       }
-
-      setMessage('')
     } catch (error) {
       console.error('Error sending message:', error)
       toast.error('Failed to send message')
+      setMessage(messageToSend) // Restore message on error
     } finally {
       setIsSending(false)
     }
-  }
+  }, [message, isSending, auctionId, username])
 
-  const sendEmojiReaction = (emoji: string) => {
+  const sendEmojiReaction = useCallback((emoji: string) => {
     // Create flying emoji - just visual, not saved to chat
     const id = `${Date.now()}-${Math.random()}`
     const left = Math.random() * 70 + 15 // Random position between 15% and 85%
@@ -138,7 +223,7 @@ export function PublicChat({ auctionId }: PublicChatProps) {
     setTimeout(() => {
       setFlyingEmojis(prev => prev.filter(e => e.id !== id))
     }, 3500)
-  }
+  }, [])
 
   return (
     <>
@@ -260,40 +345,14 @@ export function PublicChat({ auctionId }: PublicChatProps) {
                     </div>
                          ) : (
                            messages.map((msg, index) => {
-                             const isOwnMessage = msg.username === username
                              const isFirstInGroup = index === 0 || messages[index - 1].username !== msg.username
-                             
                              return (
-                               <motion.div
-                                 key={msg.id}
-                                 initial={{ opacity: 0, x: isOwnMessage ? 20 : -20 }}
-                                 animate={{ opacity: 1, x: 0 }}
-                                 transition={{ duration: 0.2 }}
-                                 className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}
-                               >
-                                 <div
-                                   className={`max-w-[75%] ${
-                                     isOwnMessage
-                                       ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white rounded-xl rounded-br-sm'
-                                       : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-xl rounded-bl-sm shadow-sm border border-gray-200 dark:border-gray-700'
-                                   } px-2.5 py-1.5`}
-                                 >
-                                   {isFirstInGroup && (
-                                     <span className={`text-[10px] font-bold block mb-0.5 ${
-                                       isOwnMessage 
-                                         ? 'text-white/80' 
-                                         : 'text-teal-600 dark:text-teal-400'
-                                     }`}>
-                                       {isOwnMessage ? 'You' : msg.username}
-                                     </span>
-                                   )}
-                                   <p className={`text-xs leading-relaxed break-words ${
-                                     isOwnMessage ? 'text-white' : 'text-gray-900 dark:text-gray-100'
-                                   }`}>
-                                     {msg.message}
-                                   </p>
-                                 </div>
-                               </motion.div>
+                               <ChatMessageItem 
+                                 key={msg.id} 
+                                 msg={msg} 
+                                 username={username} 
+                                 isFirstInGroup={isFirstInGroup}
+                               />
                              )
                            })
                          )}
