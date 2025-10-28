@@ -39,11 +39,14 @@ export default function BidderManagement() {
   const [bidders, setBidders] = useState<Bidder[]>([])
   const [loading, setLoading] = useState(true)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [successDialogOpen, setSuccessDialogOpen] = useState(false)
   const [credentials, setCredentials] = useState<BidderCredentials | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [editingBidder, setEditingBidder] = useState<Bidder | null>(null)
 
   const [formData, setFormData] = useState({
     name: '',
@@ -113,6 +116,72 @@ export default function BidderManagement() {
       setError('Network error. Please try again.')
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  const handleEditBidder = (bidder: Bidder) => {
+    setEditingBidder(bidder)
+    setFormData({
+      name: bidder.user.name,
+      teamName: bidder.teamName || '',
+      email: bidder.user.email,
+      username: bidder.username,
+      password: '', // Don't pre-fill password for security
+      purseAmount: bidder.purseAmount
+    })
+    setError('')
+    setEditDialogOpen(true)
+  }
+
+  const handleUpdateBidder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingBidder) return
+
+    setError('')
+    setIsUpdating(true)
+
+    try {
+      const updatePayload: any = {
+        name: formData.name,
+        teamName: formData.teamName,
+        email: formData.email,
+        username: formData.username,
+        purseAmount: formData.purseAmount
+      }
+
+      // Only include password if it's being changed
+      if (formData.password.trim()) {
+        updatePayload.password = formData.password
+      }
+
+      const response = await fetch(`/api/auctions/${auctionId}/bidders/${editingBidder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setEditDialogOpen(false)
+        setEditingBidder(null)
+        setSuccess('Bidder updated successfully')
+        setFormData({
+          name: '',
+          teamName: '',
+          email: '',
+          username: '',
+          password: '',
+          purseAmount: 10000000
+        })
+        fetchBidders()
+      } else {
+        setError(result.error || 'Failed to update bidder')
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -233,7 +302,7 @@ export default function BidderManagement() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => console.log('Edit', bidder.id)}
+                            onClick={() => handleEditBidder(bidder)}
                             className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                           >
                             <Edit className="h-4 w-4" />
@@ -422,6 +491,121 @@ export default function BidderManagement() {
               Done
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Bidder Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Bidder</DialogTitle>
+            <DialogDescription>
+              Update bidder information. Leave password blank to keep current password.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleUpdateBidder} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Full name"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-teamName">Team Name</Label>
+                <Input
+                  id="edit-teamName"
+                  value={formData.teamName}
+                  onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
+                  placeholder="Team name (optional)"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email *</Label>
+                <Input
+                  id="edit-email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="email@example.com"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-username">Username *</Label>
+                <Input
+                  id="edit-username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="Unique username"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-password">New Password</Label>
+                <Input
+                  id="edit-password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder="Leave blank to keep current password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-purseAmount">Initial Purse Amount (₹) *</Label>
+                <Input
+                  id="edit-purseAmount"
+                  type="number"
+                  value={formData.purseAmount}
+                  onChange={(e) => setFormData({ ...formData, purseAmount: Number(e.target.value) })}
+                  placeholder="₹ 1,00,00,000"
+                  required
+                />
+              </div>
+            </div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditDialogOpen(false)
+                  setEditingBidder(null)
+                  setError('')
+                }}
+                className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUpdating}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Bidder'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

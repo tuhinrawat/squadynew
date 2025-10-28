@@ -6,6 +6,15 @@ export default withAuth(
     const pathname = req.nextUrl.pathname
     const token = req.nextauth.token
 
+    // Redirect authenticated users from home page to their dashboard
+    if (pathname === '/' && token) {
+      if (token.role === 'BIDDER') {
+        return NextResponse.redirect(new URL('/bidder/auctions', req.url))
+      } else if (token.role === 'ADMIN' || token.role === 'SUPER_ADMIN') {
+        return NextResponse.redirect(new URL('/dashboard', req.url))
+      }
+    }
+
     // Protect /dashboard routes - only ADMIN and SUPER_ADMIN
     if (pathname.startsWith('/dashboard')) {
       if (token?.role !== 'ADMIN' && token?.role !== 'SUPER_ADMIN') {
@@ -32,7 +41,7 @@ export default withAuth(
     callbacks: {
       authorized: ({ token, req }) => {
         // Allow access to public routes
-        const publicRoutes = ['/signin', '/register']
+        const publicRoutes = ['/', '/signin', '/register', '/signup']
         if (publicRoutes.includes(req.nextUrl.pathname)) {
           return true
         }

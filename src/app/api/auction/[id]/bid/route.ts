@@ -26,11 +26,12 @@ export async function POST(
     // Fetch auction with current state
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
-      include: {
-        bidders: { 
-          where: { id: bidderId }, 
-          include: { user: true } 
-        }
+      select: {
+        id: true,
+        status: true,
+        currentPlayerId: true,
+        rules: true,
+        bidHistory: true,
       }
     })
 
@@ -42,18 +43,40 @@ export async function POST(
       return NextResponse.json({ error: 'Auction is not live' }, { status: 400 })
     }
 
-    // Fetch current player
-    const currentPlayer = auction.currentPlayerId
-      ? await prisma.player.findUnique({
-          where: { id: auction.currentPlayerId }
-        })
-      : null
+    // Fetch current player and bidder in parallel for better performance
+    const [currentPlayer, bidder] = await Promise.all([
+      auction.currentPlayerId
+        ? prisma.player.findUnique({
+            where: { id: auction.currentPlayerId },
+            select: {
+              id: true,
+              status: true,
+              data: true
+            }
+          })
+        : null,
+      prisma.bidder.findUnique({
+        where: { id: bidderId },
+        select: {
+          id: true,
+          userId: true,
+          username: true,
+          teamName: true,
+          remainingPurse: true,
+          user: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      })
+    ])
 
     if (!currentPlayer || currentPlayer.status !== 'AVAILABLE') {
       return NextResponse.json({ error: 'Player is not available' }, { status: 400 })
     }
 
-    const bidder = auction.bidders[0]
     if (!bidder) {
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
     }

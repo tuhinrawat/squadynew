@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
@@ -32,7 +32,7 @@ interface TeamsOverviewProps {
   }
 }
 
-export function TeamsOverview({ auction }: TeamsOverviewProps) {
+function TeamsOverviewComponent({ auction }: TeamsOverviewProps) {
   const [teams, setTeams] = useState<Map<string, any>>(new Map())
 
   useEffect(() => {
@@ -121,4 +121,6 @@ export function TeamsOverview({ auction }: TeamsOverviewProps) {
     </Card>
   )
 }
+
+export const TeamsOverview = memo(TeamsOverviewComponent)
 

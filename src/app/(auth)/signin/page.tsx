@@ -1,6 +1,6 @@
 'use client'
 
-import { signIn } from 'next-auth/react'
+import { signIn, getSession } from 'next-auth/react'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -33,8 +33,16 @@ export default function SignIn() {
       if (result?.error) {
         setError('Invalid email or password')
       } else if (result?.ok) {
-        // Let NextAuth handle the redirect
-        router.push('/dashboard')
+        // Get the session to check role
+        const session = await getSession()
+        if (session?.user?.role === 'BIDDER') {
+          router.push('/bidder/auctions')
+        } else if (session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN') {
+          router.push('/dashboard')
+        } else {
+          // Default to dashboard
+          router.push('/dashboard')
+        }
       }
     } catch {
       setError('An error occurred. Please try again.')

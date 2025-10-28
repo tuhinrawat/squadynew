@@ -32,7 +32,11 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ auctions })
+    // Add caching headers for better performance
+    const response = NextResponse.json({ auctions })
+    response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=120')
+    
+    return response
 
   } catch (error) {
     console.error('Error fetching auctions:', error)

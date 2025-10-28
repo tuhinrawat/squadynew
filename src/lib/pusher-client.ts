@@ -77,6 +77,14 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
   const [error, setError] = useState<string | null>(null)
   const channelRef = useRef<any>(null)
   const pusherRef = useRef<Pusher | null>(null)
+  
+  // Store callbacks in refs to prevent re-subscription
+  const callbacksRef = useRef<UsePusherOptions>(options)
+  
+  // Update callbacks ref when options change without re-subscribing
+  useEffect(() => {
+    callbacksRef.current = options
+  }, [options])
 
   useEffect(() => {
     if (!auctionId) return
@@ -88,65 +96,87 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
       const channel = pusher.subscribe(`auction-${auctionId}`)
       channelRef.current = channel
 
-      // Set up event listeners
+      // Set up event listeners using refs to get latest callbacks
+      // Wrap each callback to always call the latest version from ref
       if (options.onNewBid) {
-        channel.bind('new-bid', options.onNewBid)
+        channel.bind('new-bid', (data: any) => callbacksRef.current.onNewBid?.(data))
       }
       if (options.onBidUndo) {
-        channel.bind('bid-undo', options.onBidUndo)
+        channel.bind('bid-undo', (data: any) => callbacksRef.current.onBidUndo?.(data))
       }
       if (options.onPlayerSold) {
-        channel.bind('player-sold', options.onPlayerSold)
+        channel.bind('player-sold', (data: any) => callbacksRef.current.onPlayerSold?.(data))
       }
       if (options.onSaleUndo) {
-        channel.bind('sale-undo', options.onSaleUndo)
+        channel.bind('sale-undo', (data: any) => callbacksRef.current.onSaleUndo?.(data))
       }
       if (options.onNewPlayer) {
-        channel.bind('new-player', options.onNewPlayer)
+        channel.bind('new-player', (data: any) => callbacksRef.current.onNewPlayer?.(data))
       }
       if (options.onTimerUpdate) {
-        channel.bind('timer-update', options.onTimerUpdate)
+        channel.bind('timer-update', (data: any) => callbacksRef.current.onTimerUpdate?.(data))
       }
       if (options.onAuctionPaused) {
-        channel.bind('auction-paused', options.onAuctionPaused)
+        channel.bind('auction-paused', (data: any) => callbacksRef.current.onAuctionPaused?.(data))
       }
       if (options.onAuctionResumed) {
-        channel.bind('auction-resumed', options.onAuctionResumed)
+        channel.bind('auction-resumed', (data: any) => callbacksRef.current.onAuctionResumed?.(data))
       }
       if (options.onAuctionEnded) {
-        channel.bind('auction-ended', options.onAuctionEnded)
+        channel.bind('auction-ended', (data: any) => callbacksRef.current.onAuctionEnded?.(data))
       }
       if (options.onPlayersUpdated) {
-        channel.bind('players-updated', options.onPlayersUpdated)
+        channel.bind('players-updated', (data: any) => callbacksRef.current.onPlayersUpdated?.(data))
       }
 
-      // Connection status
-      pusher.connection.bind('connected', () => {
+      // Connection status handlers
+      const handleConnected = () => {
         setIsConnected(true)
         setError(null)
-      })
-
-      pusher.connection.bind('disconnected', () => {
+      }
+      
+      const handleDisconnected = () => {
         setIsConnected(false)
-      })
-
-      pusher.connection.bind('error', (err: any) => {
+      }
+      
+      const handleError = (err: any) => {
         setError(err.message || 'Connection error')
         setIsConnected(false)
-      })
+      }
 
+      pusher.connection.bind('connected', handleConnected)
+      pusher.connection.bind('disconnected', handleDisconnected)
+      pusher.connection.bind('error', handleError)
+
+      // Cleanup
+      return () => {
+        // Unbind all event listeners
+        channel.unbind('new-bid')
+        channel.unbind('bid-undo')
+        channel.unbind('player-sold')
+        channel.unbind('sale-undo')
+        channel.unbind('new-player')
+        channel.unbind('timer-update')
+        channel.unbind('auction-paused')
+        channel.unbind('auction-resumed')
+        channel.unbind('auction-ended')
+        channel.unbind('players-updated')
+        
+        // Unbind connection handlers
+        pusher.connection.unbind('connected', handleConnected)
+        pusher.connection.unbind('disconnected', handleDisconnected)
+        pusher.connection.unbind('error', handleError)
+        
+        // Unsubscribe channel
+        if (channelRef.current) {
+          pusher.unsubscribe(`auction-${auctionId}`)
+          channelRef.current = null
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize Pusher')
     }
-
-    // Cleanup
-    return () => {
-      if (channelRef.current) {
-        pusherRef.current?.unsubscribe(`auction-${auctionId}`)
-        channelRef.current = null
-      }
-    }
-  }, [auctionId, options])
+  }, [auctionId]) // Only depend on auctionId, not options
 
   const disconnect = () => {
     if (pusherRef.current) {

@@ -6,8 +6,11 @@ import { AdminAuctionView } from '@/components/admin-auction-view'
 import { BidderAuctionView } from '@/components/bidder-auction-view'
 import { PublicAuctionView } from '@/components/public-auction-view'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ResultsView } from '@/components/results-view'
+import { ChevronRight, Home } from 'lucide-react'
 
 export default async function LiveAuctionPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -89,13 +92,54 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       }
 
       return (
-        <PublicAuctionView 
-          auction={auction}
-          currentPlayer={currentPlayer}
-          stats={stats}
-          bidHistory={bidHistory}
-          bidders={auction.bidders}
-        />
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+          {/* Header for Public View */}
+          <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+            <div className="max-w-full mx-auto px-4 sm:px-6">
+              <div className="flex justify-between items-center h-16">
+                <Link href="/" className="flex items-center">
+                  <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
+                </Link>
+                <div className="flex items-center gap-4">
+                  <Link href="/register">
+                    <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300">
+                      Register
+                    </Button>
+                  </Link>
+                  <Link href="/signin">
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                      Sign In
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </header>
+          
+          {/* Breadcrumbs */}
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
+              <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
+                <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
+                  <Home className="h-4 w-4" />
+                  <span>Home</span>
+                </Link>
+                <ChevronRight className="h-4 w-4" />
+                <span className="text-gray-900 dark:text-gray-100 font-medium truncate max-w-xs">
+                  {auction.name} - Live Auction
+                </span>
+              </nav>
+            </div>
+          </div>
+          
+          <PublicAuctionView 
+            auction={auction}
+            currentPlayer={currentPlayer}
+            stats={stats}
+            bidHistory={bidHistory}
+            bidders={auction.bidders}
+          />
+        </div>
       )
     }
   }
@@ -163,19 +207,87 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     return <ResultsView auction={auction} userId={session.user.id} userRole={session.user.role} />
   }
 
-  return isSuperAdmin || (isAdmin && isCreator) ? (
-    <AdminAuctionView 
-      auction={auction}
-      currentPlayer={currentPlayer}
-      stats={stats}
-      bidHistory={bidHistory}
-    />
-  ) : (
-    <BidderAuctionView
-      auction={auction}
-      currentPlayer={currentPlayer}
-      stats={stats}
-    />
+  // Use AdminAuctionView for all authenticated users
+  // Pass viewMode to control which features are available
+  const viewMode = isSuperAdmin || (isAdmin && isCreator) ? 'admin' : 'bidder'
+  
+  // Determine breadcrumb paths based on user role
+  const homePath = session.user?.role === 'BIDDER' || isParticipant ? '/bidder/auctions' : '/dashboard'
+  const homeLabel = session.user?.role === 'BIDDER' || isParticipant ? 'My Auctions' : 'Dashboard'
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      {/* Header with Logo and User Info */}
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+        <div className="max-w-full mx-auto px-4 sm:px-6">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo */}
+            <Link href={homePath} className="flex items-center">
+              <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
+            </Link>
+            
+            {/* User Info */}
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex items-center gap-2 text-sm">
+                <span className="text-gray-700 dark:text-gray-300">Welcome,</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">{session.user.name}</span>
+                <Badge variant="outline" className="text-xs">
+                  {session.user.role === 'SUPER_ADMIN' ? 'Super Admin' : session.user.role}
+                </Badge>
+              </div>
+              <form action="/api/auth/signout" method="post">
+                <Button type="submit" variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                  Logout
+                </Button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      {/* Breadcrumbs */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
+          <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
+            <Link href={homePath} className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
+              <Home className="h-4 w-4" />
+              <span>{homeLabel}</span>
+            </Link>
+            <ChevronRight className="h-4 w-4" />
+            <span className="text-gray-900 dark:text-gray-100 font-medium truncate max-w-xs">
+              {auction.name}
+            </span>
+          </nav>
+        </div>
+      </div>
+      
+      {/* Auction View */}
+      <AdminAuctionView 
+        auction={auction}
+        currentPlayer={currentPlayer}
+        stats={stats}
+        bidHistory={bidHistory}
+        viewMode={viewMode}
+      />
+      
+      {/* Footer */}
+      <footer className="mt-auto bg-gray-900 dark:bg-black text-white py-6 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-6 w-auto" />
+              <span className="text-sm text-gray-400">© 2024 Squady. All rights reserved.</span>
+            </div>
+            <div className="flex items-center gap-6 text-sm text-gray-400">
+              <span>Status: {auction.status}</span>
+              {session.user?.role === 'SUPER_ADMIN' && (
+                <span>Super Admin Mode</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
   )
 }
 

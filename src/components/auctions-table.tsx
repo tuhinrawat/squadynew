@@ -81,7 +81,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   }
 
   const handleViewAuction = (auctionId: string) => {
-    router.push(`/auction/${auctionId}`)
+    window.open(`/auction/${auctionId}`, '_blank', 'noopener,noreferrer')
   }
 
   const handleEdit = (auction: Auction) => {
@@ -154,7 +154,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
       })
       if (response.ok) {
         toast.success('Auction started successfully!')
-        router.push(`/auction/${auctionId}`)
+        window.open(`/auction/${auctionId}`, '_blank', 'noopener,noreferrer')
       } else {
         const data = await response.json()
         toast.error(data.error || 'Failed to start auction')

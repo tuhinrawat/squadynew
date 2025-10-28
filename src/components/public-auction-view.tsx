@@ -248,8 +248,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const playerName = playerData.name || playerData.Name || 'No Player Selected'
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-2 sm:p-4">
-      <div className="max-w-7xl mx-auto space-y-2 sm:space-y-4">
+    <div className="p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 shadow gap-2 sm:gap-0">
           <div>

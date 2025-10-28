@@ -59,25 +59,30 @@ model User {
 }
 
 model Auction {
-  id              String         @id @default(cuid())
-  name            String
-  description     String?
-  rules           Json
-  status          AuctionStatus  @default(DRAFT)
-  isPublished     Boolean        @default(false)
-  customFields    Json?          // Store custom field definitions for public registration
-  columnOrder     Json?          // Store Excel column order as array
-  registrationOpen Boolean        @default(true)
-  createdById     String
-  currentPlayerId String?
-  bidHistory      Json?
-  createdAt       DateTime       @default(now())
+  id               String        @id @default(cuid())
+  name             String
+  description      String?
+  rules            Json
+  status           AuctionStatus @default(DRAFT)
+  isPublished      Boolean       @default(false)
+  customFields     Json? // Store custom field definitions for public registration
+  columnOrder      Json? // Store Excel column order as array
+  registrationOpen Boolean       @default(true)
+  createdById      String
+  currentPlayerId  String?
+  bidHistory       Json?
+  createdAt        DateTime      @default(now())
 
   // Relations
-  createdBy User      @relation(fields: [createdById], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
   players   Player[]
   bidders   Bidder[]
 
+  // Performance indexes
+  @@index([createdById])
+  @@index([status])
+  @@index([isPublished])
+  @@index([createdById, status])
   @@map("auctions")
 }
 
@@ -94,12 +99,16 @@ model Player {
   // Relations
   auction Auction @relation(fields: [auctionId], references: [id])
 
+  // Performance indexes
+  @@index([auctionId])
+  @@index([auctionId, status])
+  @@index([auctionId, status, soldPrice])
   @@map("players")
 }
 
 model Bidder {
-  id             String  @id @default(cuid())
-  userId         String  @unique
+  id             String   @id @default(cuid())
+  userId         String   @unique
   auctionId      String
   teamName       String?
   username       String
@@ -113,18 +122,22 @@ model Bidder {
   auction Auction @relation(fields: [auctionId], references: [id])
 
   @@unique([auctionId, username])
+  // Performance indexes
+  @@index([auctionId])
+  @@index([userId])
+  @@index([auctionId, userId])
   @@map("bidders")
 }
 
 model Invitation {
-  id         String   @id @default(cuid())
-  code       String   @unique
-  used       Boolean  @default(false)
-  usedBy     String?
-  usedAt     DateTime?
-  createdBy  String
-  createdAt  DateTime @default(now())
-  expiresAt  DateTime?
+  id        String    @id @default(cuid())
+  code      String    @unique
+  used      Boolean   @default(false)
+  usedBy    String?
+  usedAt    DateTime?
+  createdBy String
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
 
   @@map("invitations")
 }

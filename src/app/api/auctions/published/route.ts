@@ -25,7 +25,11 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    return NextResponse.json({ auctions })
+    // Add caching headers for better performance - public data can be cached longer
+    const response = NextResponse.json({ auctions })
+    response.headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600')
+    
+    return response
   } catch (error) {
     console.error('Error fetching published auctions:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -27,7 +27,7 @@ interface PlayersSoldTableProps {
   }
 }
 
-export function PlayersSoldTable({ auction }: PlayersSoldTableProps) {
+function PlayersSoldTableComponent({ auction }: PlayersSoldTableProps) {
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -54,50 +54,32 @@ export function PlayersSoldTable({ auction }: PlayersSoldTableProps) {
     return auction.bidders.find(b => b.id === soldTo)
   }
 
-  const getPlayerBidHistory = (playerId: string) => {
+  const getPlayerBidHistory = useCallback((playerId: string) => {
     if (!auction.bidHistory) return []
     const bidHistory = Array.isArray(auction.bidHistory) ? auction.bidHistory : []
     
-    // Find this player's sale/unsold event to determine the range
-    let playerSaleIndex = -1
-    let previousPlayerSaleIndex = bidHistory.length
+    // Filter all bids that belong to this player
+    const playerBids = bidHistory.filter((bid: any) => {
+      // Check if this bid is for the current player
+      return bid.playerId === playerId
+    })
     
-    // Find this player's sale event
-    for (let i = 0; i < bidHistory.length; i++) {
-      const bid = bidHistory[i]
-      if (bid.playerId === playerId && (bid.type === 'sold' || bid.type === 'unsold')) {
-        playerSaleIndex = i
-        break
-      }
-    }
-    
-    if (playerSaleIndex === -1) {
-      // No sale event found for this player
-      return []
-    }
-    
-    // Find the previous player's sale event (this gives us the range)
-    for (let i = playerSaleIndex + 1; i < bidHistory.length; i++) {
-      const bid = bidHistory[i]
-      if (bid.type === 'sold' || bid.type === 'unsold') {
-        previousPlayerSaleIndex = i
-        break
-      }
-    }
-    
-    // Collect all bids between this player's sale and the previous player's sale
-    const playerBids: any[] = []
-    for (let i = playerSaleIndex; i >= previousPlayerSaleIndex; i--) {
-      const bid = bidHistory[i]
-      
-      // Include all bids (regular bids and the sale/unsold event)
-      if (bid.type === 'bid' || (bid.playerId === playerId && (bid.type === 'sold' || bid.type === 'unsold'))) {
-        playerBids.unshift(bid)
-      }
-    }
-    
+    // Return bids with newest first (most recent bids show at top)
     return playerBids
-  }
+  }, [auction.bidHistory])
+
+  // Helper function to get the sold timestamp from bid history
+  const getSoldTimestamp = useCallback((playerId: string): number => {
+    if (!auction.bidHistory) return 0
+    const bidHistory = Array.isArray(auction.bidHistory) ? auction.bidHistory : []
+    
+    // Find the sold event for this player
+    const soldEvent = bidHistory.find((bid: any) => 
+      bid.type === 'sold' && bid.playerId === playerId
+    )
+    
+    return soldEvent?.timestamp ? new Date(soldEvent.timestamp).getTime() : 0
+  }, [auction.bidHistory])
 
   // Filter and sort players
   const filteredAndSortedPlayers = useMemo(() => {
@@ -138,20 +120,22 @@ export function PlayersSoldTable({ auction }: PlayersSoldTableProps) {
         return statusDiff
       }
 
-      // If both are SOLD, sort by price (descending by default)
+      // If both are SOLD, sort by sold timestamp (latest first)
       if (a.status === 'SOLD' && b.status === 'SOLD') {
-        if (sortColumn === 'price') {
-          const aPrice = a.soldPrice || 0
-          const bPrice = b.soldPrice || 0
-          return sortDirection === 'asc' ? aPrice - bPrice : bPrice - aPrice
-        }
+        const aTimestamp = getSoldTimestamp(a.id)
+        const bTimestamp = getSoldTimestamp(b.id)
+        // Latest sold first (descending timestamp)
+        return bTimestamp - aTimestamp
       }
 
-      return 0
+      // For UNSOLD and AVAILABLE, sort alphabetically by name
+      const aName = getPlayerName(a).toLowerCase()
+      const bName = getPlayerName(b).toLowerCase()
+      return aName.localeCompare(bName)
     })
 
     return filtered
-  }, [auction.players, statusFilter, searchTerm, sortColumn, sortDirection, selectedBidder, getPlayerName, getPlayerData, getBuyerInfo])
+  }, [auction.players, statusFilter, searchTerm, selectedBidder, getPlayerName, getPlayerData, getBuyerInfo, getSoldTimestamp])
 
   const soldPlayers = filteredAndSortedPlayers.filter(p => p.status === 'SOLD')
   const unsoldPlayers = filteredAndSortedPlayers.filter(p => p.status === 'UNSOLD')
@@ -457,52 +441,62 @@ export function PlayersSoldTable({ auction }: PlayersSoldTableProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 overflow-y-auto max-h-[60vh]">
-            {selectedPlayer && (
+            {selectedPlayer && (() => {
+              const playerBids = getPlayerBidHistory(selectedPlayer.id)
+              return (
               <div className="space-y-2">
-                {getPlayerBidHistory(selectedPlayer.id).length === 0 ? (
+                {playerBids.length === 0 ? (
                   <p className="text-sm text-gray-600 dark:text-gray-400">No bid history available for this player.</p>
                 ) : (
-                  getPlayerBidHistory(selectedPlayer.id).map((bid: any, index: number) => (
-                    <div key={index} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                      {bid.type === 'bid' ? (
-                        <div className="text-sm">
-                          <div className="font-semibold text-gray-900 dark:text-gray-100">
-                            {bid.bidderName} {bid.teamName && `(${bid.teamName})`}
+                  playerBids.map((bid: any, index: number) => {
+                    // Determine the display type - default to 'bid' if no type is set
+                    const displayType = bid.type || (bid.amount ? 'bid' : 'unknown')
+                    
+                    return (
+                      <div key={index} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                        {displayType === 'bid' ? (
+                          <div className="text-sm">
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">
+                              {bid.bidderName} {bid.teamName && `(${bid.teamName})`}
+                            </div>
+                            <div className="text-green-600 dark:text-green-400 font-medium mt-1">
+                              ₹{bid.amount.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {new Date(bid.timestamp).toLocaleString()}
+                            </div>
                           </div>
-                          <div className="text-green-600 dark:text-green-400 font-medium mt-1">
-                            ₹{bid.amount.toLocaleString('en-IN')}
+                        ) : displayType === 'sold' ? (
+                          <div className="text-sm">
+                            <div className="font-semibold text-green-700 dark:text-green-300">Sold to {bid.bidderName} {bid.teamName && `(${bid.teamName})`}</div>
+                            <div className="text-green-600 dark:text-green-400 font-medium mt-1">
+                              ₹{bid.amount.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {new Date(bid.timestamp).toLocaleString()}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {new Date(bid.timestamp).toLocaleString()}
+                        ) : displayType === 'unsold' ? (
+                          <div className="text-sm">
+                            <div className="font-semibold text-orange-700 dark:text-orange-300">Player Unsold</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {new Date(bid.timestamp).toLocaleString()}
+                            </div>
                           </div>
-                        </div>
-                      ) : bid.type === 'sold' ? (
-                        <div className="text-sm">
-                          <div className="font-semibold text-green-700 dark:text-green-300">Sold to {bid.bidderName} {bid.teamName && `(${bid.teamName})`}</div>
-                          <div className="text-green-600 dark:text-green-400 font-medium mt-1">
-                            ₹{bid.amount.toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {new Date(bid.timestamp).toLocaleString()}
-                          </div>
-                        </div>
-                      ) : bid.type === 'unsold' ? (
-                        <div className="text-sm">
-                          <div className="font-semibold text-orange-700 dark:text-orange-300">Player Unsold</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {new Date(bid.timestamp).toLocaleString()}
-                          </div>
-                        </div>
-                      ) : null}
+                        ) : null}
                     </div>
-                  ))
+                  )
+                  })
                 )}
               </div>
-            )}
+              )
+            })()}
           </div>
         </DialogContent>
       </Dialog>
     </Card>
   )
 }
+
+export const PlayersSoldTable = memo(PlayersSoldTableComponent)
 
