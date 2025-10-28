@@ -311,7 +311,7 @@ export default function PlayerRegistrationForm() {
               </Link>
             </div>
             <Link href="/register">
-              <Button variant="ghost" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+              <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Auctions
               </Button>
@@ -356,19 +356,18 @@ export default function PlayerRegistrationForm() {
               ))}
 
               <div className="pt-6">
+                <Alert className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Registration Disabled:</strong> Admins will keep the registration controls to themselves
+                  </AlertDescription>
+                </Alert>
                 <Button 
                   type="submit" 
-                  className="w-full" 
-                  disabled={submitting}
+                  className="w-full bg-gray-400 dark:bg-gray-700 cursor-not-allowed" 
+                  disabled={true}
                 >
-                  {submitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    'Submit Registration'
-                  )}
+                  Registration Disabled
                 </Button>
               </div>
             </form>

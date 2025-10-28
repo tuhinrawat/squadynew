@@ -232,42 +232,136 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</TableHead>
-          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
-          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Players</TableHead>
-          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bidders</TableHead>
-          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</TableHead>
-          <TableHead className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-3">
         {auctions.map((auction) => (
-          <TableRow key={auction.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-            <TableCell>
-              <div>
-                <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{auction.name}</div>
+          <div
+            key={auction.id}
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3"
+          >
+            <div className="flex justify-between items-start">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate">
+                  {auction.name}
+                </h3>
                 {auction.description && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
                     {auction.description}
-                  </div>
+                  </p>
                 )}
               </div>
-            </TableCell>
-            <TableCell>
-              {getStatusBadge(auction.status, auction.isPublished)}
-            </TableCell>
-            <TableCell className="text-sm text-gray-900 dark:text-gray-100">
-              {auction._count.players}
-            </TableCell>
-            <TableCell className="text-sm text-gray-900 dark:text-gray-100">
-              {auction._count.bidders}
-            </TableCell>
-            <TableCell className="text-sm text-gray-600 dark:text-gray-400">
-              {new Date(auction.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </TableCell>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleManagePlayers(auction.id)}>
+                    <Users className="mr-2 h-4 w-4" />
+                    Manage Players
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleManageBidders(auction.id)}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Manage Bidders
+                  </DropdownMenuItem>
+                  {(auction.status === 'LIVE' || auction.status === 'PAUSED') && (
+                    <DropdownMenuItem onClick={() => handleViewAuction(auction.id)}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      View Live Auction
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => handleEdit(auction)}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                  {auction.status === 'COMPLETED' && (
+                    <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Duplicate Auction
+                    </DropdownMenuItem>
+                  )}
+                  {auction.status === 'DRAFT' && (
+                    <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>
+                      <Play className="mr-2 h-4 w-4" />
+                      Start Auction
+                    </DropdownMenuItem>
+                  )}
+                  {!auction.isPublished && (
+                    <DropdownMenuItem onClick={() => handlePublish(auction.id)}>
+                      <Globe className="mr-2 h-4 w-4" />
+                      Publish
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() => handleDelete(auction)}
+                    className="text-red-600 dark:text-red-400"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-4">
+                <span className="text-gray-600 dark:text-gray-400">Players:</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{auction._count.players}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-gray-600 dark:text-gray-400">Bidders:</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">{auction._count.bidders}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>{getStatusBadge(auction.status, auction.isPublished)}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {new Date(auction.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden lg:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Name</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Players</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bidders</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</TableHead>
+              <TableHead className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {auctions.map((auction) => (
+              <TableRow key={auction.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <TableCell>
+                  <div>
+                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{auction.name}</div>
+                    {auction.description && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                        {auction.description}
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {getStatusBadge(auction.status, auction.isPublished)}
+                </TableCell>
+                <TableCell className="text-sm text-gray-900 dark:text-gray-100">
+                  {auction._count.players}
+                </TableCell>
+                <TableCell className="text-sm text-gray-900 dark:text-gray-100">
+                  {auction._count.bidders}
+                </TableCell>
+                <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                  {new Date(auction.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </TableCell>
             <TableCell className="text-right">
               <DropdownMenu>
                 <DropdownMenuTrigger className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md flex items-center justify-center">
@@ -320,8 +414,11 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
             </TableCell>
           </TableRow>
         ))}
-      </TableBody>
+          </TableBody>
+        </Table>
+      </div>
       
+      {/* Dialogs */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -605,6 +702,6 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Table>
+    </>
   )
 }

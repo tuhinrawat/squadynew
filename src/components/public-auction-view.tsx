@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { Clock, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
+import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TeamsOverview } from '@/components/teams-overview'
@@ -283,6 +284,38 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               <span className="text-lg font-bold text-blue-600">{initialStats.remaining}</span>
             </div>
           </div>
+        </div>
+
+        {/* Mobile Current Bid Banner */}
+        <div className="lg:hidden sticky top-0 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-lg shadow-lg">
+          {currentBid ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  <span className="font-semibold text-xs uppercase tracking-wide">Current Bid</span>
+                </div>
+                <div className="text-lg font-bold">
+                  ₹{currentBid.amount.toLocaleString('en-IN')}
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="opacity-90">By {currentBid.bidderName}</span>
+                {currentBid.teamName && (
+                  <span className="bg-white/20 px-2 py-0.5 rounded-full">{currentBid.teamName}</span>
+                )}
+              </div>
+              {bidHistory.length > 1 && (
+                <div className="text-xs opacity-75">
+                  {bidHistory.length} bid{bidHistory.length !== 1 ? 's' : ''} placed
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center text-sm py-2">
+              <span className="opacity-90">No bids yet - Be the first to bid!</span>
+            </div>
+          )}
         </div>
 
         {/* Main Layout */}
@@ -645,7 +678,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Live Bid History</h3>
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">Live Bid History</DialogTitle>
+              <DialogDescription className="sr-only">View the live bidding history for this player</DialogDescription>
             </div>
             
             {/* Bid History Content */}

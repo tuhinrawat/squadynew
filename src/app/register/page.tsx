@@ -80,15 +80,21 @@ export default function PlayerRegistration() {
                 <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-10 w-auto" />
               </Link>
             </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <Button variant="ghost" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                  Home
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <Link href="/tutorial">
+                <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
+                  Tutorial
                 </Button>
               </Link>
-              <Link href="/signin">
-                <Button variant="outline" className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">
+              <Link href="/signin" className="hidden md:block">
+                <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
                   Sign In
+                </Button>
+              </Link>
+              <Link href="/signup">
+                <Button className="text-sm px-3 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white">
+                  <span className="hidden sm:inline">Get Started</span>
+                  <span className="sm:hidden">Start</span>
                 </Button>
               </Link>
             </div>
@@ -177,17 +183,12 @@ export default function PlayerRegistration() {
                     )}
 
                     <div className="pt-4">
-                      {auction.registrationOpen ? (
-                        <Link href={`/register/${auction.id}`} className="w-full">
-                          <Button className="w-full">
-                            Register for this Auction
-                          </Button>
-                        </Link>
-                      ) : (
-                        <Button disabled className="w-full">
-                          Registration Closed
-                        </Button>
-                      )}
+                      <Button disabled className="w-full bg-gray-400 dark:bg-gray-700 cursor-not-allowed">
+                        Registration Disabled
+                      </Button>
+                      <p className="text-xs text-center text-gray-600 dark:text-gray-400 mt-2">
+                        Admins will keep the registration controls to themselves
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

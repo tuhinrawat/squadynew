@@ -14,6 +14,11 @@ export default function Home() {
               <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 sm:h-10 w-auto" />
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
+              <Link href="/tutorial">
+                <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
+                  Tutorial
+                </Button>
+              </Link>
               <Link href="/register" className="hidden sm:block">
                 <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
                   Player Registration
@@ -158,9 +163,11 @@ export default function Home() {
               <p className="text-gray-600 dark:text-gray-300 mb-6">
                 Get a personalized quote based on your auction volume and requirements
               </p>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700">
-                Contact Sales
-              </Button>
+              <Link href="/contact">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700">
+                  Contact Sales
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>
@@ -188,7 +195,7 @@ export default function Home() {
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><Link href="#" className="hover:text-white transition-colors">About</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Contact</Link></li>
+                <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
                 <li><Link href="#" className="hover:text-white transition-colors">Support</Link></li>
               </ul>
             </div>
