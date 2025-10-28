@@ -3,6 +3,7 @@
 import { useState, useEffect, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import Image from 'next/image'
 
 interface Player {
@@ -34,6 +35,7 @@ interface TeamsOverviewProps {
 
 function TeamsOverviewComponent({ auction }: TeamsOverviewProps) {
   const [teams, setTeams] = useState<Map<string, any>>(new Map())
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     // Calculate team purchases
@@ -58,6 +60,18 @@ function TeamsOverviewComponent({ auction }: TeamsOverviewProps) {
     setTeams(teamPurchases)
   }, [auction.bidders, auction.players])
 
+  const toggleTeam = (teamId: string) => {
+    setExpandedTeams(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(teamId)) {
+        newSet.delete(teamId)
+      } else {
+        newSet.add(teamId)
+      }
+      return newSet
+    })
+  }
+
   return (
     <Card>
       <CardHeader className="p-3 sm:p-6">
@@ -65,57 +79,74 @@ function TeamsOverviewComponent({ auction }: TeamsOverviewProps) {
       </CardHeader>
       <CardContent className="p-3 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {Array.from(teams.values()).map((team: any) => (
-            <div
-              key={team.bidder.id}
-              className="border-2 rounded-lg p-3 sm:p-4 bg-white dark:bg-gray-800 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-2 sm:gap-3 mb-3">
-                {team.bidder.logoUrl && (
-                  <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-                    <Image
-                      src={team.bidder.logoUrl}
-                      alt={team.bidder.teamName || team.bidder.username}
-                      fill
-                      className="rounded object-cover"
-                      unoptimized
-                    />
+          {Array.from(teams.values()).map((team: any) => {
+            const isExpanded = expandedTeams.has(team.bidder.id)
+            
+            return (
+              <div
+                key={team.bidder.id}
+                className="border-2 rounded-lg bg-white dark:bg-gray-800 hover:shadow-md transition-shadow"
+              >
+                {/* Header - Always visible, clickable on mobile */}
+                <div 
+                  className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 cursor-pointer sm:cursor-default"
+                  onClick={() => toggleTeam(team.bidder.id)}
+                >
+                  {team.bidder.logoUrl && (
+                    <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
+                      <Image
+                        src={team.bidder.logoUrl}
+                        alt={team.bidder.teamName || team.bidder.username}
+                        fill
+                        className="rounded object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate">
+                      {team.bidder.teamName || team.bidder.username}
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {team.bidder.user.name}
+                    </div>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate">
-                    {team.bidder.teamName || team.bidder.username}
+                  {/* Chevron - Mobile only */}
+                  <div className="sm:hidden flex-shrink-0">
+                    {isExpanded ? (
+                      <ChevronUp className="h-5 w-5 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="h-5 w-5 text-gray-500" />
+                    )}
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">
-                    {team.bidder.user.name}
+                </div>
+                
+                {/* Details - Collapsible on mobile, always visible on desktop */}
+                <div className={`space-y-2 text-sm px-3 pb-3 sm:p-4 sm:pt-0 transition-all duration-200 ${isExpanded ? 'block' : 'hidden sm:block'}`}>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Initial Purse:</span>
+                    <span className="font-semibold">₹{team.initialPurse.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Total Spent:</span>
+                    <span className="font-semibold text-red-600 dark:text-red-400">
+                      ₹{team.totalSpent.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
+                    <span className="font-semibold text-green-600 dark:text-green-400">
+                      ₹{team.remainingPurse.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2">
+                    <span className="text-gray-600 dark:text-gray-400">Players:</span>
+                    <Badge variant="secondary">{team.players.length}</Badge>
                   </div>
                 </div>
               </div>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Initial Purse:</span>
-                  <span className="font-semibold">₹{team.initialPurse.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Total Spent:</span>
-                  <span className="font-semibold text-red-600 dark:text-red-400">
-                    ₹{team.totalSpent.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Remaining:</span>
-                  <span className="font-semibold text-green-600 dark:text-green-400">
-                    ₹{team.remainingPurse.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="flex justify-between border-t pt-2">
-                  <span className="text-gray-600 dark:text-gray-400">Players:</span>
-                  <Badge variant="secondary">{team.players.length}</Badge>
-                </div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </CardContent>
     </Card>

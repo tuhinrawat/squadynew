@@ -179,7 +179,7 @@ function PlayersSoldTableComponent({ auction }: PlayersSoldTableProps) {
         escapeCSV(getPlayerData(player, 'Bowling Type')),
         buyer ? escapeCSV(buyer.teamName || buyer.username) : '',
         buyer ? escapeCSV(buyer.user?.name || buyer.username) : '',
-        player.soldPrice ? escapeCSV(`₹${player.soldPrice.toLocaleString('en-IN')}`) : ''
+        player.soldPrice ? escapeCSV(player.soldPrice.toLocaleString('en-IN')) : ''
       ]
       csvRows.push(row.join(','))
     })

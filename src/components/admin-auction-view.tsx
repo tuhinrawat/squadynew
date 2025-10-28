@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TeamsOverview } from '@/components/teams-overview'
@@ -222,6 +223,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         teamName: data.teamName
       })
       setHighestBidderId(data.bidderId)
+      
+      // Auto-pin logic: Keep only last 2 bidders pinned
+      setPinnedBidderIds(prev => {
+        // If this bidder is already pinned, keep current pins
+        if (prev.includes(data.bidderId)) {
+          return prev
+        }
+        // Add new bidder and keep only last 2
+        const newPins = [...prev, data.bidderId]
+        return newPins.slice(-2) // Keep only the last 2 bidders
+      })
+      
       // Add new bid to full history
       const newBidEntry = {
         type: 'bid' as const,
@@ -310,6 +323,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     setSelectedBidderForBid(null) // Clear selected bidder
     setCustomBidAmount('') // Clear custom bid amount
     setBidAmount(0) // Clear bid amount for bidder
+    setPinnedBidderIds([]) // Clear pinned bidders for new player
       // Refresh full bid history from server when new player loads
       refreshAuctionState()
   }, [refreshAuctionState])
@@ -383,6 +397,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const handleMarkSold = async () => {
     if (!currentPlayer || !currentBid) return
 
+    // Optimistic UI - show sold animation immediately
+    setSoldAnimation(true)
+    toast.success('Player marked as sold!')
+
+    try {
     const response = await fetch(`/api/auction/${auction.id}/mark-sold`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -391,7 +410,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
     if (response.ok) {
       const data = await response.json()
-      setSoldAnimation(true)
       setTimeout(() => {
         setCurrentPlayer(data.nextPlayer)
         setCurrentBid(null)
@@ -399,12 +417,24 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         setHighestBidderId(null)
         setSoldAnimation(false)
       }, 3000)
+      } else {
+        // Revert on error
+        setSoldAnimation(false)
+        toast.error('Failed to mark as sold')
+      }
+    } catch {
+      setSoldAnimation(false)
+      toast.error('Network error')
     }
   }
 
   const handleMarkUnsold = async () => {
     if (!currentPlayer) return
 
+    // Optimistic UI - show toast immediately
+    toast.info('Marking player as unsold...')
+
+    try {
     const response = await fetch(`/api/auction/${auction.id}/mark-unsold`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -417,6 +447,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setCurrentBid(null)
       setBidHistory([])
       setHighestBidderId(null)
+        toast.success('Player marked as unsold')
+      } else {
+        toast.error('Failed to mark as unsold')
+      }
+    } catch {
+      toast.error('Network error')
     }
   }
 
@@ -484,18 +520,19 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   }, [currentPlayer, bidders])
 
   return (
-    <div className="p-4 sm:p-6">
+    <>
+    <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} p-4 sm:p-6 transition-all duration-200`}>
       <div className="max-w-7xl mx-auto space-y-4">
         {/* Enhanced Header */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           {/* Top Section */}
           <div className="px-6 py-4">
-            <div className="flex items-center justify-between gap-4">
-              {/* Left: Title and Status */}
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">{auction.name}</h1>
-                  <Badge className={`px-4 py-1.5 text-sm font-semibold rounded-full ${
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              {/* Left: Title, Status, and Stats */}
+              <div className="flex-1 w-full sm:w-auto">
+                <div className="flex items-center gap-3 flex-wrap mb-2">
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100">{auction.name}</h1>
+                  <Badge className={`px-3 py-1 text-xs sm:text-sm font-semibold rounded-full ${
                     auction.status === 'LIVE' 
                       ? 'bg-green-500 text-white animate-pulse shadow-lg shadow-green-500/50' 
                       : auction.status === 'PAUSED'
@@ -505,13 +542,46 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 {auction.status}
               </Badge>
             </div>
+                
                 {auction.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{auction.description}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2">{auction.description}</p>
                 )}
+                
+                {/* Inline Stats with Progress - Stack on mobile */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Total:</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">{initialStats.total}</span>
           </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Sold:</span>
+                    <span className="font-bold text-green-600">{initialStats.sold}</span>
+          </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Unsold:</span>
+                    <span className="font-bold text-yellow-600">{initialStats.unsold}</span>
+        </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Remaining:</span>
+                    <span className="font-bold text-purple-600">{initialStats.remaining}</span>
+            </div>
+                  {/* Progress indicator */}
+                  <div className="flex items-center gap-2 pl-2 border-l border-gray-300 dark:border-gray-600">
+                    <div className="w-20 sm:w-24 lg:w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
+                        style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
+                      />
+            </div>
+                    <span className="font-bold text-blue-600 dark:text-blue-400 text-xs">
+                      {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}%
+                    </span>
+            </div>
+                </div>
+              </div>
               
-              {/* Right: Share and Admin Controls */}
-              <div className="flex items-center gap-3">
+              {/* Right: Share and Admin Controls - Always visible */}
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
@@ -523,123 +593,77 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       toast.error('Failed to copy link')
                     })
                   }}
-                  className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-2 sm:px-3"
                 >
-                  <Share2 className="h-4 w-4 mr-2" />
+                  <Share2 className="h-4 w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Share</span>
-            </Button>
+                </Button>
                 
                 {viewMode === 'admin' && (
-                  <div className="flex gap-2">
+                  <>
                     <Button
                       onClick={() => setIsBidConsoleOpen(true)}
                       size="sm"
-                      className="text-sm px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="text-xs sm:text-sm px-2 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-white hidden sm:inline-flex"
                       title="Open Bidding Console"
                     >
-                      Bidding Console
-            </Button>
-                    <Button onClick={handleStartAuction} disabled={auction.status === 'LIVE'} size="sm" className="text-sm px-3 disabled:opacity-50">
-                      <Play className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">Start</span>
-            </Button>
-                    <Button onClick={handlePauseResume} disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 bg-gray-700 hover:bg-gray-800 text-white">
-                      {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
-                      <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
-            </Button>
-                    <Button onClick={handleNextPlayer} disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3 bg-blue-600 hover:bg-blue-700 text-white">
-                      <SkipForward className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">Next</span>
+                      Console
                     </Button>
-                    <Button onClick={handleEndAuction} variant="destructive" disabled={auction.status !== 'LIVE'} size="sm" className="text-sm px-3">
-                      <Square className="h-4 w-4 mr-2" />
-                      <span className="hidden sm:inline">End</span>
-            </Button>
-                  </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="px-2 sm:px-3 min-w-[36px]">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 z-[100] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                        <DropdownMenuItem 
+                          onSelect={() => setIsBidConsoleOpen(true)}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer sm:hidden"
+                        >
+                          <TrendingUp className="h-4 w-4 mr-2" />
+                          Bidding Console
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onSelect={handleStartAuction} 
+                          disabled={auction.status === 'LIVE'}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer"
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Start Auction
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onSelect={handlePauseResume} 
+                          disabled={auction.status !== 'LIVE'}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer"
+                        >
+                          {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
+                          {isPaused ? 'Resume' : 'Pause'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onSelect={handleNextPlayer} 
+                          disabled={auction.status !== 'LIVE'}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer"
+                        >
+                          <SkipForward className="h-4 w-4 mr-2" />
+                          Next Player
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onSelect={handleEndAuction} 
+                          disabled={auction.status !== 'LIVE'} 
+                          className="text-red-600 dark:text-red-400 cursor-pointer"
+                        >
+                          <Square className="h-4 w-4 mr-2" />
+                          End Auction
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
                 )}
-              </div>
-          </div>
-        </div>
-
-          {/* Progress Bar Section */}
-          <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="font-medium text-gray-700 dark:text-gray-300">Progress</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400">
-                    {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}% Complete
-                  </span>
-            </div>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
-                  />
-            </div>
-            </div>
             </div>
           </div>
         </div>
 
-        {/* Enhanced Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <span className="text-2xl">📊</span>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Total</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{initialStats.total}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                  <span className="text-2xl">✅</span>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Sold</p>
-                  <p className="text-2xl font-bold text-green-600">{initialStats.sold}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
-                  <span className="text-2xl">⏸️</span>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Unsold</p>
-                  <p className="text-2xl font-bold text-yellow-600">{initialStats.unsold}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                  <span className="text-2xl">⏳</span>
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">Remaining</p>
-                  <p className="text-2xl font-bold text-purple-600">{initialStats.remaining}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Stats cards removed - now inline in header */}
 
         {/* Main Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4">
@@ -849,93 +873,95 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     </div>
                   )
                 })()}
-                {/* Spotlight Section - Current Bid */}
-                <div className="border-t-4 border-blue-200 dark:border-blue-900 pt-6 mt-6">
-                  <div className="text-center space-y-3">
-                    <div className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                      Current Bid
-                    </div>
+                {/* Combined Current Bid & Timer Section */}
+                <div className="border-t-4 border-blue-200 dark:border-blue-900 pt-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Current Bid */}
+                    <div className="text-center space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Current Bid
+                      </div>
                   {currentBid ? (
-                      <div className="space-y-2">
-                        <div className="text-5xl sm:text-6xl lg:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-                          ₹{currentBid.amount.toLocaleString('en-IN')}
-                        </div>
-                        <div className="text-lg sm:text-xl font-semibold text-gray-700 dark:text-gray-300">
-                          {currentBid.bidderName}
-                          {currentBid.teamName && (
-                            <span className="text-blue-600 font-bold"> ({currentBid.teamName})</span>
-                          )}
-                        </div>
+                        <div className="space-y-1">
+                          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+                            ₹{currentBid.amount.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-sm sm:text-base font-semibold text-gray-700 dark:text-gray-300">
+                            {currentBid.bidderName}
+                            {currentBid.teamName && (
+                              <span className="text-blue-600 font-bold"> ({currentBid.teamName})</span>
+                            )}
+                          </div>
                     </div>
                   ) : (
-                      <div className="py-8 text-xl font-semibold text-gray-400 dark:text-gray-500">
-                        No bids yet
-                      </div>
+                        <div className="py-4 text-base font-semibold text-gray-400 dark:text-gray-500">
+                          No bids yet
+                        </div>
                   )}
                 </div>
-                </div>
-                
-                {/* Timer Section */}
-                <div className="border-t-4 border-orange-200 dark:border-orange-900 pt-6 mt-6">
-                  <div className="text-center space-y-3">
-                    <div className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                      Time Remaining
-                    </div>
-                    <div className="flex items-center justify-center gap-4">
-                      <Clock className={`h-12 w-12 sm:h-16 sm:w-16 ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
-                      <div className={`text-6xl sm:text-7xl lg:text-8xl font-black ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-900 dark:text-gray-100'}`}>
+                    
+                    {/* Time Remaining */}
+                    <div className="text-center space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Time Remaining
+                      </div>
+                      <div className="flex items-center justify-center gap-3">
+                        <Clock className={`h-8 w-8 sm:h-10 sm:w-10 ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
+                        <div className={`text-4xl sm:text-5xl lg:text-6xl font-black ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-900 dark:text-gray-100'}`}>
                         {timer}s
                       </div>
                     </div>
-                    {timer <= 5 && (
-                      <div className="text-xs font-semibold text-red-500 animate-pulse uppercase tracking-wider">
-                        ⚠️ Final Moments
+                      {timer <= 5 && (
+                        <div className="text-xs font-semibold text-red-500 animate-pulse uppercase tracking-wider">
+                          ⚠️ Final Moments
                   </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
                 
-                {/* Admin Controls */}
-                {viewMode === 'admin' && (
-                  <div className="mt-6 space-y-3">
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Sidebar: Bid History (sticky) */}
+          <div className="order-2 lg:order-1 hidden lg:block space-y-4">
+            {/* Admin Controls - Above Live Activity */}
+            {viewMode === 'admin' && (
+              <div className="space-y-3">
                   {currentBid && (
-                    <div className="bg-green-50 dark:bg-green-900/10 p-2 rounded border border-green-200 dark:border-green-800">
+                  <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-200 dark:border-green-800">
                       <div className="text-xs font-semibold text-green-700 dark:text-green-300 mb-2">⚡ Finalize This Sale:</div>
-                      <div className="flex gap-2">
                         <Button 
                           variant="default"
                           size="sm" 
-                          className="text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white"
+                      className="w-full text-sm bg-green-600 hover:bg-green-700 text-white"
                           onClick={handleMarkSold}
                         >
-                          <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                          <span className="hidden sm:inline">Mark Sold</span>
-                          <span className="sm:hidden">Sold</span>
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      Mark Sold
                         </Button>
-                      </div>
                     </div>
                   )}
-                  <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2">
                     <Button 
                       variant="outline"
                       size="sm" 
-                      className="text-xs sm:text-sm bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/30 border-orange-200 dark:border-orange-800"
+                    className="flex-1 text-sm bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/30 border-orange-200 dark:border-orange-800"
                       onClick={handleMarkUnsold}
                     >
-                      <SkipForward className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">Mark Unsold</span>
-                      <span className="sm:hidden">Unsold</span>
+                    <SkipForward className="h-4 w-4 mr-2" />
+                    Mark Unsold
                     </Button>
                     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
                       <Button 
                         variant="destructive" 
                         size="sm" 
-                        className="text-xs sm:text-sm"
+                      className="flex-1 text-sm"
                         onClick={() => setUndoSaleDialogOpen(true)}
                       >
-                        <Undo2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">Undo Last Sale</span>
-                        <span className="sm:hidden">Undo</span>
+                      <Undo2 className="h-4 w-4 mr-2" />
+                      Undo Last Sale
                       </Button>
                     <AlertDialogContent>
                       <AlertDialogHeader>
@@ -952,15 +978,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       </AlertDialogFooter>
                     </AlertDialogContent>
                     </AlertDialog>
-                  </div>
                 </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Sidebar: Bid History (sticky) */}
-          <div className="order-2 lg:order-1 hidden lg:block space-y-4">
+              </div>
+            )}
+            
             {/* Bid console moved to sliding drawer */}
             {/* Bidder Controls - Show at top of sidebar for bidders */}
             {viewMode === 'bidder' && userBidder && auction.status === 'LIVE' && (
@@ -992,7 +1013,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   )}
                   
                   {/* Raise Bid Button */}
-                  <Button
+                    <Button 
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-6 text-base"
                     onClick={async () => {
                       if (!userBidder) {
@@ -1039,7 +1060,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id)}
                   >
                     {isPlacingBid ? 'Placing Bid...' : `Raise Bid (+₹1,000)`}
-                  </Button>
+                    </Button>
 
                   {/* Custom Bid */}
                   <div className="space-y-2">
@@ -1055,7 +1076,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         }}
                         className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                       />
-                      <Button
+                      <Button 
                         className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap px-6"
                         onClick={async () => {
                           if (!userBidder) {
@@ -1112,10 +1133,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       >
                         {isPlacingBid ? 'Placing...' : 'Place Bid'}
                       </Button>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             )}
 
           {/* Bid History */}
@@ -1274,100 +1295,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           </div>
         </div>
 
-        {/* Quick Bid Banner - Global - Only for admin */}
-        {viewMode === 'admin' && selectedBidderForBid && (
-          <Card className="mb-4 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700">
-            <CardContent className="p-4">
-              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                Selected Bidder: <span className="text-blue-700 dark:text-blue-300">{(() => {
-                  const bidder = auction.bidders.find(b => b.id === selectedBidderForBid)
-                  return bidder ? `${bidder.teamName || bidder.username} (${bidder.user?.name || 'Admin'})` : ''
-                })()}</span>
-              </div>
-              <div className="space-y-3">
-                {/* Quick Bid Options */}
-                <div className="flex flex-wrap gap-2">
-                  {[1000, 2000, 3000, 4000].map((amount) => (
-                    <Button
-                      key={amount}
-                      size="sm"
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={async () => {
-                        if (!selectedBidderForBid) return
-                        try {
-                          // Calculate total bid = current bid + increment
-                          const totalBid = (currentBid?.amount || 0) + amount
-                          // Admin placing bid
-                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bidderId: selectedBidderForBid, amount: totalBid })
-                          })
-                          if (response.ok) {
-                            setSelectedBidderForBid(null)
-                            setCustomBidAmount('')
-                          } else {
-                            const error = await response.json()
-                            alert(error.error || 'Failed to place bid')
-                          }
-                        } catch (error) {
-                          console.error('Error placing bid:', error)
-                          alert('Failed to place bid')
-                        }
-                      }}
-                    >
-                      ₹{amount.toLocaleString('en-IN')}
-                    </Button>
-                  ))}
-                </div>
-                
-                {/* Custom Bid Input */}
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Enter custom bid amount"
-                    value={customBidAmount}
-                    onChange={(e) => setCustomBidAmount(e.target.value)}
-                    className="flex-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                  />
-                  <Button
-                    size="sm"
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                    onClick={async () => {
-                      if (!selectedBidderForBid || !customBidAmount) return
-                      const incrementAmount = parseFloat(customBidAmount)
-                      if (isNaN(incrementAmount) || incrementAmount <= 0) {
-                        alert('Please enter a valid bid amount')
-                        return
-                      }
-                      // Add custom bid amount to current bid (cumulative)
-                      const amount = (currentBid?.amount || 0) + incrementAmount
-                      try {
-                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ bidderId: selectedBidderForBid, amount })
-                        })
-                        if (response.ok) {
-                          setSelectedBidderForBid(null)
-                          setCustomBidAmount('')
-                        } else {
-                          const error = await response.json()
-                          alert(error.error || 'Failed to place bid')
-                        }
-                      } catch (error) {
-                        console.error('Error placing bid:', error)
-                        alert('Failed to place bid')
-                      }
-                    }}
-                  >
-                    Place Bid
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Quick Bid Banner - Now moved to sidebar */}
 
         {/* Bidders Grid moved into right-side Bid Console for admin */}
 
@@ -1385,7 +1313,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         {/* Players Sold Table */}
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <PlayersSoldTable auction={{ ...auction, players: players as any, bidders: bidders as any, bidHistory: fullBidHistory }} />
-      </div>
+              </div>
 
       {/* Mobile Bid Controls - Show for bidders */}
       {viewMode === 'bidder' && userBidder && auction.status === 'LIVE' && (
@@ -1393,7 +1321,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           {/* Floating action buttons */}
           <div className="lg:hidden fixed bottom-28 right-4 z-50 flex flex-col gap-3 items-end">
             {/* Quick Raise Bid Button */}
-            <Button 
+                    <Button
               onClick={() => {
                 const rules = auction.rules as AuctionRules | undefined
                 const minIncrement = rules?.minBidIncrement || 1000
@@ -1407,8 +1335,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 setIsPlacingBid(true)
                 
                 fetch(`/api/auction/${auction.id}/bid`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     bidderId: userBidder.id,
                     amount: totalBid
@@ -1417,7 +1345,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   .then(data => {
                     if (data.error) {
                       alert(data.error)
-                    } else {
+                          } else {
                       toast.success('Bid placed successfully!')
                     }
                   }).catch(() => {
@@ -1435,7 +1363,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             >
               <TrendingUp className="h-5 w-5" />
               <span className="font-semibold text-sm">+₹1K</span>
-            </Button>
+                    </Button>
             
             {/* Custom Bid Button */}
             <Button 
@@ -1444,8 +1372,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             >
               <span className="font-semibold text-sm">Custom</span>
             </Button>
-                      </div>
-          
+                </div>
+                
           {/* Custom Bid Modal */}
           <Dialog open={customBidModalOpen} onOpenChange={setCustomBidModalOpen}>
             <DialogContent className="sm:max-w-md">
@@ -1537,7 +1465,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           body: JSON.stringify({
                             bidderId: userBidder.id,
                             amount: totalBid
-                          })
+                        })
                         })
 
                         const data = await response.json()
@@ -1559,7 +1487,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   >
                     {isPlacingBid ? 'Placing...' : 'Place Bid'}
                   </Button>
-      </div>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -1756,49 +1684,79 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         </DialogContent>
       </Dialog>
     </div>
+    </div>
 
     {/* Sliding Bidding Console (Admin only) */}
     {viewMode === 'admin' && (
       <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50`}>
         {/* Backdrop */}
         <div
-          className="absolute inset-0 bg-black/30"
+          className="absolute inset-0 bg-black/20"
           onClick={() => setIsBidConsoleOpen(false)}
         />
         {/* Panel */}
-        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-1/5 bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 shadow-2xl flex flex-col">
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <div className="text-sm font-semibold">Bidding Console</div>
-            <button className="text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-100" onClick={() => setIsBidConsoleOpen(false)}>Close</button>
+        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%] bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border-l-4 border-emerald-500 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col">
+          {/* Header */}
+          <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-white" />
+              <div className="text-base font-bold text-white">Bidding Console</div>
+            </div>
+            <button 
+              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all" 
+              onClick={() => setIsBidConsoleOpen(false)}
+            >
+              Close
+            </button>
           </div>
           {/* Pinned */}
           {pinnedBidderIds.length > 0 && (
-            <div className="p-3 border-b border-gray-100 dark:border-gray-800">
-              <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Pinned</div>
+            <div className="p-3 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/30 dark:to-yellow-950/30 border-b-2 border-amber-200 dark:border-amber-800">
+              <div className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-1">
+                <span>⚡</span>
+                <span>Active Bidders (Last 2)</span>
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 {pinnedBidderIds
                   .map(id => bidders.find(b => b.id === id))
                   .filter((b): b is BidderWithUser => Boolean(b))
                   .map(bidder => (
-                    <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
-                      <div className="text-xs font-semibold truncate">{bidder.teamName || bidder.username}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                    <div key={bidder.id} className={`p-2 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                      <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
+                      <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                      <div className="mt-2 grid grid-cols-1 gap-2">
+                        <Button size="sm" className={`h-10 text-sm w-full ${bidder.id === highestBidderId ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} disabled={bidder.id === highestBidderId}
                           onClick={async () => {
+                            const rules = auction.rules as AuctionRules | undefined
+                            const minInc = rules?.minBidIncrement || 1000
+                            const totalBid = (currentBid?.amount || 0) + minInc
+                            
+                            // Optimistic UI - update immediately
+                            setCurrentBid({
+                              bidderId: bidder.id,
+                              amount: totalBid,
+                              bidderName: bidder.user?.name || bidder.username,
+                              teamName: bidder.teamName || undefined
+                            })
+                            setHighestBidderId(bidder.id)
+                            
                             try {
-                              const rules = auction.rules as AuctionRules | undefined
-                              const minInc = rules?.minBidIncrement || 1000
-                              const totalBid = (currentBid?.amount || 0) + minInc
                               const response = await fetch(`/api/auction/${auction.id}/bid`, {
                                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
                               })
-                              if (!response.ok) { const err = await response.json(); alert(err.error || 'Failed to place bid') }
-                            } catch { alert('Failed to place bid') }
+                              if (!response.ok) { 
+                                const err = await response.json()
+                                toast.error(err.error || 'Failed to place bid')
+                                // Revert on error - will be corrected by Pusher event
+                              }
+                            } catch { 
+                              toast.error('Network error')
+                            }
                           }}>
                           Raise (+1K)
                         </Button>
-                        <Button size="sm" className="h-8 text-[12px] bg-blue-600 hover:bg-blue-700 text-white" disabled={bidder.id === highestBidderId}
+                        <Button size="sm" className="h-10 text-sm w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:text-white/90" disabled={bidder.id === highestBidderId}
                           onClick={() => setSelectedBidderForBid(bidder.id)}>
                           Custom
                         </Button>
@@ -1809,38 +1767,58 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </div>
           )}
           {/* All bidders */}
-          <div className="p-3 flex-1 overflow-y-auto">
-            <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">All Bidders</div>
+          <div className="p-3 flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+            <div className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1">
+              <span>👥</span>
+              <span>All Bidders</span>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               {bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse).map(bidder => (
-                <div key={bidder.id} className={`p-2 rounded-lg border ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-700'}`}>
+                <div key={bidder.id} className={`p-2 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold truncate">{bidder.teamName || bidder.username}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                      <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
+                      <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                     </div>
                     <button
-                      className={`text-[10px] ${pinnedBidderIds.includes(bidder.id) ? 'text-amber-600' : 'text-gray-500 hover:text-amber-600'}`}
-                      onClick={() => setPinnedBidderIds(prev => prev.includes(bidder.id) ? prev.filter(x => x !== bidder.id) : [...prev.slice(0, 5), bidder.id])}
+                      className={`text-[10px] opacity-50 hover:opacity-100 transition-opacity ${pinnedBidderIds.includes(bidder.id) ? 'text-amber-600' : 'text-gray-400 hover:text-amber-600'}`}
+                      onClick={() => setPinnedBidderIds(prev => prev.includes(bidder.id) ? prev.filter(x => x !== bidder.id) : [...prev, bidder.id].slice(-2))}
                       aria-label={pinnedBidderIds.includes(bidder.id) ? 'Unpin' : 'Pin'}
+                      title="Manual pin (auto-pins on bid)"
                     >📌</button>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Button size="sm" className={`h-8 text-[12px] ${bidder.id === highestBidderId ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
+                  <div className="mt-2 grid grid-cols-1 gap-2">
+                    <Button size="sm" className={`h-10 text-sm w-full ${bidder.id === highestBidderId ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} disabled={bidder.id === highestBidderId}
                       onClick={async () => {
+                        const rules = auction.rules as AuctionRules | undefined
+                        const minInc = rules?.minBidIncrement || 1000
+                        const totalBid = (currentBid?.amount || 0) + minInc
+                        
+                        // Optimistic UI - update immediately
+                        setCurrentBid({
+                          bidderId: bidder.id,
+                          amount: totalBid,
+                          bidderName: bidder.user?.name || bidder.username,
+                          teamName: bidder.teamName || undefined
+                        })
+                        setHighestBidderId(bidder.id)
+                        
                         try {
-                          const rules = auction.rules as AuctionRules | undefined
-                          const minInc = rules?.minBidIncrement || 1000
-                          const totalBid = (currentBid?.amount || 0) + minInc
                           const response = await fetch(`/api/auction/${auction.id}/bid`, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
                           })
-                          if (!response.ok) { const err = await response.json(); alert(err.error || 'Failed to place bid') }
-                        } catch { alert('Failed to place bid') }
+                          if (!response.ok) { 
+                            const err = await response.json()
+                            toast.error(err.error || 'Failed to place bid')
+                          }
+                        } catch { 
+                          toast.error('Network error')
+                        }
                       }}>
                       Raise (+1K)
                     </Button>
-                    <Button size="sm" className="h-8 text-[12px] bg-emerald-600 hover:bg-emerald-700 text-white" disabled={bidder.id === highestBidderId}
+                    <Button size="sm" className="h-10 text-sm w-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-gray-400 disabled:text-white/90" disabled={bidder.id === highestBidderId}
                       onClick={() => setSelectedBidderForBid(bidder.id)}>
                       Custom
                     </Button>
@@ -1849,9 +1827,129 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               ))}
             </div>
           </div>
+          
+          {/* Custom Bid Section - Appears at bottom when a bidder is selected */}
+          {selectedBidderForBid && (
+            <div className="p-3 border-t-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+              <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                Custom Bid: {(() => {
+                  const bidder = bidders.find(b => b.id === selectedBidderForBid)
+                  return bidder ? `${bidder.teamName || bidder.username}` : ''
+                })()}
+              </div>
+              
+              {/* Quick increment buttons */}
+              <div className="grid grid-cols-4 gap-1 mb-2">
+                {[1000, 2000, 3000, 5000].map((amount) => (
+                  <Button
+                    key={amount}
+                    size="sm"
+                    className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={async () => {
+                      const totalBid = (currentBid?.amount || 0) + amount
+                      const bidder = bidders.find(b => b.id === selectedBidderForBid)
+                      
+                      // Optimistic UI
+                      setCurrentBid({
+                        bidderId: selectedBidderForBid,
+                        amount: totalBid,
+                        bidderName: bidder?.user?.name || bidder?.username || '',
+                        teamName: bidder?.teamName || undefined
+                      })
+                      setHighestBidderId(selectedBidderForBid)
+                      
+                      try {
+                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ bidderId: selectedBidderForBid, amount: totalBid })
+                        })
+                        if (response.ok) {
+                          setSelectedBidderForBid(null)
+                        } else {
+                          const error = await response.json()
+                          toast.error(error.error || 'Failed to place bid')
+                        }
+                      } catch {
+                        toast.error('Network error')
+                      }
+                    }}
+                  >
+                    +₹{(amount/1000).toFixed(0)}k
+                  </Button>
+                ))}
+              </div>
+              
+              {/* Custom amount input */}
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Custom increment"
+                  value={customBidAmount}
+                  onChange={(e) => setCustomBidAmount(e.target.value)}
+                  className="flex-1 h-8 text-xs bg-white dark:bg-gray-800"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 text-xs px-3 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={async () => {
+                    if (!customBidAmount) return
+                    const incrementAmount = parseFloat(customBidAmount)
+                    if (isNaN(incrementAmount) || incrementAmount <= 0) {
+                      toast.error('Invalid amount')
+                      return
+                    }
+                    
+                    const totalBid = (currentBid?.amount || 0) + incrementAmount
+                    const bidder = bidders.find(b => b.id === selectedBidderForBid)
+                    
+                    // Optimistic UI
+                    setCurrentBid({
+                      bidderId: selectedBidderForBid,
+                      amount: totalBid,
+                      bidderName: bidder?.user?.name || bidder?.username || '',
+                      teamName: bidder?.teamName || undefined
+                    })
+                    setHighestBidderId(selectedBidderForBid)
+                    
+                    try {
+                      const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bidderId: selectedBidderForBid, amount: totalBid })
+                      })
+                      if (response.ok) {
+                        setSelectedBidderForBid(null)
+                        setCustomBidAmount('')
+                      } else {
+                        const error = await response.json()
+                        toast.error(error.error || 'Failed to place bid')
+                      }
+                    } catch {
+                      toast.error('Network error')
+                    }
+                  }}
+                >
+                  Bid
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs px-2"
+                  onClick={() => {
+                    setSelectedBidderForBid(null)
+                    setCustomBidAmount('')
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )}
+    </>
   )
 }
 

@@ -249,9 +249,6 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
               <div className="hidden sm:flex items-center gap-2 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">Welcome,</span>
                 <span className="font-semibold text-gray-900 dark:text-gray-100">{session.user.name}</span>
-                <Badge variant="outline" className="text-xs">
-                  {session.user.role === 'SUPER_ADMIN' ? 'Super Admin' : session.user.role}
-                </Badge>
               </div>
               <form action="/api/auth/signout" method="post">
                 <Button type="submit" variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">

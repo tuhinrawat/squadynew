@@ -513,21 +513,50 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     </div>
                   )
                 })()}
-                <div className="border-t pt-2 sm:pt-4">
-                  <div className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1 sm:mb-2">Current Bid</div>
-                  {currentBid ? (
-                    <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-600">
-                      ₹{currentBid.amount.toLocaleString('en-IN')} - {currentBid.bidderName}
-                      {currentBid.teamName && ` (${currentBid.teamName})`}
+                {/* Combined Current Bid & Timer Section */}
+                <div className="border-t-4 border-blue-200 dark:border-blue-900 pt-4 mt-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Current Bid */}
+                    <div className="text-center space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Current Bid
+                      </div>
+                      {currentBid ? (
+                        <div className="space-y-1">
+                          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+                            ₹{currentBid.amount.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-sm sm:text-base font-semibold text-gray-700 dark:text-gray-300">
+                            {currentBid.bidderName}
+                            {currentBid.teamName && (
+                              <span className="text-blue-600 font-bold"> ({currentBid.teamName})</span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-4 text-base font-semibold text-gray-400 dark:text-gray-500">
+                          No bids yet
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-sm sm:text-base lg:text-lg font-medium text-gray-700 dark:text-gray-300">No bids yet</div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 sm:gap-4 border-t pt-2 sm:pt-4">
-                  <Clock className="h-4 w-4 sm:h-6 sm:w-6" />
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold" style={{ color: timer <= 5 ? 'red' : 'inherit' }}>
-                    {timer}s
+                    
+                    {/* Time Remaining */}
+                    <div className="text-center space-y-2">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Time Remaining
+                      </div>
+                      <div className="flex items-center justify-center gap-3">
+                        <Clock className={`h-8 w-8 sm:h-10 sm:w-10 ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
+                        <div className={`text-4xl sm:text-5xl lg:text-6xl font-black ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-900 dark:text-gray-100'}`}>
+                          {timer}s
+                        </div>
+                      </div>
+                      {timer <= 5 && (
+                        <div className="text-xs font-semibold text-red-500 animate-pulse uppercase tracking-wider">
+                          ⚠️ Final Moments
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -685,123 +714,165 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             
             {/* Bid History Content */}
             <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto">
-            {bidHistory.map((bid, index) => {
-              // Handle sold/unsold events
-              if (bid.type === 'sold') {
+              {bidHistory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <p>No bids yet</p>
+                </div>
+              ) : (
+                bidHistory.map((bid, index) => {
+                // Handle sold/unsold events
+                if (bid.type === 'sold') {
+                  const bidTime = new Date(bid.timestamp)
+                  let timeAgo = ''
+                  if (isClient) {
+                    const now = new Date()
+                    const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                    timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  } else {
+                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }
+                  
+                  return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-sm border-l-4 border-green-500 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 rounded-lg p-3 mb-2 shadow-lg"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">🎉</span>
+                          <div className="font-bold text-lg text-green-800 dark:text-green-300">
+                            {bid.playerName} SOLD!
+                      </div>
+                      </div>
+                        <div className="flex items-center gap-2 mb-1 text-sm">
+                          <span className="text-gray-700 dark:text-gray-300">To:</span>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                          {bid.teamName && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200">({bid.teamName})</span>
+                          )}
+                      </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                            ₹{bid.amount.toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
+                    </div>
+                      </motion.div>
+                  )
+                }
+                
+                if (bid.type === 'unsold') {
+                  const bidTime = new Date(bid.timestamp)
+                  let timeAgo = ''
+                  if (isClient) {
+                    const now = new Date()
+                    const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                    timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  } else {
+                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }
+                  
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-sm border-l-4 border-orange-500 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40 rounded-lg p-3 mb-2 shadow-md"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl">⏭️</span>
+                        <div className="font-bold text-lg text-orange-800 dark:text-orange-300">
+                          {bid.playerName} - UNSOLD
+                      </div>
+                      </div>
+                      <div className="text-sm text-orange-700 dark:text-orange-400 mb-1">
+                        No buyer found • Moving to next player
+                      </div>
+                      <div className="text-xs text-orange-600 dark:text-orange-400">
+                        ⏰ {timeAgo}
+                    </div>
+                    </motion.div>
+                  )
+                }
+                
+                // Handle regular bids
                 const bidTime = new Date(bid.timestamp)
+                
                 let timeAgo = ''
                 if (isClient) {
                   const now = new Date()
                   const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                  timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  
+                  if (timeDiff < 60) {
+                    timeAgo = `${timeDiff} second${timeDiff !== 1 ? 's' : ''} ago`
+                  } else if (timeDiff < 3600) {
+                    const minutes = Math.floor(timeDiff / 60)
+                    timeAgo = `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
+                  } else {
+                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }
                 } else {
                   timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }
                 
-                return (
-                  <motion.div 
-                    key={index} 
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="text-sm border-l-2 pl-2 border-green-500 bg-gradient-to-r from-green-50 to-transparent dark:from-green-900/10 rounded p-2"
-                  >
-                    <div className="font-semibold text-green-800 dark:text-green-300">
-                      ✅ {bid.playerName} SOLD!
-                    </div>
-                    <div className="text-xs text-green-700 dark:text-green-400">
-                      To: {bid.bidderName} {bid.teamName && `(${bid.teamName})`} for ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
-                    </div>
-                    <div className="text-xs text-green-600 dark:text-green-500 mt-1">
-                      {timeAgo}
-                    </div>
-                  </motion.div>
-                )
-              }
-              
-              if (bid.type === 'unsold') {
-                const bidTime = new Date(bid.timestamp)
-                let timeAgo = ''
-                if (isClient) {
-                  const now = new Date()
-                  const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                  timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                } else {
-                  timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }
+                const isLatestBid = index === bidHistory.length - 1
+                const increment = isLatestBid
+                  ? bid.amount 
+                  : bid.amount - bidHistory[index + 1]?.amount || 0
+                
+                const commentary = isLatestBid
+                  ? "🎯 Current Top Bid!"
+                  : increment > 50000 
+                    ? "🚀 Big Jump!"
+                    : "💪 Standard Bid"
+                
+                // Enhanced styling for auction-like appearance
+                const bidStyle = isLatestBid 
+                  ? "border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30 rounded-lg p-3 shadow-md animate-pulse"
+                  : increment > 50000
+                    ? "border-l-4 border-purple-500 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg p-3"
+                    : "border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-lg p-3"
                 
                 return (
-                  <motion.div 
+                  <motion.div
                     key={index}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="text-sm border-l-2 pl-2 border-orange-500 bg-gradient-to-r from-orange-50 to-transparent dark:from-orange-900/10 rounded p-2"
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className={`text-sm ${bidStyle} mb-2`}
                   >
-                    <div className="font-semibold text-orange-800 dark:text-orange-300">
-                      ⏭️ {bid.playerName} - UNSOLD
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-lg text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                      {bid.teamName && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">({bid.teamName})</span>
+                      )}
                     </div>
-                    <div className="text-xs text-orange-700 dark:text-orange-400">
-                      No buyer • Moving to next player
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        isLatestBid 
+                          ? "bg-emerald-600 text-white" 
+                          : increment > 50000 
+                            ? "bg-purple-600 text-white"
+                            : "bg-blue-600 text-white"
+                      }`}>
+                        {commentary}
+                      </span>
+                      <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                        ₹{bid.amount.toLocaleString('en-IN')}
+                      </span>
                     </div>
-                    <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">
-                      {timeAgo}
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                      <span>⏰ {timeAgo}</span>
+                      {increment > 0 && !isLatestBid && (
+                        <span className="text-green-600 dark:text-green-400">↑ +₹{increment.toLocaleString('en-IN')}</span>
+                      )}
                     </div>
                   </motion.div>
                 )
-              }
-              
-              const bidTime = new Date(bid.timestamp)
-              let timeAgo = ''
-              
-              if (isClient) {
-                const now = new Date()
-                const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                if (timeDiff < 60) {
-                  timeAgo = `${timeDiff} second${timeDiff !== 1 ? 's' : ''} ago`
-                } else if (timeDiff < 3600) {
-                  const minutes = Math.floor(timeDiff / 60)
-                  timeAgo = `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
-                } else {
-                  timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }
-              } else {
-                timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              }
-              
-              const isLatestBid = index === bidHistory.length - 1
-              // Calculate increment compared to previous bid (index-1 is older)
-              const increment = index === 0
-                ? bid.amount 
-                : bid.amount - bidHistory[index - 1]?.amount || 0
-              
-              const commentary = isLatestBid
-                ? "🎯 Current Top Bid!"
-                : increment > 50000 
-                  ? "🚀 Big Jump!"
-                  : "💪 Standard Bid"
-              
-              return (
-                <motion.div 
-                  key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className={`text-sm border-l-2 pl-2 border-blue-500 ${isLatestBid ? 'bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-900/10' : ''} rounded p-2`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
-                    {bid.teamName && (
-                      <span className="text-xs text-gray-600 dark:text-gray-400">({bid.teamName})</span>
-                    )}
-                    {isLatestBid && <Badge className="text-xs bg-blue-500">LATEST</Badge>}
-                  </div>
-                  <div className="text-xs text-gray-700 dark:text-gray-300">
-                    {commentary} • ₹{bid.amount?.toLocaleString('en-IN') || 'N/A'}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {timeAgo}
-                  </div>
-                </motion.div>
-              )
-            })}
+              }))}
             </div>
           </div>
         </DialogContent>
