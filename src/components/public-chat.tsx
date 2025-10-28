@@ -403,6 +403,10 @@ export function PublicChat({ auctionId }: PublicChatProps) {
                       onChange={(e) => setMessage(e.target.value)}
                       maxLength={500}
                       disabled={isSending}
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="sentences"
+                      spellCheck="true"
                       className="flex-1 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-10 text-base px-3"
                       style={{ fontSize: '16px' }}
                     />
