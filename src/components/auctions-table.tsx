@@ -97,7 +97,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
       countdownSeconds: rules?.countdownSeconds || 15,
       maxTeamSize: rules?.maxTeamSize?.toString() || '',
       enforcePurse: rules?.enforcePurse !== undefined ? rules.enforcePurse : true,
-      iconPlayerCount: rules?.iconPlayerCount || 10,
+      iconPlayerCount: rules?.iconPlayerCount ?? 10,
       mandatoryTeamSize: rules?.mandatoryTeamSize || 12,
       bidderCount: rules?.bidderCount || 10
     })
@@ -493,15 +493,15 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
               {/* Auction Rules */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-iconPlayerCount">Icon Players Count *</Label>
+                  <Label htmlFor="edit-iconPlayerCount">Icon Players Count</Label>
                   <Input 
                     id="edit-iconPlayerCount"
                     type="number"
                     value={editFormData.iconPlayerCount}
                     onChange={(e) => setEditFormData({ ...editFormData, iconPlayerCount: Number(e.target.value) })}
-                    min="1"
+                    min="0"
                   />
-                  <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order)</p>
+                  <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order). Set to 0 to skip icon players.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-mandatoryTeamSize">Mandatory Team Size *</Label>

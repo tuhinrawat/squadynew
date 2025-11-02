@@ -88,7 +88,7 @@ export async function PUT(
       })
 
       const rules = auction?.rules as any
-      const maxIconPlayers = rules?.iconPlayerCount || 10
+      const maxIconPlayers = rules?.iconPlayerCount ?? 10
 
       // Count current icon players
       const currentIconCount = await prisma.player.count({

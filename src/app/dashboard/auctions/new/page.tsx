@@ -21,7 +21,7 @@ export default function NewAuction() {
     enforcePurse: true,
     isPublished: false,
     registrationOpen: true,
-    iconPlayerCount: 10,
+    iconPlayerCount: 0,
     mandatoryTeamSize: 12,
     bidderCount: 10
   })
@@ -49,8 +49,8 @@ export default function NewAuction() {
       newErrors.maxTeamSize = 'Team size must be between 1 and 50'
     }
 
-    if (formData.iconPlayerCount < 1) {
-      newErrors.iconPlayerCount = 'Icon player count must be at least 1'
+    if (formData.iconPlayerCount < 0) {
+      newErrors.iconPlayerCount = 'Icon player count cannot be negative'
     }
 
     if (formData.mandatoryTeamSize < 1) {
@@ -253,20 +253,20 @@ export default function NewAuction() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="iconPlayerCount">Icon Players Count *</Label>
+                <Label htmlFor="iconPlayerCount">Icon Players Count</Label>
                 <Input
                   id="iconPlayerCount"
                   name="iconPlayerCount"
                   type="number"
                   value={formData.iconPlayerCount}
                   onChange={handleNumberChange}
-                  min="1"
+                  min="0"
                   className={errors.iconPlayerCount ? 'border-red-500' : ''}
                 />
                 {errors.iconPlayerCount && (
                   <p className="text-sm text-red-600">{errors.iconPlayerCount}</p>
                 )}
-                <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order)</p>
+                <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order). Set to 0 to skip icon players.</p>
               </div>
 
               <div className="space-y-2">

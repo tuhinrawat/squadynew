@@ -601,7 +601,7 @@ export default function PlayerManagement() {
                   <div className="flex items-center gap-2">
                     <span>Players ({players.length})</span>
                     <Badge variant="default" className="bg-purple-600 text-white">
-                      ⭐ {players.filter((p: any) => p.isIcon).length} / {auctionRules?.iconPlayerCount || 10} Icon Players
+                      ⭐ {players.filter((p: any) => p.isIcon).length} / {auctionRules?.iconPlayerCount ?? 10} Icon Players
                     </Badge>
                   </div>
                 }

@@ -37,7 +37,7 @@ export async function POST(
 
     // Get auction rules
     const rules = auction.rules as any
-    const iconPlayerCount = rules?.iconPlayerCount || 10
+    const iconPlayerCount = rules?.iconPlayerCount ?? 10
 
     // Check how many icon players have been auctioned (status is not AVAILABLE)
     const iconPlayersAuctioned = auction.players.filter(p => (p as any).isIcon && p.status !== 'AVAILABLE').length
