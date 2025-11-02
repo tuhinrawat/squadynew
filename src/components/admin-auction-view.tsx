@@ -720,7 +720,27 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 <div className="flex flex-col items-center gap-3">
                   {(() => {
                     const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
-                    if (!profilePhotoLink) return null
+                    
+                    // If no profile photo, show placeholder with player name
+                    if (!profilePhotoLink) {
+                      return (
+                        <>
+                          <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center ring-4 ring-blue-200 dark:ring-blue-900 shadow-2xl">
+                            <span className="text-gray-600 dark:text-gray-400 text-4xl sm:text-5xl lg:text-6xl font-semibold">
+                              {playerName.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <CardTitle className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-gray-100 text-center">{playerName}</CardTitle>
+                            {currentPlayer?.data && (currentPlayer.data as { isIcon?: boolean }).isIcon && (
+                              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg px-3 py-1 text-sm font-bold">
+                                ⭐ ICON PLAYER
+                              </Badge>
+                            )}
+                          </div>
+                        </>
+                      )
+                    }
                     
                     // Extract file ID from the Google Drive URL
                     const fileId = profilePhotoLink.includes('/file/d/') 
