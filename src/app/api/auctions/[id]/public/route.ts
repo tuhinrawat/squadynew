@@ -1,24 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/auctions/[id]/public - Get auction details for public registration
+// GET /api/auctions/[id]/public - Get auction data without authentication
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const auction = await prisma.auction.findFirst({
-      where: {
-        id: params.id,
-        isPublished: true
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        customFields: true,
-        registrationOpen: true,
-        status: true
+    const auction = await prisma.auction.findUnique({
+      where: { id: params.id },
+      include: {
+        players: true,
+        bidders: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        }
       }
     })
 
@@ -28,7 +31,7 @@ export async function GET(
 
     return NextResponse.json({ auction })
   } catch (error) {
-    console.error('Error fetching auction:', error)
+    console.error('Error fetching public auction:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

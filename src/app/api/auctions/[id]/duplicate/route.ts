@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
-import bcrypt from 'bcryptjs'
 
 export async function POST(
   request: NextRequest,
@@ -59,55 +58,26 @@ export async function POST(
       })
     }
 
-    // Copy bidders by creating new users and bidders
-    const createdBidders = []
+    // Copy bidders by reusing existing users (bidders are unique per auction)
     for (const bidder of sourceAuction.bidders) {
-      // Generate a unique email by appending timestamp
-      const timestamp = Date.now()
-      const randomSuffix = Math.floor(Math.random() * 10000)
-      const newEmail = `${bidder.user.email.split('@')[0]}_copy_${timestamp}_${randomSuffix}@squady.com`
-      
-      // Generate a random password
-      const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8)
-      const hashedPassword = await bcrypt.hash(randomPassword, 10)
-      
-      // Create new user
-      const user = await prisma.user.create({
+      // Create new bidder record with the same user, reset purse
+      await prisma.bidder.create({
         data: {
-          email: newEmail,
-          name: bidder.user.name,
-          password: hashedPassword,
-          role: 'BIDDER'
-        }
-      })
-
-      // Create the bidder with the same settings but reset purse
-      const newBidder = await prisma.bidder.create({
-        data: {
-          userId: user.id,
+          userId: bidder.userId, // Reuse the same user
           auctionId: newAuction.id,
           teamName: bidder.teamName,
-          username: `${bidder.username}_copy_${timestamp}`, // Make username unique
+          username: bidder.username, // Keep the same username
           purseAmount: bidder.purseAmount,
           remainingPurse: bidder.purseAmount, // Reset to full purse
           logoUrl: bidder.logoUrl
         }
-      })
-
-      createdBidders.push({
-        username: newBidder.username,
-        password: randomPassword,
-        email: newEmail,
-        name: user.name,
-        teamName: newBidder.teamName
       })
     }
 
     return NextResponse.json({
       success: true,
       auctionId: newAuction.id,
-      bidders: createdBidders,
-      message: 'Auction duplicated successfully with all players and bidders.'
+      message: 'Auction duplicated successfully. All bidders retain their original credentials and can access the new auction.'
     })
   } catch (error) {
     console.error('Error duplicating auction:', error)

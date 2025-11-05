@@ -60,9 +60,9 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, teamName, email, username, password, purseAmount } = body
+    const { name, teamName, email, username, password, purseAmount, logoUrl } = body
 
-    // Check if bidder exists
+    // Check if bidder exists and get auction status
     const existingBidder = await prisma.bidder.findFirst({
       where: {
         id: params.bidderId,
@@ -70,11 +70,27 @@ export async function PUT(
         auction: {
           createdById: session.user.id
         }
+      },
+      include: {
+        auction: {
+          select: {
+            isPublished: true,
+            status: true
+          }
+        }
       }
     })
 
     if (!existingBidder) {
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
+    }
+
+    // Prevent editing if auction is published or live
+    if (existingBidder.auction.isPublished || existingBidder.auction.status === 'LIVE') {
+      return NextResponse.json(
+        { error: 'Cannot edit bidder details when auction is published or live' },
+        { status: 403 }
+      )
     }
 
     // Check username uniqueness if changed
@@ -101,6 +117,7 @@ export async function PUT(
     // Update bidder fields
     if (teamName !== undefined) updateData.teamName = teamName || null
     if (username !== undefined) updateData.username = username
+    if (logoUrl !== undefined) updateData.logoUrl = logoUrl || null
     if (purseAmount !== undefined) {
       updateData.purseAmount = Number(purseAmount)
       updateData.remainingPurse = Number(purseAmount) // Reset remaining purse

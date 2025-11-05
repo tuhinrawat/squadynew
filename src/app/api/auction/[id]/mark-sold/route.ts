@@ -45,7 +45,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid player' }, { status: 400 })
     }
 
-    // Parse bid history to get current highest bid
+    // Parse bid history to get current highest bid (filter for current player only)
     let bidHistory: any[] = []
     if (auction.bidHistory && typeof auction.bidHistory === 'object') {
       const bidHistoryData = auction.bidHistory as any
@@ -54,18 +54,26 @@ export async function POST(
       }
     }
 
-    if (bidHistory.length === 0) {
+    // CRITICAL: Filter bid history to only include bids for the current player
+    // This prevents using bids from other players when marking as sold
+    const currentPlayerBidHistory = bidHistory.filter(bid => {
+      // Include bids with playerId matching current player, or bids without playerId (legacy bids)
+      return !bid.playerId || bid.playerId === currentPlayer.id
+    }).filter(bid => bid.type !== 'sold' && bid.type !== 'unsold') // Exclude sold/unsold events
+
+    if (currentPlayerBidHistory.length === 0) {
       return NextResponse.json({ error: 'No bids on this player' }, { status: 400 })
     }
 
-    const highestBid = bidHistory[0]
+    // Get the highest bid for this specific player
+    const highestBid = currentPlayerBidHistory[0]
     const winningBidderId = auction.bidders.find(b => b.id === highestBid.bidderId)?.id
 
     if (!winningBidderId) {
       return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })
     }
 
-    // Fetch winning bidder with user relation
+    // Fetch winning bidder with user relation (fresh from database to ensure correct purse)
     const winningBidder = await prisma.bidder.findUnique({
       where: { id: winningBidderId },
       include: { user: true }
@@ -73,6 +81,13 @@ export async function POST(
 
     if (!winningBidder) {
       return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })
+    }
+
+    // Check if bidder has sufficient remaining purse for the bid amount
+    if (winningBidder.remainingPurse < highestBid.amount) {
+      return NextResponse.json({
+        error: `Insufficient funds. Bidder has ₹${winningBidder.remainingPurse.toLocaleString('en-IN')} remaining, but bid amount is ₹${highestBid.amount.toLocaleString('en-IN')}.`
+      }, { status: 400 })
     }
 
     // Enforce purse and squad-size feasibility at sale time as a safety net
@@ -103,23 +118,27 @@ export async function POST(
       }
     }
 
-    // Mark player as sold
-    await prisma.player.update({
-      where: { id: playerId },
-      data: {
-        status: 'SOLD',
-        soldTo: winningBidder.id,
-        soldPrice: highestBid.amount
-      }
-    })
+    // Calculate new remaining purse
+    const newRemainingPurse = winningBidder.remainingPurse - highestBid.amount
 
-    // Deduct from bidder's remaining purse
-    await prisma.bidder.update({
-      where: { id: winningBidder.id },
-      data: {
-        remainingPurse: winningBidder.remainingPurse - highestBid.amount
-      }
-    })
+    // Update player and bidder in parallel for better performance
+    await Promise.all([
+      prisma.player.update({
+        where: { id: playerId },
+        data: {
+          status: 'SOLD',
+          soldTo: winningBidder.id,
+          soldPrice: highestBid.amount
+        }
+      }),
+      // Deduct from bidder's remaining purse
+      prisma.bidder.update({
+        where: { id: winningBidder.id },
+        data: {
+          remainingPurse: newRemainingPurse
+        }
+      })
+    ])
 
     // Get next available player
     const nextPlayer = await prisma.player.findFirst({
@@ -145,6 +164,7 @@ export async function POST(
       timestamp: new Date().toISOString()
     }
     
+    // Add sold event to the full bid history (not just current player's history)
     const updatedHistory = [soldEvent, ...bidHistory]
 
     // Update auction
@@ -156,13 +176,15 @@ export async function POST(
       }
     })
 
-    // Broadcast player sold event
-    await triggerAuctionEvent(params.id, 'player-sold', {
+    // Broadcast player sold event with purse update (fire and forget for speed)
+    triggerAuctionEvent(params.id, 'player-sold', {
       playerId: currentPlayer.id,
       bidderId: winningBidder.id,
       amount: highestBid.amount,
-      playerName: currentPlayer.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
-    } as any)
+      playerName: currentPlayer.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player',
+      bidderRemainingPurse: newRemainingPurse, // Include for instant UI update
+      updatedBidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }] // Batch format for team stats
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     // Broadcast new player if exists
     if (nextPlayer) {
@@ -177,8 +199,16 @@ export async function POST(
       } as any)
     }
 
-    // Broadcast players updated event
-    await triggerAuctionEvent(params.id, 'players-updated', {})
+    // Broadcast players updated event with data to avoid fetch (fire and forget)
+    triggerAuctionEvent(params.id, 'players-updated', {
+      players: [{
+        ...currentPlayer,
+        status: 'SOLD',
+        soldTo: winningBidder.id,
+        soldPrice: highestBid.amount
+      }],
+      bidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }]
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 
       success: true,

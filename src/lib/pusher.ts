@@ -16,27 +16,32 @@ export interface AuctionEventData {
   'new-bid': {
     bidderId: string
     amount: number
-    timestamp: Date
+    timestamp: Date | string
     bidderName: string
     teamName?: string
     countdownSeconds: number
+    remainingPurse?: number // Include purse update for instant UI
   }
   'bid-undo': {
     bidderId: string
     previousBid: number | null
     currentBid: any | null
+    remainingPurse?: number // Include purse update
   }
   'player-sold': {
     playerId: string
     bidderId: string
     amount: number
     playerName: string
+    bidderRemainingPurse?: number // Include purse update
+    updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch purse updates
   }
   'sale-undo': {
     playerId: string
+    updatedBidders?: Array<{ id: string; remainingPurse: number }>
   }
   'new-player': {
-    player: any // Will be typed properly when Player type is available
+    player: any
   }
   'timer-update': {
     seconds: number
@@ -44,16 +49,22 @@ export interface AuctionEventData {
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
-  'players-updated': {}
+  'players-updated': {
+    players?: any[] // Include player updates to avoid fetch
+    bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
+  }
 }
 
 export type AuctionEventName = keyof AuctionEventData
 
+// Optimized trigger with non-blocking promise
 export function triggerAuctionEvent<T extends AuctionEventName>(
   auctionId: string,
   eventName: T,
   data: AuctionEventData[T]
 ): Promise<Pusher.Response> {
+  // Fire and forget for critical path - don't wait for Pusher response
+  // The promise will resolve in background
   return pusher.trigger(`auction-${auctionId}`, eventName, data)
 }
 

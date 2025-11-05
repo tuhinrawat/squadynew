@@ -77,7 +77,7 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { name, teamName, email, username, password, purseAmount } = body
+    const { name, teamName, email, username, password, purseAmount, logoUrl } = body
 
     // Validate required fields
     if (!name || !email || !username || !password || !purseAmount) {
@@ -148,7 +148,8 @@ export async function POST(
         teamName: teamName || null,
         username,
         purseAmount: Number(purseAmount),
-        remainingPurse: Number(purseAmount)
+        remainingPurse: Number(purseAmount),
+        logoUrl: logoUrl || null
       },
       include: {
         user: {

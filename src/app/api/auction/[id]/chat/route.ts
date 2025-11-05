@@ -60,7 +60,18 @@ export async function POST(
 ) {
   try {
     const auctionId = params.id
-    const { username, userId, message } = await request.json()
+    const { username, userId, message, emoji } = await request.json()
+
+    // Handle emoji reactions separately (don't save to database, just broadcast)
+    if (emoji) {
+      await pusher.trigger(`auction-${auctionId}`, 'emoji-reaction', {
+        emoji,
+        username,
+        userId,
+        timestamp: Date.now()
+      })
+      return NextResponse.json({ success: true })
+    }
 
     if (!username || !message) {
       return NextResponse.json(

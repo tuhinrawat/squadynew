@@ -56,30 +56,53 @@ export async function POST(
     }
 
     // Remove last bid
-    bidHistory.shift()
+    const undoneBid = bidHistory.shift()
+    const bidAmount = undoneBid?.amount || 0
 
     // Get previous bid (if exists)
     const previousBid = bidHistory.length > 0 ? bidHistory[0] : null
 
-    // Update auction
-    await prisma.auction.update({
-      where: { id: params.id },
-      data: {
-        bidHistory: bidHistory as any
-      }
+    // Fetch bidder to restore purse
+    const bidder = await prisma.bidder.findUnique({
+      where: { id: bidderId },
+      select: { id: true, remainingPurse: true }
     })
 
-    // Reset timer
+    if (!bidder) {
+      return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
+    }
+
+    // Restore purse (add back the bid amount)
+    const restoredPurse = bidder.remainingPurse + bidAmount
+
+    // Update auction and bidder in parallel for better performance
+    await Promise.all([
+      prisma.auction.update({
+        where: { id: params.id },
+        data: {
+          bidHistory: bidHistory as any
+        }
+      }),
+      prisma.bidder.update({
+        where: { id: bidderId },
+        data: {
+          remainingPurse: restoredPurse
+        }
+      })
+    ])
+
+    // Reset timer (non-blocking)
     const rules = auction.rules as any
     const countdownSeconds = rules?.countdownSeconds || 30
     resetTimer(params.id, countdownSeconds)
 
-    // Broadcast bid undo event
-    await triggerAuctionEvent(params.id, 'bid-undo', {
+    // Broadcast bid undo event with purse update (fire and forget for speed)
+    triggerAuctionEvent(params.id, 'bid-undo', {
       bidderId,
       previousBid: previousBid?.amount || null,
-      currentBid: previousBid || null
-    })
+      currentBid: previousBid || null,
+      remainingPurse: restoredPurse // Include for instant UI update
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 
       success: true, 

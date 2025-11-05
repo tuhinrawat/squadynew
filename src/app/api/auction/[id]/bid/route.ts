@@ -24,6 +24,13 @@ export async function POST(
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
+    // Validate bid amount is a multiple of 1000
+    if (amount % 1000 !== 0) {
+      return NextResponse.json({ 
+        error: 'Bid amount must be in multiples of ₹1,000' 
+      }, { status: 400 })
+    }
+
     // Fetch auction with current state
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
@@ -200,29 +207,46 @@ export async function POST(
 
     bidHistory.unshift(newBid)
 
-    // Update auction with new bid
-    await prisma.auction.update({
-      where: { id: params.id },
-      data: {
-        bidHistory: bidHistory as any
-      }
-    })
+    // Calculate new remaining purse (optimistic - will be confirmed by DB)
+    const newRemainingPurse = bidder.remainingPurse - amount
 
-    // Reset timer
+    // Update auction and bidder in parallel for better performance
+    await Promise.all([
+      prisma.auction.update({
+        where: { id: params.id },
+        data: {
+          bidHistory: bidHistory as any
+        }
+      }),
+      // Update bidder purse immediately (optimistic update)
+      prisma.bidder.update({
+        where: { id: bidderId },
+        data: {
+          remainingPurse: newRemainingPurse
+        }
+      })
+    ])
+
+    // Reset timer (non-blocking)
     const countdownSeconds = rules?.countdownSeconds || 30
     resetTimer(params.id, countdownSeconds)
 
-    // Broadcast new bid event
-    await triggerAuctionEvent(params.id, 'new-bid', {
+    // Broadcast new bid event with purse update (fire and forget for speed)
+    triggerAuctionEvent(params.id, 'new-bid', {
       bidderId,
       amount,
       timestamp: new Date().toISOString(),
       bidderName: bidder.user.name,
       teamName: bidder.teamName,
-      countdownSeconds
-    } as any)
+      countdownSeconds,
+      remainingPurse: newRemainingPurse // Include for instant UI update
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
-    return NextResponse.json({ success: true, bid: newBid })
+    return NextResponse.json({ 
+      success: true, 
+      bid: newBid,
+      remainingPurse: newRemainingPurse // Return for optimistic UI
+    })
   } catch (error) {
     logger.error('Error placing bid:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

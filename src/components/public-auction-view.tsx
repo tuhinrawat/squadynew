@@ -6,13 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Clock, ChevronDown, ChevronUp, TrendingUp, Eye } from 'lucide-react'
+import { Clock, ChevronDown, ChevronUp, TrendingUp, Eye, Trophy } from 'lucide-react'
+import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
-import { TeamsOverview } from '@/components/teams-overview'
-import { PlayersSoldTable } from '@/components/players-sold-table'
 import { useViewerCount } from '@/hooks/use-viewer-count'
 import { PublicChat } from '@/components/public-chat'
 
@@ -88,14 +87,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         return !bid.playerId || bid.playerId === currentPlayer.id
       })
       logger.log('PublicAuctionView filtered history', { length: filteredHistory.length })
-      // Reverse to have oldest first, newest last (matching admin view)
-      const reversedHistory = [...filteredHistory].reverse()
-      setBidHistory(reversedHistory)
+      // Sort to have latest first (newest at top)
+      const sortedHistory = [...filteredHistory].sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
+      setBidHistory(sortedHistory)
       
       // Set current bid if there's a bid in the filtered history
-      if (reversedHistory.length > 0) {
-        // Get the latest bid (last item is most recent since we append to end)
-        const latestBid = reversedHistory[reversedHistory.length - 1]
+      if (sortedHistory.length > 0) {
+        // Get the latest bid (first item is most recent)
+        const latestBid = sortedHistory[0]
         if (latestBid && (!latestBid.type || latestBid.type === 'bid')) {
           logger.log('PublicAuctionView initial current bid', latestBid)
           setCurrentBid({
@@ -166,8 +167,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setTimer(data.countdownSeconds || 30)
       setBidHistory(prev => {
         logger.log('PublicAuctionView updating bid history', { prevLength: prev.length })
-        // Add newest bid at the end (matching admin view order)
-        return [...prev, {
+        // Add newest bid at the beginning (latest first)
+        return [{
           bidderId: data.bidderId,
           amount: data.amount,
           timestamp: new Date(),
@@ -175,17 +176,25 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           teamName: data.teamName,
           playerId: currentPlayer?.id, // Associate bid with current player
           type: 'bid'
-        }]
+        }, ...prev]
       })
+      // Update purse instantly from Pusher data (no API call needed)
+      if (data.remainingPurse !== undefined) {
+        setBiddersState(prev => prev.map(b => 
+          b.id === data.bidderId 
+            ? { ...b, remainingPurse: data.remainingPurse! }
+            : b
+        ))
+      }
     },
     onPlayerSold: (data) => {
       logger.log('PublicAuctionView player sold')
       
       // Add sold event to bid history using the latest bid in history
       setBidHistory(prev => {
-        const latestBid = prev.length > 0 ? prev[prev.length - 1] : null
+        const latestBid = prev.length > 0 ? prev[0] : null // Latest is now first
         if (latestBid && latestBid.type === 'bid') {
-          return [...prev, {
+          return [{
             type: 'sold',
             playerName: data?.playerName || (currentPlayer as any)?.data?.name || 'Player',
             bidderId: latestBid.bidderId,
@@ -194,18 +203,30 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             amount: latestBid.amount,
             timestamp: new Date(),
             playerId: currentPlayer?.id
-          }]
+          }, ...prev] // Add at beginning
         }
         return prev
       })
       
-      // Refresh players and bidders list immediately
-      refreshPlayersList()
+      // Update purse instantly from Pusher data (no API call needed)
+      if (data.bidderRemainingPurse !== undefined && data.bidderId) {
+        setBiddersState(prev => prev.map(b => 
+          b.id === data.bidderId 
+            ? { ...b, remainingPurse: data.bidderRemainingPurse! }
+            : b
+        ))
+      } else if (data.updatedBidders) {
+        // Batch update multiple bidders
+        setBiddersState(prev => prev.map(b => {
+          const update = data.updatedBidders!.find(ub => ub.id === b.id)
+          return update ? { ...b, remainingPurse: update.remainingPurse } : b
+        }))
+      }
       
       setSoldAnimation(true)
       setTimeout(() => {
         setSoldAnimation(false)
-        window.location.reload()
+        // Don't reload - updates are handled via Pusher
       }, 3000)
     },
     onTimerUpdate: (data) => {
@@ -222,8 +243,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       window.location.reload()
     },
     onBidUndo: (data) => {
-      // Remove last bid (newest) since we append to end
-      setBidHistory(prev => prev.slice(0, -1))
+      // Remove first bid (newest) since we prepend to beginning
+      setBidHistory(prev => prev.slice(1))
       if (data.currentBid && data.currentBid.amount > 0) {
         setCurrentBid({
           bidderId: data.currentBid.bidderId,
@@ -236,12 +257,27 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         setCurrentBid(null)
         setHighestBidderId(null)
       }
+      // Update purse instantly from Pusher data if available
+      if (data.remainingPurse !== undefined && data.bidderId) {
+        setBiddersState(prev => prev.map(b => 
+          b.id === data.bidderId 
+            ? { ...b, remainingPurse: data.remainingPurse! }
+            : b
+        ))
+      }
     },
     onSaleUndo: () => {
       window.location.reload()
     },
-    onPlayersUpdated: () => {
-      refreshPlayersList()
+    onPlayersUpdated: (data) => {
+      // Update from Pusher data if available (no API call needed)
+      if (data.bidders) {
+        setBiddersState(prev => prev.map(b => {
+          const update = data.bidders!.find(ub => ub.id === b.id)
+          return update ? { ...b, remainingPurse: update.remainingPurse } : b
+        }))
+      }
+      // Note: players update handled via onPlayerSold
     },
   })
 
@@ -268,6 +304,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               <Badge variant="outline" className="text-xs sm:text-sm text-gray-900 bg-white border-gray-300 hover:bg-gray-50 dark:text-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700">Public Viewer</Badge>
             </div>
           </div>
+          
+          <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <Trophy className="h-4 w-4 mr-2" />
+              Team Stats
+            </Button>
+          </Link>
         </div>
 
         {/* Stats */}
@@ -554,24 +601,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         </div>
                       )}
                     </div>
-                    
-                    {/* Time Remaining */}
-                    <div className="text-center space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                        Time Remaining
-                      </div>
-                      <div className="flex items-center justify-center gap-3">
-                        <Clock className={`h-8 w-8 sm:h-10 sm:w-10 ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
-                        <div className={`text-4xl sm:text-5xl lg:text-6xl font-black ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-900 dark:text-gray-100'}`}>
-                          {timer}s
-                        </div>
-                      </div>
-                      {timer <= 5 && (
-                        <div className="text-xs font-semibold text-red-500 animate-pulse uppercase tracking-wider">
-                          ⚠️ Final Moments
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -661,11 +690,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     }
                     
-                    const isLatestBid = index === bidHistory.length - 1
+                    const isLatestBid = index === 0 // Latest bid is first in the array
                     // Calculate increment compared to previous bid (index-1 is older)
                     const increment = index === 0
                       ? bid.amount 
-                      : bid.amount - bidHistory[index - 1]?.amount || 0
+                      : bid.amount - (bidHistory[index - 1]?.amount || bid.amount)
                     
                     const commentary = isLatestBid
                       ? "🎯 Current Top Bid!"
@@ -695,12 +724,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             </Card>
           </div>
         </div>
-
-        {/* Teams Overview */}
-        <TeamsOverview auction={{ ...auction, bidders: biddersState.map(b => ({ ...b, user: { name: b.username } })), players: players as any }} />
-
-        {/* Players Sold Table */}
-        <PlayersSoldTable auction={{ ...auction, players: players as any, bidders: biddersState.map(b => ({ ...b, user: { name: b.username } })), bidHistory }} />
       </div>
 
       {/* Mobile Bid History Floating Button */}
@@ -833,10 +856,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }
                 
-                const isLatestBid = index === bidHistory.length - 1
+                const isLatestBid = index === 0 // Latest bid is first in the array
                 const increment = isLatestBid
                   ? bid.amount 
-                  : bid.amount - bidHistory[index + 1]?.amount || 0
+                  : bid.amount - (bidHistory[index - 1]?.amount || bid.amount)
                 
                 const commentary = isLatestBid
                   ? "🎯 Current Top Bid!"

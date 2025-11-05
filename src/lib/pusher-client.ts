@@ -30,20 +30,25 @@ export interface AuctionEventData {
     bidderName: string
     teamName?: string
     countdownSeconds: number
+    remainingPurse?: number // Added for instant UI updates
   }
   'bid-undo': {
     bidderId: string
     previousBid: number | null
     currentBid: any | null
+    remainingPurse?: number // Added for instant UI updates
   }
   'player-sold': {
     playerId: string
     bidderId: string
     amount: number
     playerName: string
+    bidderRemainingPurse?: number // Added for instant UI updates
+    updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch updates
   }
   'sale-undo': {
     playerId: string
+    updatedBidders?: Array<{ id: string; remainingPurse: number }>
   }
   'new-player': {
     player: any
@@ -54,7 +59,10 @@ export interface AuctionEventData {
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
-  'players-updated': {}
+  'players-updated': {
+    players?: any[] // Include player updates to avoid fetch
+    bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
+  }
 }
 
 export type AuctionEventName = keyof AuctionEventData

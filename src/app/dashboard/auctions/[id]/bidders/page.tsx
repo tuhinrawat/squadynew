@@ -54,8 +54,10 @@ export default function BidderManagement() {
     email: '',
     username: '',
     password: '',
-    purseAmount: 10000000
+    purseAmount: 10000000,
+    logoUrl: ''
   })
+  const [logoFile, setLogoFile] = useState<File | null>(null)
 
   useEffect(() => {
     fetchBidders()
@@ -106,8 +108,10 @@ export default function BidderManagement() {
           email: '',
           username: '',
           password: '',
-          purseAmount: 10000000
+          purseAmount: 10000000,
+          logoUrl: ''
         })
+        setLogoFile(null)
         fetchBidders()
       } else {
         setError(result.error || 'Failed to create bidder')
@@ -127,8 +131,10 @@ export default function BidderManagement() {
       email: bidder.user.email,
       username: bidder.username,
       password: '', // Don't pre-fill password for security
-      purseAmount: bidder.purseAmount
+      purseAmount: bidder.purseAmount,
+      logoUrl: bidder.logoUrl || ''
     })
+    setLogoFile(null)
     setError('')
     setEditDialogOpen(true)
   }
@@ -146,7 +152,8 @@ export default function BidderManagement() {
         teamName: formData.teamName,
         email: formData.email,
         username: formData.username,
-        purseAmount: formData.purseAmount
+        purseAmount: formData.purseAmount,
+        logoUrl: formData.logoUrl
       }
 
       // Only include password if it's being changed
@@ -172,8 +179,10 @@ export default function BidderManagement() {
           email: '',
           username: '',
           password: '',
-          purseAmount: 10000000
+          purseAmount: 10000000,
+          logoUrl: ''
         })
+        setLogoFile(null)
         fetchBidders()
       } else {
         setError(result.error || 'Failed to update bidder')
@@ -356,6 +365,28 @@ export default function BidderManagement() {
                   placeholder="Team name (optional)"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="logoFile">Team Profile Photo</Label>
+                <Input
+                  id="logoFile"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      setLogoFile(file)
+                      // Preview the image
+                      const reader = new FileReader()
+                      reader.onloadend = () => {
+                        setFormData({ ...formData, logoUrl: reader.result as string })
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">Optional. Will be displayed in team stats</p>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -523,6 +554,28 @@ export default function BidderManagement() {
                   onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
                   placeholder="Team name (optional)"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-logoFile">Team Profile Photo</Label>
+                <Input
+                  id="edit-logoFile"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      setLogoFile(file)
+                      // Preview the image
+                      const reader = new FileReader()
+                      reader.onloadend = () => {
+                        setFormData({ ...formData, logoUrl: reader.result as string })
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">Optional. Will be displayed in team stats</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">

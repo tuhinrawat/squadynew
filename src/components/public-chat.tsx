@@ -76,9 +76,34 @@ export function PublicChat({ auctionId }: PublicChatProps) {
   const [flyingEmojis, setFlyingEmojis] = useState<Array<{ id: string; emoji: string; left: number }>>([])
   const messageCountRef = useRef(0)
   const lastScrollHeightRef = useRef(0)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const isOpenRef = useRef(isOpen)
+  const [isMobile, setIsMobile] = useState(false)
   
   // Quick reaction emojis
   const quickEmojis = ['❤️', '🔥', '👏', '😂', '🎉', '😍']
+
+  // Detect if we're on mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024) // lg breakpoint
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  // Sync isOpenRef with isOpen and reset unread count when chat opens
+  useEffect(() => {
+    isOpenRef.current = isOpen
+    if (isOpen) {
+      setUnreadCount(0)
+      // Scroll to bottom when chat opens
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
+  }, [isOpen])
 
   // Load or generate unique user ID and username
   useEffect(() => {
@@ -144,20 +169,47 @@ export function PublicChat({ auctionId }: PublicChatProps) {
       messageQueue.push(data)
       messageCountRef.current++
       
-      // Flush immediately if queue is small, batch if high traffic
-      if (messageQueue.length >= 5) {
+      // Increment unread count only if chat is closed
+      if (!isOpenRef.current) {
+        setUnreadCount(prev => prev + 1)
+      }
+      
+      // Ultra-low latency: flush immediately for single messages, micro-batch for bursts
+      // This ensures <50ms latency for single messages while batching high traffic
+      if (messageQueue.length === 1) {
+        // Single message - flush immediately for instant feedback
+        if (flushTimeout) clearTimeout(flushTimeout)
+        flushMessages()
+      } else if (messageQueue.length >= 5) {
+        // High traffic - flush immediately to prevent queue buildup
         if (flushTimeout) clearTimeout(flushTimeout)
         flushMessages()
       } else {
+        // Small batch - flush after 50ms (reduced from 100ms for lower latency)
         if (flushTimeout) clearTimeout(flushTimeout)
-        flushTimeout = setTimeout(flushMessages, 100)
+        flushTimeout = setTimeout(flushMessages, 50)
       }
+    })
+
+    // Listen for emoji reactions from other users
+    channel.bind('emoji-reaction', (data: { emoji: string; userId: string; timestamp: number }) => {
+      // Create flying emoji animation for all users
+      const id = `${data.timestamp}-${Math.random()}`
+      const left = Math.random() * 70 + 15 // Random position between 15% and 85%
+      
+      setFlyingEmojis(prev => [...prev, { id, emoji: data.emoji, left }])
+      
+      // Remove after animation completes
+      setTimeout(() => {
+        setFlyingEmojis(prev => prev.filter(e => e.id !== id))
+      }, 3500)
     })
 
     return () => {
       if (flushTimeout) clearTimeout(flushTimeout)
       flushMessages() // Flush remaining messages
       channel.unbind('new-chat-message')
+      channel.unbind('emoji-reaction')
       pusher.unsubscribe(`auction-${auctionId}`)
     }
   }, [auctionId])
@@ -228,18 +280,22 @@ export function PublicChat({ auctionId }: PublicChatProps) {
     }
   }, [message, isSending, auctionId, username, userId])
 
-  const sendEmojiReaction = useCallback((emoji: string) => {
-    // Create flying emoji - just visual, not saved to chat
-    const id = `${Date.now()}-${Math.random()}`
-    const left = Math.random() * 70 + 15 // Random position between 15% and 85%
-    
-    setFlyingEmojis(prev => [...prev, { id, emoji, left }])
-    
-    // Remove after animation completes
-    setTimeout(() => {
-      setFlyingEmojis(prev => prev.filter(e => e.id !== id))
-    }, 3500)
-  }, [])
+  const sendEmojiReaction = useCallback(async (emoji: string) => {
+    // Send emoji to server to broadcast to all users
+    try {
+      await fetch(`/api/auction/${auctionId}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          username, 
+          userId,
+          emoji 
+        })
+      })
+    } catch (error) {
+      console.error('Failed to send emoji reaction:', error)
+    }
+  }, [auctionId, username, userId])
 
   return (
     <>
@@ -251,20 +307,21 @@ export function PublicChat({ auctionId }: PublicChatProps) {
         >
           <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" />
           <span className="text-sm sm:text-base font-semibold">Chat</span>
-          {messages.length > 0 && (
+          {unreadCount > 0 && (
             <span className="bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg">
-              {messages.length > 99 ? '99+' : messages.length}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </Button>
       </div>
 
-      {/* Chat Sheet */}
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent
-          side="bottom"
-          className="h-[80vh] sm:h-[70vh] p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden"
-        >
+      {/* Mobile Chat Sheet - Only render on mobile to avoid overlay on desktop */}
+      {isMobile && (
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetContent
+            side="bottom"
+            className="h-[80vh] sm:h-[70vh] p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden"
+          >
           {/* Flying Emojis Overlay */}
           <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
             {flyingEmojis.map(({ id, emoji, left }) => {
@@ -301,16 +358,13 @@ export function PublicChat({ auctionId }: PublicChatProps) {
           </div>
 
           <div className="flex flex-col h-full relative">
-            {/* Header */}
-            <SheetHeader className="px-4 py-4 border-b-2 border-teal-200 dark:border-teal-800 bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 shadow-lg">
-              <div className="w-12 h-1.5 bg-white/50 rounded-full mx-auto mb-3" />
-              <SheetTitle className="text-white flex items-center justify-center gap-2 text-xl font-bold">
-                <MessageCircle className="h-6 w-6 animate-pulse" />
+            {/* Header - Compact */}
+            <SheetHeader className="px-4 py-2.5 border-b border-teal-200 dark:border-teal-800 bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 shadow-md">
+              <div className="w-12 h-1 bg-white/50 rounded-full mx-auto mb-1.5" />
+              <SheetTitle className="text-white flex items-center justify-center gap-2 text-base font-bold">
+                <MessageCircle className="h-4 w-4" />
                 Live Chat 💬
               </SheetTitle>
-              <SheetDescription className="text-white/90 text-center">
-                Join the conversation • Be respectful
-              </SheetDescription>
             </SheetHeader>
 
             {!hasSetUsername ? (
@@ -427,8 +481,109 @@ export function PublicChat({ auctionId }: PublicChatProps) {
               </>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+          </SheetContent>
+        </Sheet>
+      )}
+
+      {/* Desktop Compact Chat Window - Facebook Style */}
+      {!isMobile && isOpen && (
+        <div className="fixed bottom-6 right-24 z-50 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+          {/* Compact Header */}
+          <div className="bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-white" />
+              <span className="text-white font-bold text-base">Live Chat</span>
+            </div>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-white/80 hover:text-white text-2xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+
+          {!hasSetUsername ? (
+            // Username Setup
+            <div className="flex-1 flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900">
+              <div className="text-5xl mb-4">👋</div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Join the Chat</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 text-center">Enter your name to start chatting</p>
+              <form onSubmit={(e) => { e.preventDefault(); handleSetUsername(); }} className="w-full space-y-3">
+                <Input
+                  type="text"
+                  placeholder="Your name"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600"
+                  required
+                  minLength={2}
+                  maxLength={20}
+                />
+                <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700">
+                  Start Chatting
+                </Button>
+              </form>
+            </div>
+          ) : (
+            <>
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50 dark:bg-gray-900">
+                {messages.map((msg, index) => {
+                  const prevMsg = index > 0 ? messages[index - 1] : null
+                  const isFirstInGroup = !prevMsg || prevMsg.userId !== msg.userId
+                  return (
+                    <ChatMessageItem
+                      key={msg.id}
+                      msg={msg}
+                      userId={userId}
+                      isFirstInGroup={isFirstInGroup}
+                    />
+                  )
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Quick Emojis */}
+              <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div className="flex gap-2 justify-center">
+                  {quickEmojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => sendEmojiReaction(emoji)}
+                      className="text-2xl hover:scale-125 transition-transform"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input Form */}
+              <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Type a message..."
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    disabled={isSending}
+                    className="flex-1 text-sm"
+                    maxLength={500}
+                  />
+                  <Button
+                    type="submit"
+                    disabled={!message.trim() || isSending}
+                    size="sm"
+                    className="bg-teal-600 hover:bg-teal-700"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </form>
+            </>
+          )}
+        </div>
+      )}
     </>
   )
 }

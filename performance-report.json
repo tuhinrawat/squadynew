@@ -1,0 +1,67 @@
+{
+  "codeAnalysis": {
+    "totalApiFiles": 32,
+    "totalComponentFiles": 38,
+    "parallelQueries": 4,
+    "pusherOptimizations": 4,
+    "optimisticUpdates": 2,
+    "fireAndForgetPatterns": 3
+  },
+  "apiPerformance": [
+    {
+      "name": "Get Published Auctions",
+      "method": "GET",
+      "path": "/api/auctions/published",
+      "avgLatency": 873,
+      "minLatency": 534,
+      "maxLatency": 1544,
+      "p95Latency": 1544,
+      "successRate": 100,
+      "errors": null
+    },
+    {
+      "name": "Proxy Image",
+      "method": "GET",
+      "path": "/api/proxy-image?url=https://httpbin.org/image/png",
+      "avgLatency": 560,
+      "minLatency": 15,
+      "maxLatency": 1650,
+      "p95Latency": 1650,
+      "successRate": 100,
+      "errors": null
+    }
+  ],
+  "databaseOptimizations": [
+    {
+      "file": "src/app/api/auction/[id]/bid/route.ts",
+      "optimization": "Parallel database queries with Promise.all",
+      "count": 2
+    },
+    {
+      "file": "src/app/api/auction/[id]/mark-sold/route.ts",
+      "optimization": "Parallel database queries with Promise.all",
+      "count": 1
+    },
+    {
+      "file": "src/app/api/auction/[id]/undo-bid/route.ts",
+      "optimization": "Parallel database queries with Promise.all",
+      "count": 1
+    },
+    {
+      "type": "Query Pattern Analysis",
+      "sequentialQueries": 21,
+      "parallelQueries": 3,
+      "nPlusOnePatterns": 2,
+      "recommendation": "Consider using include/select to reduce N+1 queries"
+    }
+  ],
+  "realTimeLatency": [
+    {
+      "pusherListeners": 4,
+      "directStateUpdates": 2,
+      "apiCallsInListeners": 1,
+      "optimization": "Warning: API calls detected in Pusher listeners"
+    }
+  ],
+  "recommendations": []
+}
