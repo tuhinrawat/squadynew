@@ -36,72 +36,63 @@ export async function POST(
       return NextResponse.json({ error: 'Auction is not live' }, { status: 400 })
     }
 
-    // Parse bid history
-    let bidHistory: any[] = []
+    // Parse and filter bid history to current player context only
+    let fullHistory: any[] = []
     if (auction.bidHistory && typeof auction.bidHistory === 'object') {
       const bidHistoryData = auction.bidHistory as any
       if (Array.isArray(bidHistoryData)) {
-        bidHistory = bidHistoryData
+        fullHistory = bidHistoryData
       }
     }
 
-    if (bidHistory.length === 0) {
-      return NextResponse.json({ error: 'No bids to undo' }, { status: 400 })
+    // Determine current player
+    const currentPlayer = auction.currentPlayerId
+      ? await prisma.player.findUnique({ where: { id: auction.currentPlayerId }, select: { id: true } })
+      : null
+
+    // Filter to only bids for current player (strict)
+    const filteredHistory = currentPlayer?.id
+      ? fullHistory.filter(b => (b.playerId === currentPlayer.id) && b.type !== 'sold' && b.type !== 'unsold')
+      : []
+
+    if (filteredHistory.length === 0) {
+      return NextResponse.json({ error: 'No bids to undo for current player' }, { status: 400 })
     }
 
-    // Validate that last bid is from this bidder
-    const lastBid = bidHistory[0]
+    // Validate that last bid for current player is from this bidder
+    const lastBid = filteredHistory[0]
     if (lastBid.bidderId !== bidderId) {
-      return NextResponse.json({ error: 'You are not the last bidder' }, { status: 400 })
+      return NextResponse.json({ error: 'You are not the last bidder for this player' }, { status: 400 })
     }
 
-    // Remove last bid
-    const undoneBid = bidHistory.shift()
-    const bidAmount = undoneBid?.amount || 0
+    // Remove last bid only from the overall history (not just filtered array)
+    const indexInFull = fullHistory.findIndex(b => b === lastBid)
+    if (indexInFull === -1) {
+      return NextResponse.json({ error: 'Bid not found in history' }, { status: 400 })
+    }
+    const [undoneBid] = fullHistory.splice(indexInFull, 1)
 
-    // Get previous bid (if exists)
-    const previousBid = bidHistory.length > 0 ? bidHistory[0] : null
+    // Determine previous bid for current player (strict)
+    const previousBid = fullHistory.find(b => (currentPlayer && b.playerId === currentPlayer.id) && b.type !== 'sold' && b.type !== 'unsold') || null
 
-    // Fetch bidder to restore purse
-    const bidder = await prisma.bidder.findUnique({
-      where: { id: bidderId },
-      select: { id: true, remainingPurse: true }
+    // Persist updated history; do NOT mutate purse on undo-bid (purse is adjusted on sale only)
+    await prisma.auction.update({
+      where: { id: params.id },
+      data: {
+        bidHistory: fullHistory as any
+      }
     })
-
-    if (!bidder) {
-      return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
-    }
-
-    // Restore purse (add back the bid amount)
-    const restoredPurse = bidder.remainingPurse + bidAmount
-
-    // Update auction and bidder in parallel for better performance
-    await Promise.all([
-      prisma.auction.update({
-        where: { id: params.id },
-        data: {
-          bidHistory: bidHistory as any
-        }
-      }),
-      prisma.bidder.update({
-        where: { id: bidderId },
-        data: {
-          remainingPurse: restoredPurse
-        }
-      })
-    ])
 
     // Reset timer (non-blocking)
     const rules = auction.rules as any
     const countdownSeconds = rules?.countdownSeconds || 30
     resetTimer(params.id, countdownSeconds)
 
-    // Broadcast bid undo event with purse update (fire and forget for speed)
+    // Broadcast bid undo event
     triggerAuctionEvent(params.id, 'bid-undo', {
       bidderId,
       previousBid: previousBid?.amount || null,
-      currentBid: previousBid || null,
-      remainingPurse: restoredPurse // Include for instant UI update
+      currentBid: previousBid || null
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 

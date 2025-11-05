@@ -99,10 +99,9 @@ export async function POST(
       }
     }
 
-    // Filter bids for current player only
-    // Include bids without playerId (legacy bids) as they belong to the current player being auctioned
+    // Filter bids for the CURRENT player only (strict). Do not include legacy bids without playerId.
     const currentPlayerBidHistory = currentPlayer?.id 
-      ? bidHistory.filter(bid => !bid.playerId || bid.playerId === currentPlayer.id)
+      ? bidHistory.filter(bid => bid.playerId === currentPlayer.id)
       : []
   
     logger.log('Filtering bids for current player', {
@@ -210,42 +209,33 @@ export async function POST(
     // Calculate new remaining purse (optimistic - will be confirmed by DB)
     const newRemainingPurse = bidder.remainingPurse - amount
 
-    // Update auction and bidder in parallel for better performance
-    await Promise.all([
-      prisma.auction.update({
-        where: { id: params.id },
-        data: {
-          bidHistory: bidHistory as any
-        }
-      }),
-      // Update bidder purse immediately (optimistic update)
-      prisma.bidder.update({
-        where: { id: bidderId },
-        data: {
-          remainingPurse: newRemainingPurse
-        }
-      })
-    ])
-
     // Reset timer (non-blocking)
     const countdownSeconds = rules?.countdownSeconds || 30
     resetTimer(params.id, countdownSeconds)
 
-    // Broadcast new bid event with purse update (fire and forget for speed)
+    // Broadcast new bid event IMMEDIATELY (before DB write) for instant real-time updates
+    // Fire-and-forget: clients get the update while DB write happens in parallel
     triggerAuctionEvent(params.id, 'new-bid', {
       bidderId,
       amount,
       timestamp: new Date().toISOString(),
       bidderName: bidder.user.name,
       teamName: bidder.teamName,
-      countdownSeconds,
-      remainingPurse: newRemainingPurse // Include for instant UI update
+      countdownSeconds
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
+
+    // Persist bid history; do NOT mutate purse here. Purse is deducted on sale.
+    await prisma.auction.update({
+      where: { id: params.id },
+      data: {
+        bidHistory: bidHistory as any
+      }
+    })
 
     return NextResponse.json({ 
       success: true, 
       bid: newBid,
-      remainingPurse: newRemainingPurse // Return for optimistic UI
+      // Purse is unchanged at bid time
     })
   } catch (error) {
     logger.error('Error placing bid:', error)

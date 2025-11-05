@@ -19,6 +19,7 @@ interface ChatMessage {
 
 interface PublicChatProps {
   auctionId: string
+  rightOffsetClass?: string // optional class to shift floating button when panels are open
 }
 
 // Memoized Message Component for performance
@@ -64,7 +65,7 @@ const ChatMessageItem = memo(({ msg, userId, isFirstInGroup }: {
 })
 ChatMessageItem.displayName = 'ChatMessageItem'
 
-export function PublicChat({ auctionId }: PublicChatProps) {
+export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [username, setUsername] = useState('')
@@ -299,8 +300,8 @@ export function PublicChat({ auctionId }: PublicChatProps) {
 
   return (
     <>
-      {/* Floating Chat Button - Left side on mobile, right side on desktop */}
-      <div className="fixed bottom-6 left-4 lg:left-auto lg:right-20 z-50">
+      {/* Floating Chat Button - Left side on mobile, shiftable on desktop */}
+      <div className={`fixed bottom-6 left-4 lg:left-auto ${rightOffsetClass ?? 'lg:right-20'} z-40`}>
         <Button
           onClick={() => setIsOpen(true)}
           className="rounded-full px-6 py-4 sm:px-8 sm:py-5 h-auto shadow-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white hover:scale-110 transition-transform flex items-center gap-2"

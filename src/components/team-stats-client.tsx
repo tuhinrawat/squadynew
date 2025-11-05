@@ -5,7 +5,9 @@ import { Auction, Player, Bidder, User } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon } from 'lucide-react'
+import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye } from 'lucide-react'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { ActivityLog } from '@/components/activity-log'
 import Link from 'next/link'
 import { initializePusher } from '@/lib/pusher-client'
 
@@ -38,6 +40,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'sold' | 'unsold'>('overview')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [bidModalPlayer, setBidModalPlayer] = useState<Player | null>(null)
+  const [bidModalItems, setBidModalItems] = useState<any[]>([])
 
   // Subscribe to real-time updates with incremental updates (no API calls - millisecond latency)
   useEffect(() => {
@@ -143,6 +147,18 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
         return auction.players.filter(p => p.status === 'UNSOLD')
       default:
         return []
+    }
+  }
+
+  const openPlayerBids = async (player: Player) => {
+    setBidModalPlayer(player)
+    try {
+      const res = await fetch(`/api/auction/${auction.id}/player/${player.id}/bids`)
+      const data = await res.json()
+      if (data.bids) setBidModalItems(data.bids)
+      else setBidModalItems([])
+    } catch {
+      setBidModalItems([])
     }
   }
 
@@ -465,6 +481,15 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             <td className="py-2 sm:py-3 px-2 text-right text-white font-bold text-sm sm:text-base bg-white/5">
                               ₹{(player.soldPrice || 0).toLocaleString('en-IN')}
                             </td>
+                            <td className="py-2 sm:py-3 px-2 text-right w-10">
+                              <button
+                                className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-md p-2"
+                                title="View bidding history"
+                                onClick={() => openPlayerBids(player)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            </td>
                           </tr>
                         )
                       })}
@@ -473,6 +498,15 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 </div>
               </CardContent>
             </Card>
+            {/* Player Bids Modal */}
+            <Dialog open={!!bidModalPlayer} onOpenChange={(o) => { if (!o) { setBidModalPlayer(null); setBidModalItems([]) } }}>
+              <DialogContent className="sm:max-w-lg">
+                <DialogTitle>Bidding Activity</DialogTitle>
+                <div className="max-h-[60vh] overflow-y-auto">
+                  <ActivityLog items={bidModalItems as any} />
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
       </div>

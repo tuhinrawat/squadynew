@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +15,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PublicChat } from '@/components/public-chat'
+import { ActivityLog } from '@/components/activity-log'
+import PlayerCard from '@/components/player-card'
+import BidAmountStrip from '@/components/bid-amount-strip'
+import ActionButtons from '@/components/action-buttons'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
@@ -132,6 +136,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [bidders, setBidders] = useState(auction.bidders)
   const [pinnedBidderIds, setPinnedBidderIds] = useState<string[]>([])
   const [isBidConsoleOpen, setIsBidConsoleOpen] = useState(false)
+  const [isBidConsolePinned, setIsBidConsolePinned] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const v = localStorage.getItem('admin.bidConsole.pinned')
+      return v === '1'
+    } catch {
+      return false
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('admin.bidConsole.pinned', isBidConsolePinned ? '1' : '0')
+    } catch {}
+  }, [isBidConsolePinned])
 
   // Find current user's bidder profile (for bidder view)
   const userBidder = bidders.find((b) => b.userId === session?.user?.id)
@@ -246,7 +265,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         return newPins.slice(-2) // Keep only the last 2 bidders
       })
       
-      // Add new bid to full history
+      // Add new bid to full history (single source of truth)
       const newBidEntry = {
         type: 'bid' as const,
         bidderId: data.bidderId,
@@ -256,9 +275,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         teamName: data.teamName,
         playerId: currentPlayer?.id // Associate bid with current player
       }
-      setFullBidHistory(prev => [newBidEntry, ...prev])
-      // Also add to current player's filtered history
-      setBidHistory(prev => [newBidEntry, ...prev])
+      setFullBidHistory(prev => {
+        const last = prev[0]
+        // Deduplicate if the same top-of-list bid already exists for this player
+        if (last && last.type === 'bid' && last.playerId === newBidEntry.playerId && last.bidderId === newBidEntry.bidderId && last.amount === newBidEntry.amount) {
+          return prev
+        }
+        return [newBidEntry, ...prev]
+      })
       
       // Update purse instantly from Pusher data (no API call needed)
       if (data.remainingPurse !== undefined) {
@@ -377,9 +401,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     setCustomBidAmount('') // Clear custom bid amount
     setBidAmount(0) // Clear bid amount for bidder
     setPinnedBidderIds([]) // Clear pinned bidders for new player
+      // Keep console state if pinned; otherwise leave current behavior
+      if (isBidConsolePinned) {
+        setIsBidConsoleOpen(true)
+      }
       // Refresh full bid history from server when new player loads
       refreshAuctionState()
-  }, [refreshAuctionState])
+  }, [refreshAuctionState, isBidConsolePinned])
 
   const handleAuctionPaused = useCallback(() => setIsPaused(true), [])
   const handleAuctionResumed = useCallback(() => setIsPaused(false), [])
@@ -594,6 +622,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     preloadImages()
   }, [currentPlayer, bidders])
 
+  if (!isClient) {
+    // Avoid SSR/CSR markup drift by rendering after mount
+    return null
+  }
+
   return (
     <>
     <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} p-4 sm:p-6 transition-all duration-200`}>
@@ -801,7 +834,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 )}
               </div>
               
-              <CardHeader>
+          {/* New Player Spotlight Card (presentational) - client only to avoid SSR drift */}
+          {isClient && (
+            <div className="mb-4">
+              <PlayerCard
+                name={playerName}
+                imageUrl={undefined}
+                tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
+                fields={(() => {
+                  const essentials: Array<{ label: string; value: string }> = []
+                  const add = (label: string, key: string) => {
+                    const v = (playerData as any)[key]
+                    if (v) essentials.push({ label, value: String(v) })
+                  }
+                  add('Speciality', 'Speciality')
+                  add('Batting Type', 'Batting Type')
+                  add('Bowling Type', 'Bowling Type')
+                  return essentials
+                })()}
+              />
+            </div>
+          )}
+
+          <CardHeader className="hidden">
                 <div className="flex flex-col items-center gap-3">
                   {(() => {
                     const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
@@ -894,7 +949,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               </CardHeader>
               <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
                 {/* Essential Fields */}
-                <div className="space-y-3">
+                <div className="hidden">
                   {(() => {
                     // Define essential fields to show always
                     const essentialFields = ['Speciality', 'Batting Type', 'Bowling Type', 'Wicket Keeper']
@@ -922,8 +977,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   })()}
                 </div>
 
-                {/* Read More Section */}
-                {(() => {
+                {/* Read More Section (hidden in new design) */}
+                {false && (() => {
                   const essentialFields = ['Speciality', 'Batting Type', 'Bowling Type', 'Wicket Keeper']
                   const allFields = Object.entries(playerData).filter(([key]) => 
                     key.toLowerCase() !== 'name' && 
@@ -979,34 +1034,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     </div>
                   )
                 })()}
-                {/* Combined Current Bid & Timer Section */}
-                <div className="border-t-4 border-blue-200 dark:border-blue-900 pt-4 mt-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Current Bid */}
-                    <div className="text-center space-y-2">
-                      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                        Current Bid
-                      </div>
-                  {currentBid ? (
-                        <div className="space-y-1">
-                          <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
-                            ₹{currentBid.amount.toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-sm sm:text-base font-semibold text-gray-700 dark:text-gray-300">
-                            {currentBid.bidderName}
-                            {currentBid.teamName && (
-                              <span className="text-blue-600 font-bold"> ({currentBid.teamName})</span>
-                            )}
-                          </div>
-                    </div>
-                  ) : (
-                        <div className="py-4 text-base font-semibold text-gray-400 dark:text-gray-500">
-                          No bids yet
-                        </div>
-                  )}
-                </div>
+                {/* Current Bid Strip (presentational) */}
+                {isClient && (
+                  <div className="pt-4 mt-4">
+                    <BidAmountStrip
+                      amount={currentBid?.amount ?? null}
+                      bidderName={currentBid?.bidderName}
+                      teamName={currentBid?.teamName}
+                      timerSeconds={timer}
+                      nextMin={(currentBid?.amount || 0) + ((auction.rules as any)?.minBidIncrement || 1000)}
+                    />
                   </div>
-                </div>
+                )}
                 
               </CardContent>
             </Card>
@@ -1017,56 +1056,27 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             {/* Admin Controls - Above Live Activity */}
             {viewMode === 'admin' && (
               <div className="space-y-3">
-                  {currentBid && (
-                  <div className="bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-200 dark:border-green-800">
-                      <div className="text-xs font-semibold text-green-700 dark:text-green-300 mb-2">⚡ Finalize This Sale:</div>
-                        <Button 
-                          variant="default"
-                          size="sm" 
-                      className="w-full text-sm bg-green-600 hover:bg-green-700 text-white"
-                          onClick={handleMarkSold}
-                        >
-                      <TrendingUp className="h-4 w-4 mr-2" />
-                      Mark Sold
-                        </Button>
-                    </div>
-                  )}
-                <div className="flex gap-2">
-                    <Button 
-                      variant="outline"
-                      size="sm" 
-                    className="flex-1 text-sm bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-300 dark:hover:bg-orange-900/30 border-orange-200 dark:border-orange-800"
-                      onClick={handleMarkUnsold}
-                    >
-                    <SkipForward className="h-4 w-4 mr-2" />
-                    Mark Unsold
-                    </Button>
-                    <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
-                      <Button 
-                        variant="destructive" 
-                        size="sm" 
-                      className="flex-1 text-sm"
-                        onClick={() => setUndoSaleDialogOpen(true)}
-                      >
-                      <Undo2 className="h-4 w-4 mr-2" />
-                      Undo Last Sale
-                      </Button>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Undo Last Sale?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will restore the last sold player back to the auction and refund the bidder. This action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700 text-white">
-                          Undo Sale
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                    </AlertDialog>
-                </div>
+                <ActionButtons
+                  onMarkSold={handleMarkSold}
+                  onMarkUnsold={handleMarkUnsold}
+                  onUndoSale={() => setUndoSaleDialogOpen(true)}
+                />
+                <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Undo Last Sale?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will restore the last sold player back to the auction and refund the bidder. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700 text-white">
+                        Undo Sale
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
             
@@ -1239,182 +1249,32 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             <Card className="shadow-lg border-2 border-blue-100 dark:border-blue-900 lg:sticky lg:top-[calc(theme(spacing.4)+theme(spacing.4)+theme(spacing.4))]">
               <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
                 <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                  <span>📋</span> Live Bidding Activity
+                  <span>📋</span> Live Activity
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 sm:p-6">
-                <div className="space-y-3 max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-2">
-                  {bidHistory.map((bid, index) => {
-                    // Handle sold/unsold events
-                    if (bid.type === 'sold') {
-                      const bidTime = new Date(bid.timestamp)
-                      let timeAgo = ''
-                      if (isClient) {
-                        const now = new Date()
-                        const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                        timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      } else {
-                        timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      }
-                      
-                      return (
-                        <motion.div 
-                          key={index}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="rounded-lg border-2 border-green-500 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-3 shadow-md"
-                        >
-                          <div className="font-bold text-base text-green-800 dark:text-green-300 mb-2">
-                            ✅ SOLD!
-                          </div>
-                          <div className="text-sm text-green-700 dark:text-green-400 mb-1">
-                            To: <span className="font-semibold">{bid.bidderName}</span> {bid.teamName && `(${bid.teamName})`}
-                          </div>
-                          <div className="text-xl font-black text-green-600 dark:text-green-400 mb-1">
-                            ₹{bid.amount.toLocaleString('en-IN')}
-                          </div>
-                          <div className="text-xs text-green-600 dark:text-green-500">
-                            {timeAgo}
-                          </div>
-                        </motion.div>
-                      )
-                    }
-                    
-                    if (bid.type === 'unsold') {
-                      const bidTime = new Date(bid.timestamp)
-                      let timeAgo = ''
-                      if (isClient) {
-                        const now = new Date()
-                        const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                        timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      } else {
-                        timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      }
-                      
-                      return (
-                        <motion.div
-                          key={index}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="rounded-lg border-2 border-orange-500 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 p-3 shadow-md"
-                        >
-                          <div className="font-bold text-base text-orange-800 dark:text-orange-300 mb-2">
-                            ⏭️ UNSOLD
-                          </div>
-                          <div className="text-sm text-orange-700 dark:text-orange-400">
-                            No buyer • Moving to next player
-                          </div>
-                          <div className="text-xs text-orange-600 dark:text-orange-500 mt-2">
-                            {timeAgo}
-                          </div>
-                        </motion.div>
-                      )
-                    }
-                    
-                    // Handle regular bids
-                    const bidTime = new Date(bid.timestamp)
-                    
-                    let timeAgo = ''
-                    if (isClient) {
-                      const now = new Date()
-                      const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000) // seconds ago
-                      
-                      if (timeDiff < 60) {
-                        timeAgo = `${timeDiff} second${timeDiff !== 1 ? 's' : ''} ago`
-                      } else if (timeDiff < 3600) {
-                        const minutes = Math.floor(timeDiff / 60)
-                        timeAgo = `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
-                      } else {
-                        timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      }
-                    } else {
-                      // Render static time during SSR
-                      timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    }
-                    
-                    const isLatestBid = index === 0 // Latest bid is first in the array
-                    const increment = isLatestBid
-                      ? bid.amount 
-                      : bid.amount - (bidHistory[index - 1]?.amount || bid.amount)
-                    
-                    const commentary = isLatestBid
-                      ? "🎯 Current Top Bid!"
-                      : increment > 50000 
-                        ? "🚀 Big Jump!"
-                        : "💪 Standard Bid"
-                    
-                    return (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className={`rounded-lg p-3 shadow-md transition-all ${
-                          isLatestBid
-                            ? 'border-2 border-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20'
-                            : 'border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-base text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
-                          {bid.teamName && (
-                              <Badge variant="outline" className="text-xs">{bid.teamName}</Badge>
-                          )}
-                        </div>
-                          <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">{timeAgo}</span>
-                        </div>
-                        <div className="flex items-baseline justify-between">
-                          <div className="text-xl font-black text-blue-600 dark:text-blue-400">
-                            ₹{bid.amount.toLocaleString('en-IN')}
-                        </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className={`text-xs ${
-                              isLatestBid
-                                ? 'bg-green-500 text-white'
-                                : increment > 50000
-                                ? 'bg-purple-500 text-white'
-                                : 'bg-gray-500 text-white'
-                            }`}>
-                              {commentary}
-                            </Badge>
-                            {isLatestBid && viewMode === 'admin' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={async () => {
-                                  if (!confirm('Undo this bid?')) return
-                                  try {
-                                    const response = await fetch(`/api/auction/${auction.id}/undo-bid`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ bidderId: bid.bidderId })
-                                    })
-                                    if (!response.ok) {
-                                      const data = await response.json()
-                                      toast.error(data.error || 'Failed to undo bid')
-                                    } else {
-                                      toast.success('Bid undone successfully')
-                                    }
-                                  } catch (error) {
-                                    toast.error('Failed to undo bid')
-                                  }
-                                }}
-                                className="h-6 px-2 text-xs bg-red-500 hover:bg-red-600 text-white border-red-600"
-                              >
-                                <Undo2 className="h-3 w-3 mr-1" />
-                                Undo
-                              </Button>
-                            )}
-                          </div>
-                      </div>
-                        {!isLatestBid && increment > 0 && (
-                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                            +₹{increment.toLocaleString('en-IN')}
-                          </div>
-                        )}
-                      </motion.div>
-                    )
-                  })}
+              <CardContent className="p-3 sm:p-4">
+                <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-2">
+                  {isClient && (
+                    <ActivityLog
+                      items={bidHistory as any}
+                      onUndoBid={async (entry) => {
+                        try {
+                          if (!entry.bidderId) return
+                          const response = await fetch(`/api/auction/${auction.id}/undo-bid`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ bidderId: entry.bidderId })
+                          })
+                          if (!response.ok) {
+                            const data = await response.json()
+                            toast.error(data.error || 'Failed to undo bid')
+                          }
+                        } catch {
+                          toast.error('Failed to undo bid')
+                        }
+                      }}
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1829,26 +1689,37 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
     {/* Sliding Bidding Console (Admin only) */}
     {viewMode === 'admin' && (
-      <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50`}>
-        {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-black/20"
-          onClick={() => setIsBidConsoleOpen(false)}
-        />
+      <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50 ${isBidConsolePinned ? 'pointer-events-none' : ''}`}>
+        {/* Backdrop (disabled when pinned to allow page interaction) */}
+        {!isBidConsolePinned && (
+          <div
+            className="absolute inset-0 bg-black/20"
+            onClick={() => { if (!isBidConsolePinned) setIsBidConsoleOpen(false) }}
+          />
+        )}
         {/* Panel */}
-        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%] bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border-l-4 border-emerald-500 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col">
+        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%] bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border-l-4 border-emerald-500 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto">
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-white" />
               <div className="text-base font-bold text-white">Bidding Console</div>
             </div>
-            <button 
-              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all" 
-              onClick={() => setIsBidConsoleOpen(false)}
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                className={`text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${isBidConsolePinned ? 'bg-white/20' : ''}`}
+                onClick={() => setIsBidConsolePinned(p => !p)}
+                title={isBidConsolePinned ? 'Unpin console' : 'Pin console'}
+              >
+                {isBidConsolePinned ? 'Pinned' : 'Pin'}
+              </button>
+              <button 
+                className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all" 
+                onClick={() => setIsBidConsoleOpen(false)}
+              >
+                Close
+              </button>
+            </div>
           </div>
           {/* Pinned */}
           {pinnedBidderIds.length > 0 && (
@@ -1863,96 +1734,102 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   .filter((b): b is BidderWithUser => Boolean(b))
                   .map(bidder => (
                     <div key={bidder.id} className={`p-2 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
-                      <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
-                      <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
-                      <div className="mt-2 grid grid-cols-1 gap-2">
-                    <Button size="sm" className={`h-10 text-sm w-full ${bidder.id === highestBidderId || isPlacingBid ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`} 
-                      disabled={bidder.id === highestBidderId || isPlacingBid}
-                      onClick={async () => {
-                        // Prevent multiple simultaneous bids
-                        if (isPlacingBid) return
-                        
-                        const rules = auction.rules as AuctionRules | undefined
-                        const minInc = rules?.minBidIncrement || 1000
-                        const totalBid = (currentBid?.amount || 0) + minInc
-                        
-                        // Disable all buttons globally
-                        setIsPlacingBid(true)
-                        setPlacingBidFor(bidder.id)
-                        
-                        // Optimistically update purse only (not highestBidderId - wait for Pusher)
-                        const previousPurse = bidder.remainingPurse
-                        setBidders(prev => prev.map(b => 
-                          b.id === bidder.id 
-                            ? { ...b, remainingPurse: b.remainingPurse - minInc }
-                            : b
-                        ))
-                        
-                        try {
-                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                          })
-                          if (!response.ok) { 
-                            const err = await response.json()
-                            toast.error(err.error || 'Failed to place bid')
-                            // Revert optimistic purse update on error
-                            setBidders(prev => prev.map(b => 
-                              b.id === bidder.id 
-                                ? { ...b, remainingPurse: previousPurse }
-                                : b
-                            ))
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                          } else {
-                            // Re-enable buttons immediately after successful API response (don't wait for Pusher)
-                            // This allows rapid bidder switching with <50ms latency
-                            const data = await response.json()
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                            
-                            // Optimistically update state from API response (Pusher will correct if needed)
-                            setCurrentBid({
-                              bidderId: bidder.id,
-                              amount: totalBid,
-                              bidderName: bidder.user?.name || bidder.username,
-                              teamName: bidder.teamName || undefined
-                            })
-                            setHighestBidderId(bidder.id)
-                            
-                            // Use API response purse if available, otherwise keep optimistic
-                            if (data.remainingPurse !== undefined) {
-                              setBidders(prev => prev.map(b => 
-                                b.id === bidder.id 
-                                  ? { ...b, remainingPurse: data.remainingPurse }
-                                  : b
-                              ))
-                            }
-                          }
-                          // Pusher event will still arrive and correct any state, but we don't block on it
-                        } catch { 
-                          toast.error('Network error')
-                          // Revert on network error
-                          setBidders(prev => prev.map(b => 
-                            b.id === bidder.id 
-                              ? { ...b, remainingPurse: previousPurse }
-                              : b
-                          ))
-                          setIsPlacingBid(false)
-                          setPlacingBidFor(null)
-                        }
-                      }}>
-                      Raise (+1K)
-                    </Button>
-                        <Button size="sm" className="h-10 text-sm w-full bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:text-white/90" 
-                          disabled={bidder.id === highestBidderId || isPlacingBid}
-                          onClick={() => {
-                            if (!isPlacingBid) {
-                              setSelectedBidderForBid(bidder.id)
-                            }
-                          }}>
-                          Custom
-                        </Button>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
+                          <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
+                          <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 w-32">
+                          <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
+                            disabled={bidder.id === highestBidderId || isPlacingBid}
+                            onClick={async (e) => {
+                              // Prevent multiple simultaneous bids
+                              if (isPlacingBid) return
+                              
+                              // Instant feedback: disable button imperatively (before React re-render)
+                              const btn = e.currentTarget
+                              btn.disabled = true
+                              btn.style.opacity = '0.5'
+                              
+                              const rules = auction.rules as AuctionRules | undefined
+                              const minInc = rules?.minBidIncrement || 1000
+                              const totalBid = (currentBid?.amount || 0) + minInc
+                              
+                              // Optimistic state updates
+                              setIsPlacingBid(true)
+                              setPlacingBidFor(bidder.id)
+                              const previousPurse = bidder.remainingPurse
+                              const previousBid = currentBid
+                              const previousHighestBidderId = highestBidderId
+                              
+                              // Optimistic UI: set new bid immediately
+                              setCurrentBid({
+                                bidderId: bidder.id,
+                                amount: totalBid,
+                                bidderName: bidder.user?.name || bidder.username,
+                                teamName: bidder.teamName || undefined
+                              })
+                              setHighestBidderId(bidder.id)
+                              
+                              // Optimistic activity log entry
+                              const optimisticEntry: BidHistoryEntry = {
+                                bidderId: bidder.id,
+                                amount: totalBid,
+                                timestamp: new Date(),
+                                bidderName: bidder.user?.name || bidder.username,
+                                teamName: bidder.teamName || undefined,
+                                type: 'bid'
+                              }
+                              setFullBidHistory(prev => [optimisticEntry, ...prev])
+                              
+                              try {
+                                const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                                  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                                })
+                                if (!response.ok) { 
+                                  const err = await response.json()
+                                  toast.error(err.error || 'Failed to place bid')
+                                  // Rollback optimistic updates
+                                  setCurrentBid(previousBid)
+                                  setHighestBidderId(previousHighestBidderId)
+                                  setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                                  setIsPlacingBid(false)
+                                  setPlacingBidFor(null)
+                                  btn.disabled = false
+                                  btn.style.opacity = '1'
+                                } else {
+                                  // Success - Pusher event will arrive shortly for reconciliation
+                                  // Use startTransition for non-critical state updates
+                                  startTransition(() => {
+                                    setIsPlacingBid(false)
+                                    setPlacingBidFor(null)
+                                  })
+                                }
+                              } catch { 
+                                toast.error('Network error')
+                                // Rollback optimistic updates
+                                setCurrentBid(previousBid)
+                                setHighestBidderId(previousHighestBidderId)
+                                setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                                setIsPlacingBid(false)
+                                setPlacingBidFor(null)
+                                btn.disabled = false
+                                btn.style.opacity = '1'
+                              }
+                            }}>
+                            Raise
+                          </Button>
+                          <Button size="sm" className="h-10 w-full text-xs !px-3 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400 disabled:text-white/90" 
+                            disabled={bidder.id === highestBidderId || isPlacingBid}
+                            onClick={() => {
+                              if (!isPlacingBid) {
+                                setSelectedBidderForBid(bidder.id)
+                              }
+                            }}>
+                            Custom
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1974,101 +1851,97 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
                       <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                     </div>
-                    <button
-                      className={`text-[10px] opacity-50 hover:opacity-100 transition-opacity ${pinnedBidderIds.includes(bidder.id) ? 'text-amber-600' : 'text-gray-400 hover:text-amber-600'}`}
-                      onClick={() => setPinnedBidderIds(prev => prev.includes(bidder.id) ? prev.filter(x => x !== bidder.id) : [...prev, bidder.id].slice(-2))}
-                      aria-label={pinnedBidderIds.includes(bidder.id) ? 'Unpin' : 'Pin'}
-                      title="Manual pin (auto-pins on bid)"
-                    >📌</button>
-                  </div>
-                  <div className="mt-2 grid grid-cols-1 gap-2">
-                    <Button size="sm" className={`h-10 text-sm w-full ${bidder.id === highestBidderId || isPlacingBid ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
-                      disabled={bidder.id === highestBidderId || isPlacingBid}
-                      onClick={async () => {
-                        // Prevent multiple simultaneous bids
-                        if (isPlacingBid) return
-                        
-                        const rules = auction.rules as AuctionRules | undefined
-                        const minInc = rules?.minBidIncrement || 1000
-                        const totalBid = (currentBid?.amount || 0) + minInc
-                        
-                        // Disable all buttons globally
-                        setIsPlacingBid(true)
-                        setPlacingBidFor(bidder.id)
-                        
-                        // Optimistically update purse only (not highestBidderId - wait for API response)
-                        const previousPurse = bidder.remainingPurse
-                        setBidders(prev => prev.map(b => 
-                          b.id === bidder.id 
-                            ? { ...b, remainingPurse: b.remainingPurse - minInc }
-                            : b
-                        ))
-                        
-                        try {
-                          const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                    <div className="grid grid-cols-2 gap-2 w-32">
+                      <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
+                        disabled={bidder.id === highestBidderId || isPlacingBid}
+                        onClick={async (e) => {
+                          if (isPlacingBid) return
+                          
+                          // Instant feedback: disable button imperatively (before React re-render)
+                          const btn = e.currentTarget
+                          btn.disabled = true
+                          btn.style.opacity = '0.5'
+                          
+                          const rules = auction.rules as AuctionRules | undefined
+                          const minInc = rules?.minBidIncrement || 1000
+                          const totalBid = (currentBid?.amount || 0) + minInc
+                          
+                          // Optimistic state updates
+                          setIsPlacingBid(true)
+                          setPlacingBidFor(bidder.id)
+                          const previousPurse = bidder.remainingPurse
+                          const previousBid = currentBid
+                          const previousHighestBidderId = highestBidderId
+                          
+                          // Optimistic UI: set new bid immediately
+                          setCurrentBid({
+                            bidderId: bidder.id,
+                            amount: totalBid,
+                            bidderName: bidder.user?.name || bidder.username,
+                            teamName: bidder.teamName || undefined
                           })
-                          if (!response.ok) { 
-                            const err = await response.json()
-                            toast.error(err.error || 'Failed to place bid')
-                            // Revert optimistic purse update on error
-                            setBidders(prev => prev.map(b => 
-                              b.id === bidder.id 
-                                ? { ...b, remainingPurse: previousPurse }
-                                : b
-                            ))
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                          } else {
-                            // Re-enable buttons immediately after successful API response (don't wait for Pusher)
-                            // This allows rapid bidder switching with <50ms latency
-                            const data = await response.json()
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                            
-                            // Optimistically update state from API response (Pusher will correct if needed)
-                            setCurrentBid({
-                              bidderId: bidder.id,
-                              amount: totalBid,
-                              bidderName: bidder.user?.name || bidder.username,
-                              teamName: bidder.teamName || undefined
-                            })
-                            setHighestBidderId(bidder.id)
-                            
-                            // Use API response purse if available, otherwise keep optimistic
-                            if (data.remainingPurse !== undefined) {
-                              setBidders(prev => prev.map(b => 
-                                b.id === bidder.id 
-                                  ? { ...b, remainingPurse: data.remainingPurse }
-                                  : b
-                              ))
-                            }
+                          setHighestBidderId(bidder.id)
+                          
+                          // Optimistic activity log entry
+                          const optimisticEntry: BidHistoryEntry = {
+                            bidderId: bidder.id,
+                            amount: totalBid,
+                            timestamp: new Date(),
+                            bidderName: bidder.user?.name || bidder.username,
+                            teamName: bidder.teamName || undefined,
+                            type: 'bid'
                           }
-                          // Pusher event will still arrive and correct any state, but we don't block on it
-                        } catch { 
-                          toast.error('Network error')
-                          // Revert on network error
-                          setBidders(prev => prev.map(b => 
-                            b.id === bidder.id 
-                              ? { ...b, remainingPurse: previousPurse }
-                              : b
-                          ))
-                          setIsPlacingBid(false)
-                          setPlacingBidFor(null)
-                        }
-                      }}>
-                      Raise (+1K)
-                    </Button>
-                    <Button size="sm" className="h-10 text-sm w-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-gray-400 disabled:text-white/90" 
-                      disabled={bidder.id === highestBidderId || isPlacingBid}
-                      onClick={() => {
-                        if (!isPlacingBid) {
-                          setSelectedBidderForBid(bidder.id)
-                        }
-                      }}>
-                      Custom
-                    </Button>
+                          setFullBidHistory(prev => [optimisticEntry, ...prev])
+                          
+                          try {
+                            const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                            })
+                            if (!response.ok) { 
+                              const err = await response.json()
+                              toast.error(err.error || 'Failed to place bid')
+                              // Rollback optimistic updates
+                              setCurrentBid(previousBid)
+                              setHighestBidderId(previousHighestBidderId)
+                              setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                              setIsPlacingBid(false)
+                              setPlacingBidFor(null)
+                              btn.disabled = false
+                              btn.style.opacity = '1'
+                            } else {
+                              // Success - Pusher event will arrive shortly for reconciliation
+                              // Use startTransition for non-critical state updates
+                              startTransition(() => {
+                                setIsPlacingBid(false)
+                                setPlacingBidFor(null)
+                              })
+                            }
+                          } catch { 
+                            toast.error('Network error')
+                            // Rollback optimistic updates
+                            setCurrentBid(previousBid)
+                            setHighestBidderId(previousHighestBidderId)
+                            setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                            setIsPlacingBid(false)
+                            setPlacingBidFor(null)
+                            btn.disabled = false
+                            btn.style.opacity = '1'
+                          }
+                        }}>
+                        Raise
+                      </Button>
+                      <Button size="sm" className="h-10 w-full text-xs !px-3 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400 disabled:text-white/90" 
+                        disabled={bidder.id === highestBidderId || isPlacingBid}
+                        onClick={() => {
+                          if (!isPlacingBid) {
+                            setSelectedBidderForBid(bidder.id)
+                          }
+                        }}>
+                        Custom
+                      </Button>
+                    </div>
                   </div>
+                  {/* compact inline buttons already added above; remove old vertical button group */}
                 </div>
               ))}
             </div>
@@ -2092,26 +1965,44 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     size="sm"
                     className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:text-white/90"
                     disabled={isPlacingBid}
-                    onClick={async () => {
+                    onClick={async (e) => {
                       // Prevent multiple simultaneous bids
                       if (isPlacingBid) return
+                      
+                      // Instant feedback: disable button imperatively
+                      const btn = e.currentTarget
+                      btn.disabled = true
+                      btn.style.opacity = '0.5'
                       
                       const totalBid = (currentBid?.amount || 0) + amount
                       const bidder = bidders.find(b => b.id === selectedBidderForBid)
                       
-                      // Disable all buttons globally
+                      // Optimistic state updates
                       setIsPlacingBid(true)
-                      setPlacingBidFor(selectedBidderForBid)
-                      
-                      // Optimistically update purse only (not highestBidderId - wait for Pusher)
+                      setPlacingBidFor(selectedBidderForBid!)
                       const previousPurse = bidder?.remainingPurse || 0
-                      if (bidder) {
-                        setBidders(prev => prev.map(b => 
-                          b.id === selectedBidderForBid 
-                            ? { ...b, remainingPurse: b.remainingPurse - amount }
-                            : b
-                        ))
+                      const previousBid = currentBid
+                      const previousHighestBidderId = highestBidderId
+                      
+                      // Optimistic UI: set new bid immediately
+                      setCurrentBid({
+                        bidderId: selectedBidderForBid!,
+                        amount: totalBid,
+                        bidderName: bidder?.user?.name || bidder?.username || '',
+                        teamName: bidder?.teamName || undefined
+                      })
+                      setHighestBidderId(selectedBidderForBid!)
+                      
+                      // Optimistic activity log entry
+                      const optimisticEntry: BidHistoryEntry = {
+                        bidderId: selectedBidderForBid!,
+                        amount: totalBid,
+                        timestamp: new Date(),
+                        bidderName: bidder?.user?.name || bidder?.username || '',
+                        teamName: bidder?.teamName || undefined,
+                        type: 'bid'
                       }
+                      setFullBidHistory(prev => [optimisticEntry, ...prev])
                       
                       try {
                         const response = await fetch(`/api/auction/${auction.id}/bid`, {
@@ -2122,57 +2013,34 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         if (!response.ok) {
                           const error = await response.json()
                           toast.error(error.error || 'Failed to place bid')
-                          // Revert optimistic purse update on error
-                          if (bidder) {
-                            setBidders(prev => prev.map(b => 
-                              b.id === selectedBidderForBid 
-                                ? { ...b, remainingPurse: previousPurse }
-                                : b
-                            ))
-                          }
+                          // Rollback optimistic updates
+                          setCurrentBid(previousBid)
+                          setHighestBidderId(previousHighestBidderId)
+                          setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
                           setIsPlacingBid(false)
                           setPlacingBidFor(null)
+                          btn.disabled = false
+                          btn.style.opacity = '1'
                         } else {
-                          // Re-enable buttons immediately after successful API response
-                          const data = await response.json()
-                          setIsPlacingBid(false)
-                          setPlacingBidFor(null)
-                          
-                          // Optimistically update state from API response
-                          setCurrentBid({
-                            bidderId: selectedBidderForBid,
-                            amount: totalBid,
-                            bidderName: bidder?.user?.name || bidder?.username || '',
-                            teamName: bidder?.teamName || undefined
-                          })
-                          setHighestBidderId(selectedBidderForBid)
-                          
-                          // Use API response purse if available
-                          if (data.remainingPurse !== undefined && bidder) {
-                            setBidders(prev => prev.map(b => 
-                              b.id === selectedBidderForBid 
-                                ? { ...b, remainingPurse: data.remainingPurse }
-                                : b
-                            ))
-                          }
-                          
-                          // Clear selected bidder after successful bid
+                          // Success - clear form and use startTransition for cleanup
                           setSelectedBidderForBid(null)
                           setCustomBidAmount('')
+                          
+                          startTransition(() => {
+                            setIsPlacingBid(false)
+                            setPlacingBidFor(null)
+                          })
                         }
-                        // Pusher event will still arrive and correct any state, but we don't block on it
                       } catch {
                         toast.error('Network error')
-                        // Revert on network error
-                        if (bidder) {
-                          setBidders(prev => prev.map(b => 
-                            b.id === selectedBidderForBid 
-                              ? { ...b, remainingPurse: previousPurse }
-                              : b
-                          ))
-                        }
+                        // Rollback optimistic updates
+                        setCurrentBid(previousBid)
+                        setHighestBidderId(previousHighestBidderId)
+                        setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
                         setIsPlacingBid(false)
                         setPlacingBidFor(null)
+                        btn.disabled = false
+                        btn.style.opacity = '1'
                       }
                     }}
                   >
@@ -2314,7 +2182,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     )}
 
     {/* Public Chat */}
-    <PublicChat auctionId={auction.id} />
+    <PublicChat auctionId={auction.id} rightOffsetClass={isBidConsoleOpen ? 'lg:right-[calc(30%+24px)]' : 'lg:right-20'} />
     </>
   )
 }

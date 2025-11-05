@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, startTransition } from 'react'
 import { useSession } from 'next-auth/react'
 import { Auction, Player } from '@prisma/client'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import { Clock } from 'lucide-react'
 import { usePusher } from '@/lib/pusher-client'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
+import { ActivityLog } from '@/components/activity-log'
+import { toast } from 'sonner'
 
 interface BidderAuctionViewProps {
   auction: any
@@ -24,6 +26,7 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [bidAmount, setBidAmount] = useState(0)
   const [isPlacingBid, setIsPlacingBid] = useState(false)
   const [error, setError] = useState('')
+  const [bidHistory, setBidHistory] = useState<any[]>([])
 
   // Find current user's bidder profile
   const userBidder = auction.bidders.find((b: any) => b.userId === session?.user?.id)
@@ -36,11 +39,17 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
   usePusher(auction.id, {
     onNewBid: (data) => {
       setCurrentBid(data)
+      // Reset local timer on each new bid to reflect countdown restart
+      setTimer(data.countdownSeconds || 30)
+      setBidHistory(prev => [{
+        type: 'bid', bidderId: data.bidderId, bidderName: data.bidderName, teamName: data.teamName, amount: data.amount, timestamp: new Date(), playerId: currentPlayer?.id
+      }, ...prev])
     },
     onBidUndo: (data) => {
       setCurrentBid(data.currentBid || null)
       const rules = auction.rules as any
       setTimer(rules?.countdownSeconds || 30)
+      setBidHistory(prev => prev.slice(1))
     },
     onTimerUpdate: (data) => {
       setTimer(data.seconds)
@@ -49,6 +58,7 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
       setCurrentPlayer(data.player)
       setCurrentBid(null)
       setBidAmount(0)
+      setBidHistory([])
     },
     onSaleUndo: (data) => {
       window.location.reload()
@@ -79,8 +89,30 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
       return
     }
 
+    // Optimistic state updates
     setIsPlacingBid(true)
     setError('')
+    const previousBid = currentBid
+    
+    // Optimistic UI: set new bid immediately
+    setCurrentBid({
+      bidderId: userBidder.id,
+      amount: bidAmount,
+      bidderName: userBidder.user?.name || userBidder.username,
+      teamName: userBidder.teamName
+    })
+    
+    // Optimistic activity log entry
+    const optimisticEntry = {
+      type: 'bid',
+      bidderId: userBidder.id,
+      bidderName: userBidder.user?.name || userBidder.username,
+      teamName: userBidder.teamName,
+      amount: bidAmount,
+      timestamp: new Date(),
+      playerId: currentPlayer?.id
+    }
+    setBidHistory(prev => [optimisticEntry, ...prev])
 
     try {
       const response = await fetch(`/api/auction/${auction.id}/bid`, {
@@ -95,13 +127,27 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
       const data = await response.json()
 
       if (response.ok) {
+        // Success - clear form and use startTransition for cleanup
         setBidAmount(0)
+        toast.success('Bid placed successfully!')
+        
+        startTransition(() => {
+          setIsPlacingBid(false)
+        })
       } else {
+        // Rollback optimistic updates
+        setCurrentBid(previousBid)
+        setBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
         setError(data.error || 'Failed to place bid')
+        toast.error(data.error || 'Failed to place bid')
+        setIsPlacingBid(false)
       }
     } catch (err) {
+      // Rollback optimistic updates
+      setCurrentBid(previousBid)
+      setBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
       setError('Network error. Please try again.')
-    } finally {
+      toast.error('Network error. Please try again.')
       setIsPlacingBid(false)
     }
   }

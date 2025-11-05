@@ -54,12 +54,11 @@ export async function POST(
       }
     }
 
-    // CRITICAL: Filter bid history to only include bids for the current player
-    // This prevents using bids from other players when marking as sold
-    const currentPlayerBidHistory = bidHistory.filter(bid => {
-      // Include bids with playerId matching current player, or bids without playerId (legacy bids)
-      return !bid.playerId || bid.playerId === currentPlayer.id
-    }).filter(bid => bid.type !== 'sold' && bid.type !== 'unsold') // Exclude sold/unsold events
+    // CRITICAL: Filter bid history to only include bids for the current player (strict)
+    // This prevents using bids from other players or legacy untagged bids
+    const currentPlayerBidHistory = bidHistory
+      .filter(bid => bid.playerId === currentPlayer.id)
+      .filter(bid => bid.type !== 'sold' && bid.type !== 'unsold')
 
     if (currentPlayerBidHistory.length === 0) {
       return NextResponse.json({ error: 'No bids on this player' }, { status: 400 })
