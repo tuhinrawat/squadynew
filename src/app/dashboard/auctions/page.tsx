@@ -26,7 +26,16 @@ export default async function AuctionsList() {
     orderBy: {
       createdAt: 'desc'
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      status: true,
+      isPublished: true,
+      createdAt: true,
+      totalViews: true,
+      uniqueVisitors: true,
+      peakViewers: true,
       _count: {
         select: {
           players: true,

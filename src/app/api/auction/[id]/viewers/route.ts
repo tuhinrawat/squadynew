@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pusher } from '@/lib/pusher'
+import { prisma } from '@/lib/prisma'
 
 // In-memory store for viewer counts (in production, use Redis)
 const viewerCounts = new Map<string, number>()
@@ -16,6 +17,23 @@ export async function POST(
       const currentCount = viewerCounts.get(auctionId) || 0
       const newCount = currentCount + 1
       viewerCounts.set(auctionId, newCount)
+
+      // Update peak viewers if this is a new peak
+      try {
+        const auction = await prisma.auction.findUnique({
+          where: { id: auctionId },
+          select: { peakViewers: true }
+        })
+        
+        if (auction && newCount > auction.peakViewers) {
+          await prisma.auction.update({
+            where: { id: auctionId },
+            data: { peakViewers: newCount }
+          })
+        }
+      } catch (err) {
+        console.error('Failed to update peak viewers:', err)
+      }
 
       // Broadcast new count to all viewers
       await pusher.trigger(`auction-${auctionId}`, 'viewer-count-update', {

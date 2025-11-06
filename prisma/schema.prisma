@@ -74,11 +74,17 @@ model Auction {
   bidHistory       Json?
   createdAt        DateTime      @default(now())
 
+  // Analytics fields
+  totalViews       Int           @default(0) // Total page views
+  uniqueVisitors   Int           @default(0) // Unique visitors count
+  peakViewers      Int           @default(0) // Peak concurrent viewers
+
   // Relations
   createdBy    User          @relation(fields: [createdById], references: [id])
   players      Player[]
   bidders      Bidder[]
   chatMessages ChatMessage[]
+  views        AuctionView[] // Individual view records
 
   // Performance indexes
   @@index([createdById])
@@ -158,4 +164,23 @@ model ChatMessage {
   // Performance indexes
   @@index([auctionId, createdAt])
   @@map("chat_messages")
+}
+
+model AuctionView {
+  id          String   @id @default(cuid())
+  auctionId   String
+  visitorId   String   // Anonymous visitor identifier (from cookie/session)
+  userAgent   String?  // Browser user agent
+  ipAddress   String?  // IP address (hashed for privacy)
+  referrer    String?  // Where they came from
+  viewedAt    DateTime @default(now())
+
+  // Relations
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+
+  // Performance indexes
+  @@index([auctionId])
+  @@index([auctionId, visitorId])
+  @@index([auctionId, viewedAt])
+  @@map("auction_views")
 }

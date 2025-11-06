@@ -47,31 +47,31 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 				</svg>
 			</div>
 			
-			{/* Content */}
-			<div className="relative z-10 p-6 sm:p-8 lg:p-10">
-				{/* Player Name at Top */}
-				<div className="mb-6">
-					<h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white uppercase tracking-tight leading-tight">
-						{name}
-					</h2>
-					<div className="w-16 sm:w-20 h-1 bg-white mt-3 sm:mt-4"></div>
-				</div>
-				
-				{/* Speciality Section */}
-				{speciality && (
-					<div className="mb-8">
-						<div className="flex items-center gap-3">
-							<span className="text-xs sm:text-sm font-semibold text-white uppercase tracking-widest">SPECIALITY</span>
-							<span className="text-lg sm:text-xl lg:text-2xl font-black text-white uppercase">{speciality}</span>
-						</div>
+		{/* Content */}
+		<div className="relative z-10 p-3 sm:p-8 lg:p-10">
+			{/* Player Name at Top */}
+			<div className="mb-3 sm:mb-6">
+				<h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-white uppercase tracking-tight leading-tight">
+					{name}
+				</h2>
+				<div className="w-12 sm:w-20 h-0.5 sm:h-1 bg-white mt-2 sm:mt-4"></div>
+			</div>
+			
+			{/* Speciality Section */}
+			{speciality && (
+				<div className="mb-4 sm:mb-8">
+					<div className="flex items-center gap-2 sm:gap-3">
+						<span className="text-[10px] sm:text-sm font-semibold text-white uppercase tracking-widest">SPECIALITY</span>
+						<span className="text-sm sm:text-xl lg:text-2xl font-black text-white uppercase">{speciality}</span>
 					</div>
-				)}
+				</div>
+			)}
 				
-				{/* Player Image and Stats Side by Side */}
-				<div className="flex flex-col lg:flex-row items-center lg:items-start gap-6 lg:gap-12 mb-8">
-					{/* Player Image */}
-					<div className="flex flex-col items-center lg:items-start">
-						<div className="relative w-80 h-80 sm:w-96 sm:h-96 lg:w-[28rem] lg:h-[28rem] mb-3">
+			{/* Player Image and Stats Side by Side */}
+			<div className="flex flex-col lg:flex-row items-center lg:items-start gap-3 sm:gap-6 lg:gap-12 mb-4 sm:mb-8">
+				{/* Player Image */}
+				<div className="flex flex-col items-center lg:items-start">
+					<div className="relative w-40 h-40 sm:w-96 sm:h-96 lg:w-[28rem] lg:h-[28rem] mb-2 sm:mb-3">
 							{imageUrl ? (
 								<div className="w-full h-full rounded-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center border-4 border-white/20 overflow-hidden">
 									<img 
@@ -95,36 +95,36 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							)}
 						</div>
 						
-						{/* Stats below image on mobile, hidden on desktop */}
-						<div className="flex flex-col lg:hidden items-center gap-4 mt-4 w-full">
-							{batting && (
-								<div className="flex flex-col gap-1 items-center">
-									<span className="text-xs sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BATSMEN</span>
-									<span className="text-xl sm:text-2xl font-black text-white uppercase">{batting}</span>
-								</div>
-							)}
-							{bowling && (
-								<div className="flex flex-col gap-1 items-center">
-									<span className="text-xs sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BOWLER</span>
-									<span className="text-xl sm:text-2xl font-black text-white uppercase">{bowling}</span>
-								</div>
-							)}
-							
-							{/* Cricheros Profile Link - Mobile */}
-							{profileLink && (
-								<a 
-									href={profileLink} 
-									target="_blank" 
-									rel="noopener noreferrer"
-									className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors duration-200 border border-white/30 mt-2"
-								>
-									<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-									</svg>
-									View Profile
-								</a>
-							)}
-						</div>
+					{/* Stats below image on mobile, hidden on desktop */}
+					<div className="flex flex-col lg:hidden items-center gap-2 sm:gap-4 mt-2 sm:mt-4 w-full">
+						{batting && (
+							<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
+								<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BATSMEN</span>
+								<span className="text-sm sm:text-2xl font-black text-white uppercase">{batting}</span>
+							</div>
+						)}
+						{bowling && (
+							<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
+								<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BOWLER</span>
+								<span className="text-sm sm:text-2xl font-black text-white uppercase">{bowling}</span>
+							</div>
+						)}
+						
+						{/* Cricheros Profile Link - Mobile */}
+						{profileLink && (
+							<a 
+								href={profileLink} 
+								target="_blank" 
+								rel="noopener noreferrer"
+								className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-sm font-semibold rounded-lg transition-colors duration-200 border border-white/30 mt-1 sm:mt-2"
+							>
+								<svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+								</svg>
+								View Profile
+							</a>
+						)}
+					</div>
 					</div>
 					
 					{/* Stats next to image on desktop only */}
@@ -170,13 +170,13 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 					</div>
 				)}
 				
-				{/* Base Price - Bottom Right Corner */}
-				{basePrice !== undefined && (
-					<div className="absolute bottom-6 right-6 text-right">
-						<span className="text-xs text-white/60 uppercase tracking-wider block">Base Price</span>
-						<span className="text-2xl sm:text-3xl font-black text-white">₹{basePrice/1000}k</span>
-					</div>
-				)}
+			{/* Base Price - Bottom Right Corner */}
+			{basePrice !== undefined && (
+				<div className="absolute bottom-3 right-3 sm:bottom-6 sm:right-6 text-right">
+					<span className="text-[9px] sm:text-xs text-white/60 uppercase tracking-wider block">Base Price</span>
+					<span className="text-base sm:text-3xl font-black text-white">₹{basePrice/1000}k</span>
+				</div>
+			)}
 			</div>
 		</div>
 	)

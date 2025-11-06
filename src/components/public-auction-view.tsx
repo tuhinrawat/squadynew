@@ -74,6 +74,23 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setIsClient(true)
   }, [])
 
+  // Track page view
+  useEffect(() => {
+    // Generate or retrieve visitor ID from localStorage
+    let visitorId = localStorage.getItem('visitorId')
+    if (!visitorId) {
+      visitorId = `visitor_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+      localStorage.setItem('visitorId', visitorId)
+    }
+
+    // Track the view
+    fetch(`/api/auction/${auction.id}/track-view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visitorId })
+    }).catch(err => console.error('Failed to track view:', err))
+  }, [auction.id])
+
   // Sync biddersState with bidders prop when it changes
   useEffect(() => {
     setBiddersState(bidders)
@@ -294,10 +311,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const playerName = playerData.name || playerData.Name || 'No Player Selected'
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-4">
-        {/* Compact Dark Header */}
-        <div className="relative bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden px-4 py-3">
+    <div className="p-2 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-2 sm:space-y-4">
+        {/* Title Only (Mobile Only - Top) - Compact */}
+        <div className="sm:hidden flex items-center justify-between gap-2 py-1">
+          <h1 className="text-sm font-bold text-gray-900 dark:text-white uppercase truncate">{auction.name}</h1>
+        </div>
+
+        {/* Compact Dark Header (Desktop) / Stats Header (Mobile - appears after player card) */}
+        <div className="hidden sm:block relative bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Left: Title & Badges */}
             <div className="flex items-center gap-3">
@@ -354,70 +376,30 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             </div>
           </div>
           
-          {/* Mobile Stats - Two Rows */}
-          <div className="sm:hidden mt-3 space-y-2">
-            {/* Stats Row */}
-            <div className="flex items-center justify-between text-[10px]">
-              <div className="flex items-center gap-1">
-                <span className="text-gray-400">Total:</span>
-                <span className="font-bold text-white">{initialStats.total}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-gray-400">Sold:</span>
-                <span className="font-bold text-green-400">{initialStats.sold}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-gray-400">Unsold:</span>
-                <span className="font-bold text-yellow-400">{initialStats.unsold}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-gray-400">Left:</span>
-                <span className="font-bold text-purple-400">{initialStats.remaining}</span>
-              </div>
-            </div>
-            
-            {/* Progress Bar Row */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-white/10 rounded-full h-1.5">
-                <div 
-                  className="h-full bg-gradient-to-r from-green-500 to-blue-500 rounded-full transition-all"
-                  style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
-                />
-              </div>
-              <span className="text-xs font-bold text-blue-400">
-                {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}%
-              </span>
-            </div>
-          </div>
         </div>
 
-        {/* Mobile Current Bid Banner */}
-        <div className="lg:hidden sticky top-0 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 rounded-lg shadow-lg">
+        {/* Current Bid Banner (Mobile Only - Compact) */}
+        <div className="lg:hidden sticky top-0 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-md shadow-lg">
           {currentBid ? (
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  <span className="font-semibold text-xs uppercase tracking-wide">Current Bid</span>
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="h-3 w-3" />
+                  <span className="font-semibold text-[10px] uppercase tracking-wide">Current Bid</span>
                 </div>
-                <div className="text-lg font-bold">
+                <div className="text-base font-bold">
                   ₹{currentBid.amount.toLocaleString('en-IN')}
                 </div>
               </div>
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-[10px]">
                 <span className="opacity-90">By {currentBid.bidderName}</span>
                 {currentBid.teamName && (
-                  <span className="bg-white/20 px-2 py-0.5 rounded-full">{currentBid.teamName}</span>
+                  <span className="bg-white/20 px-1.5 py-0.5 rounded-full">{currentBid.teamName}</span>
                 )}
               </div>
-              {bidHistory.length > 1 && (
-                <div className="text-xs opacity-75">
-                  {bidHistory.length} bid{bidHistory.length !== 1 ? 's' : ''} placed
-                </div>
-              )}
             </div>
           ) : (
-            <div className="text-center text-sm py-2">
+            <div className="text-center text-xs py-1.5">
               <span className="opacity-90">No bids yet - Be the first to bid!</span>
             </div>
           )}
@@ -443,6 +425,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               </AnimatePresence>
               
               <CardContent className="p-4 space-y-4">
+                {/* Live Badges - Above Player Card */}
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <Badge className="bg-green-500 text-white text-xs font-bold px-3 py-1.5 animate-pulse">● LIVE</Badge>
+                  <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs font-semibold px-3 py-1.5 animate-pulse">
+                    <Eye className="h-3.5 w-3.5 mr-1.5" />
+                    Live Views: {viewerCount || 0}
+                  </Badge>
+                </div>
+
                 {/* New Player Card */}
                 {isClient && (
                   <PlayerCard

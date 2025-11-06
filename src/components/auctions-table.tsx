@@ -41,6 +41,9 @@ interface Auction {
   status: AuctionStatus
   isPublished: boolean
   createdAt: Date
+  totalViews: number
+  uniqueVisitors: number
+  peakViewers: number
   _count: {
     players: number
     bidders: number
@@ -333,6 +336,9 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Players</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bidders</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Views</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Unique</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Peak</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</TableHead>
               <TableHead className="text-right text-xs font-semibold text-gray-500 uppercase tracking-wider w-16">Actions</TableHead>
             </TableRow>
@@ -358,6 +364,15 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                 </TableCell>
                 <TableCell className="text-sm text-gray-900 dark:text-gray-100">
                   {auction._count.bidders}
+                </TableCell>
+                <TableCell className="text-sm text-gray-900 dark:text-gray-100 font-medium">
+                  {auction.totalViews.toLocaleString()}
+                </TableCell>
+                <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                  {auction.uniqueVisitors.toLocaleString()}
+                </TableCell>
+                <TableCell className="text-sm text-gray-600 dark:text-gray-400">
+                  {auction.peakViewers}
                 </TableCell>
                 <TableCell className="text-sm text-gray-600 dark:text-gray-400">
                   {new Date(auction.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

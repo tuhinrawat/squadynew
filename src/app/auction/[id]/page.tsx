@@ -130,8 +130,8 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             </div>
           </div>
           
-          {/* Breadcrumbs */}
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          {/* Breadcrumbs - Hidden on mobile for public view */}
+          <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
               <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
                 <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
