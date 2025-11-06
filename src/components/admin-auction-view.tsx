@@ -2274,7 +2274,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     )}
 
     {/* Public Chat */}
-    <PublicChat auctionId={auction.id} rightOffsetClass={isBidConsoleOpen ? 'lg:right-[calc(30%+24px)]' : 'lg:right-20'} />
+    <PublicChat auctionId={auction.id} rightOffsetClass={isBidConsoleOpen ? 'lg:right-[calc(30%+2rem)]' : 'lg:right-20'} />
     
     {/* Undo Sale Dialog */}
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>

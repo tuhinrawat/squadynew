@@ -500,7 +500,7 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
 
       {/* Desktop Compact Chat Window - Facebook Style */}
       {!isMobile && isOpen && (
-        <div className="fixed bottom-6 right-24 z-50 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+        <div className={`fixed bottom-6 ${rightOffsetClass ?? 'right-20'} z-50 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden`}>
           {/* Flying Emojis Overlay */}
           <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden rounded-lg">
             {flyingEmojis.map(({ id, emoji, left }) => {
@@ -619,7 +619,7 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     disabled={isSending}
-                    className="flex-1 text-sm"
+                    className="flex-1 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     maxLength={500}
                   />
                   <Button
