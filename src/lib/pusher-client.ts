@@ -137,44 +137,46 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
       const setupChannel = () => {
         // Get or subscribe to the channel
         const existingChannel = pusher.channel(channelName)
+        let channel: any
+        
         if (existingChannel) {
-          console.log('♻️ Channel already exists and has bindings, skipping setup')
-          // Channel already exists with bindings from first mount
-          // Do NOT unbind or rebind - just reuse it as-is
+          console.log('♻️ Channel already exists, reusing it')
+          channel = existingChannel
           channelRef.current = existingChannel
           if (existingChannel.subscribed) {
             setIsConnected(true)
           }
-          return // Exit early, don't rebind
-        }
-        const channel = pusher.subscribe(channelName)
-        channelRef.current = channel
-        
-        console.log('📍 Channel state after subscribe:', {
-          name: channel.name,
-          subscribed: channel.subscribed,
-          subscriptionPending: channel.subscriptionPending,
-          subscriptionCancelled: channel.subscriptionCancelled
-        })
-        
-        // Bind subscription events
-        channel.bind('pusher:subscription_succeeded', () => {
-          console.log('✅ Pusher subscription successful:', channelName)
-          setIsConnected(true)
-        })
-        
-        channel.bind('pusher:subscription_error', (error: any) => {
-          console.error('❌ Pusher subscription error:', channelName, error)
-          setError('Subscription failed')
-        })
-        
-        // If channel is already subscribed, manually trigger success
-        if (channel.subscribed) {
-          console.log('✅ Channel already subscribed, setting connected state')
-          setIsConnected(true)
+        } else {
+          console.log('📡 Creating new channel subscription')
+          channel = pusher.subscribe(channelName)
+          channelRef.current = channel
+          
+          console.log('📍 Channel state after subscribe:', {
+            name: channel.name,
+            subscribed: channel.subscribed,
+            subscriptionPending: channel.subscriptionPending,
+            subscriptionCancelled: channel.subscriptionCancelled
+          })
+          
+          // Bind subscription events
+          channel.bind('pusher:subscription_succeeded', () => {
+            console.log('✅ Pusher subscription successful:', channelName)
+            setIsConnected(true)
+          })
+          
+          channel.bind('pusher:subscription_error', (error: any) => {
+            console.error('❌ Pusher subscription error:', channelName, error)
+            setError('Subscription failed')
+          })
+          
+          // If channel is already subscribed, manually trigger success
+          if (channel.subscribed) {
+            console.log('✅ Channel already subscribed, setting connected state')
+            setIsConnected(true)
+          }
         }
 
-        // Set up event listeners using refs to get latest callbacks
+        // Always bind event listeners (they will stack but use the same callback ref)
         console.log('🔗 Binding event listeners:', { 
           hasNewBid: !!options.onNewBid, 
           hasBidUndo: !!options.onBidUndo,
