@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Auction, Player } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +17,7 @@ import { PublicChat } from '@/components/public-chat'
 import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
+import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 
 interface BidHistoryEntry {
   bidderId: string
@@ -68,6 +69,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
   const [players, setPlayers] = useState(auction.players)
   const [biddersState, setBiddersState] = useState(bidders)
+  const [showPlayerReveal, setShowPlayerReveal] = useState(false)
+  const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
 
   // Set client-side rendered flag
   useEffect(() => {
@@ -95,6 +98,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   useEffect(() => {
     setBiddersState(bidders)
   }, [bidders])
+
+  // Handler when reveal animation completes
+  const handleRevealComplete = useCallback(() => {
+    setShowPlayerReveal(false)
+    
+    if (pendingPlayer) {
+      setIsImageLoading(true)
+      setCurrentPlayer(pendingPlayer)
+      setCurrentBid(null)
+      setHighestBidderId(null)
+      setBidHistory([]) // Clear bid history for new player
+      setPendingPlayer(null)
+    }
+  }, [pendingPlayer])
 
   // Initialize bid history and current bid from initial data
   useEffect(() => {
@@ -253,11 +270,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setTimer(data.seconds)
     },
     onNewPlayer: (data) => {
-      setIsImageLoading(true)
-      setCurrentPlayer(data.player as Player)
-      setCurrentBid(null)
-      setHighestBidderId(null)
-      setBidHistory([]) // Clear bid history for new player
+      // Store the new player and show reveal animation
+      setPendingPlayer(data.player as Player)
+      setShowPlayerReveal(true)
+      // Don't update current player yet - wait for animation to complete
     },
     onAuctionEnded: () => {
       window.location.reload()
@@ -310,7 +326,40 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const playerData = getPlayerData(currentPlayer)
   const playerName = playerData.name || playerData.Name || 'No Player Selected'
 
+  // Get all player names for reveal animation
+  // Only include AVAILABLE players (exclude SOLD, UNSOLD, RETIRED)
+  const allPlayerNames = useMemo(() => {
+    // Filter out SOLD, UNSOLD, and RETIRED players - only show AVAILABLE players
+    const availablePlayers = players.filter(p => p.status === 'AVAILABLE')
+    
+    // If we have a pending player, make sure it's included (even if not in players array yet)
+    const allPlayers = [...availablePlayers]
+    if (pendingPlayer && !allPlayers.find(p => p.id === pendingPlayer.id)) {
+      // Only add pending player if it's AVAILABLE
+      if (pendingPlayer.status === 'AVAILABLE') {
+        allPlayers.push(pendingPlayer)
+      }
+    }
+    
+    // Extract names and filter out empty/undefined names
+    const names = allPlayers
+      .map(p => {
+        const data = p.data as any
+        return data?.name || data?.Name || data?.player_name || null
+      })
+      .filter((name): name is string => name !== null && name !== undefined && name !== '')
+    
+    return names.length > 0 ? names : ['Player 1', 'Player 2', 'Player 3'] // Fallback if no names
+  }, [players, pendingPlayer])
+
+  const pendingPlayerName = useMemo(() => {
+    if (!pendingPlayer) return ''
+    const data = pendingPlayer.data as any
+    return data?.name || data?.Name || data?.player_name || 'Unknown Player'
+  }, [pendingPlayer])
+
   return (
+    <>
     <div className="p-2 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-2 sm:space-y-4">
         {/* Title Only (Mobile Only - Top) - Compact */}
@@ -436,7 +485,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
                 {/* New Player Card */}
                 {isClient && (
-                  <PlayerCard
+                  <div className="relative">
+                    {/* Player Reveal Animation - Inside Player Card */}
+                    <AnimatePresence>
+                      {showPlayerReveal && pendingPlayer && (
+                        <PlayerRevealAnimation
+                          allPlayerNames={allPlayerNames}
+                          finalPlayerName={pendingPlayerName}
+                          onComplete={handleRevealComplete}
+                          duration={5000}
+                        />
+                      )}
+                    </AnimatePresence>
+                    
+                    <PlayerCard
                     name={playerName}
                     imageUrl={(() => {
                       const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo'] || playerData['PROFILE PHOTO'] || playerData['profile_photo']
@@ -491,6 +553,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       return essentials
                     })()}
                   />
+                  </div>
                 )}
                 
                 {/* Bid Amount Strip */}
@@ -923,6 +986,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       {/* Public Chat */}
       <PublicChat auctionId={auction.id} />
     </div>
+    </>
   )
 }
 

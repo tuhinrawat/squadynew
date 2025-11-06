@@ -176,53 +176,57 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
           }
         }
 
-        // Always bind event listeners (they will stack but use the same callback ref)
-        console.log('🔗 Binding event listeners:', { 
-          hasNewBid: !!options.onNewBid, 
-          hasBidUndo: !!options.onBidUndo,
-          hasPlayerSold: !!options.onPlayerSold
+        // Always bind ALL event listeners using the callback ref
+        // This way they work even if channel already exists
+        console.log('🔗 Binding ALL event listeners')
+        
+        channel.bind('new-bid', (data: any) => {
+          console.log('📨 Pusher received new-bid:', data)
+          callbacksRef.current.onNewBid?.(data)
         })
         
-        if (options.onNewBid) {
-          console.log('🔗 Binding new-bid handler to channel')
-          channel.bind('new-bid', (data: any) => {
-            console.log('📨 Pusher received new-bid:', data)
-            callbacksRef.current.onNewBid?.(data)
-          })
-          console.log('✅ new-bid handler bound successfully')
-        }
-        if (options.onBidUndo) {
-          console.log('🔗 Binding bid-undo handler to channel')
-          channel.bind('bid-undo', (data: any) => {
-            console.log('📨 Pusher client received bid-undo event:', data)
-            callbacksRef.current.onBidUndo?.(data)
-          })
-          console.log('✅ bid-undo handler bound successfully')
-        }
-        if (options.onPlayerSold) {
-          channel.bind('player-sold', (data: any) => callbacksRef.current.onPlayerSold?.(data))
-        }
-        if (options.onSaleUndo) {
-          channel.bind('sale-undo', (data: any) => callbacksRef.current.onSaleUndo?.(data))
-        }
-        if (options.onNewPlayer) {
-          channel.bind('new-player', (data: any) => callbacksRef.current.onNewPlayer?.(data))
-        }
-        if (options.onTimerUpdate) {
-          channel.bind('timer-update', (data: any) => callbacksRef.current.onTimerUpdate?.(data))
-        }
-        if (options.onAuctionPaused) {
-          channel.bind('auction-paused', (data: any) => callbacksRef.current.onAuctionPaused?.(data))
-        }
-        if (options.onAuctionResumed) {
-          channel.bind('auction-resumed', (data: any) => callbacksRef.current.onAuctionResumed?.(data))
-        }
-        if (options.onAuctionEnded) {
-          channel.bind('auction-ended', (data: any) => callbacksRef.current.onAuctionEnded?.(data))
-        }
-        if (options.onPlayersUpdated) {
-          channel.bind('players-updated', (data: any) => callbacksRef.current.onPlayersUpdated?.(data))
-        }
+        channel.bind('bid-undo', (data: any) => {
+          console.log('📨 Pusher client received bid-undo event:', data)
+          callbacksRef.current.onBidUndo?.(data)
+        })
+        
+        channel.bind('player-sold', (data: any) => {
+          console.log('📨 Pusher received player-sold:', data)
+          callbacksRef.current.onPlayerSold?.(data)
+        })
+        
+        channel.bind('sale-undo', (data: any) => {
+          console.log('📨 Pusher received sale-undo:', data)
+          callbacksRef.current.onSaleUndo?.(data)
+        })
+        
+        channel.bind('new-player', (data: any) => {
+          console.log('📨 Pusher received new-player:', data)
+          callbacksRef.current.onNewPlayer?.(data)
+        })
+        
+        channel.bind('timer-update', (data: any) => {
+          callbacksRef.current.onTimerUpdate?.(data)
+        })
+        
+        channel.bind('auction-paused', (data: any) => {
+          callbacksRef.current.onAuctionPaused?.(data)
+        })
+        
+        channel.bind('auction-resumed', (data: any) => {
+          callbacksRef.current.onAuctionResumed?.(data)
+        })
+        
+        channel.bind('auction-ended', (data: any) => {
+          callbacksRef.current.onAuctionEnded?.(data)
+        })
+        
+        channel.bind('players-updated', (data: any) => {
+          console.log('📨 Pusher received players-updated:', data)
+          callbacksRef.current.onPlayersUpdated?.(data)
+        })
+        
+        console.log('✅ All event handlers bound successfully')
       }
       
       // Setup channel immediately (Pusher will queue subscriptions if not connected yet)

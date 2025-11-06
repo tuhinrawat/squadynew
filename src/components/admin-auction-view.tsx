@@ -19,6 +19,7 @@ import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
+import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
@@ -156,6 +157,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       return false
     }
   })
+  const [showPlayerReveal, setShowPlayerReveal] = useState(false)
+  const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
+  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const soldAnimationRef = useRef(false)
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    soldAnimationRef.current = soldAnimation
+  }, [soldAnimation])
 
   useEffect(() => {
     try {
@@ -425,23 +435,82 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   }, [currentPlayer])
 
   const handleNewPlayer = useCallback((data: PusherPlayerData) => {
-      setIsImageLoading(true)
-      setCurrentPlayer(data.player)
-      setTimer(30)
-      setBidHistory([]) // Clear bid history for new player
-    setCurrentBid(null) // Clear current bid
-    setHighestBidderId(null) // Clear highest bidder
-    setSelectedBidderForBid(null) // Clear selected bidder
-    setCustomBidAmount('') // Clear custom bid amount
-    setBidAmount(0) // Clear bid amount for bidder
-    setPinnedBidderIds([]) // Clear pinned bidders for new player
-      // Keep console state if pinned; otherwise leave current behavior
-      if (isBidConsolePinned) {
-        setIsBidConsoleOpen(true)
+      console.log('🎬 NEW PLAYER EVENT RECEIVED - Starting reveal animation:', data.player)
+      console.log('🎬 Player data:', {
+        id: data.player?.id,
+        name: (data.player?.data as any)?.Name || (data.player?.data as any)?.name,
+        status: data.player?.status
+      })
+      
+      // Clear any pending fallback timeout since Pusher event arrived
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current)
+        fallbackTimeoutRef.current = null
+        console.log('✅ Cleared fallback timeout - Pusher event received')
       }
-      // Refresh full bid history from server when new player loads
-      refreshAuctionState()
-  }, [refreshAuctionState, isBidConsolePinned])
+      
+      // Store the new player
+      setPendingPlayer(data.player)
+      
+      // Check if sold animation is showing - if so, delay reveal animation until after it closes
+      // The sold animation shows for 3 seconds, so wait for it to complete
+      // Use ref to avoid stale closure issues
+      if (soldAnimationRef.current) {
+        console.log('⏳ Sold animation is showing, delaying reveal animation by 3s')
+        setTimeout(() => {
+          setShowPlayerReveal(true)
+          console.log('🎬 Reveal animation started after sold banner closed')
+        }, 3000)
+      } else {
+        // Show reveal animation immediately if sold animation is not showing
+        setShowPlayerReveal(true)
+        console.log('🎬 Animation state set immediately:', {
+          showPlayerReveal: true,
+          hasPendingPlayer: !!data.player
+        })
+      }
+      
+      // Don't update current player yet - wait for animation to complete
+  }, [])
+
+  // Handler when reveal animation completes
+  const handleRevealComplete = useCallback(() => {
+      console.log('✅ REVEAL ANIMATION COMPLETE - Updating player')
+      setShowPlayerReveal(false)
+      
+      // Clear any pending fallback timeout since animation completed
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current)
+        fallbackTimeoutRef.current = null
+      }
+      
+      if (pendingPlayer) {
+        setIsImageLoading(true)
+        setCurrentPlayer(pendingPlayer)
+        setTimer(30)
+        setBidHistory([]) // Clear bid history for new player
+        setCurrentBid(null) // Clear current bid
+        setHighestBidderId(null) // Clear highest bidder
+        setSelectedBidderForBid(null) // Clear selected bidder
+        setCustomBidAmount('') // Clear custom bid amount
+        setBidAmount(0) // Clear bid amount for bidder
+        setPinnedBidderIds([]) // Clear pinned bidders for new player
+        
+        // Clear loading states
+        setIsMarkingSold(false)
+        setIsMarkingUnsold(false)
+        
+        // Keep console state if pinned; otherwise leave current behavior
+        if (isBidConsolePinned) {
+          setIsBidConsoleOpen(true)
+        }
+        
+        // Refresh full bid history from server when new player loads
+        refreshAuctionState()
+        
+        setPendingPlayer(null)
+      }
+  }, [pendingPlayer, refreshAuctionState, isBidConsolePinned])
 
   const handleAuctionPaused = useCallback(() => setIsPaused(true), [])
   const handleAuctionResumed = useCallback(() => setIsPaused(false), [])
@@ -550,13 +619,34 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setSoldAnimation(true)
       toast.success('Player marked as sold!')
       
+      // Try to use Pusher event for animation, but have fallback if it doesn't arrive
+      if (data.nextPlayer) {
+        // Clear any existing fallback timeout
+        if (fallbackTimeoutRef.current) {
+          clearTimeout(fallbackTimeoutRef.current)
+        }
+        
+        // Set a timeout fallback in case Pusher event doesn't arrive
+        // Wait for sold animation (3s) + buffer (1.5s) = 4.5s total
+        fallbackTimeoutRef.current = setTimeout(() => {
+          // If we reach here, Pusher event didn't arrive in time
+          console.warn('⚠️ Pusher new-player event not received within 4.5s, using fallback')
+          setCurrentPlayer(data.nextPlayer)
+          setCurrentBid(null)
+          setBidHistory([])
+          setHighestBidderId(null)
+          setIsMarkingSold(false)
+          fallbackTimeoutRef.current = null
+        }, 4500) // 3s for sold animation + 1.5s buffer
+      }
+      
       setTimeout(() => {
-        setCurrentPlayer(data.nextPlayer)
+        setSoldAnimation(false)
+        // Don't set isMarkingSold to false here - let fallback or animation completion handle it
+        // Clear current bid and history - new player will be set by Pusher event or fallback
         setCurrentBid(null)
         setBidHistory([])
         setHighestBidderId(null)
-        setSoldAnimation(false)
-        setIsMarkingSold(false)
       }, 3000)
       } else {
         const errorData = await response.json()
@@ -585,12 +675,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
     if (response.ok) {
       const data = await response.json()
-      setCurrentPlayer(data.nextPlayer)
-      setCurrentBid(null)
-      setBidHistory([])
-      setHighestBidderId(null)
-        toast.success('Player marked as unsold')
+      toast.success('Player marked as unsold')
+      
+      // Try to use Pusher event for animation, but have fallback if it doesn't arrive
+      if (data.nextPlayer) {
+        // Clear any existing fallback timeout
+        if (fallbackTimeoutRef.current) {
+          clearTimeout(fallbackTimeoutRef.current)
+        }
+        
+        // Set a timeout fallback in case Pusher event doesn't arrive
+        fallbackTimeoutRef.current = setTimeout(() => {
+          // If we reach here, Pusher event didn't arrive in time
+          console.warn('⚠️ Pusher new-player event not received within 1.5s, using fallback')
+          setCurrentPlayer(data.nextPlayer)
+          setCurrentBid(null)
+          setBidHistory([])
+          setHighestBidderId(null)
+          setIsMarkingUnsold(false)
+          fallbackTimeoutRef.current = null
+        }, 1500)
+      } else {
         setIsMarkingUnsold(false)
+      }
       } else {
         toast.error('Failed to mark as unsold')
         setIsMarkingUnsold(false)
@@ -663,6 +770,64 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
     preloadImages()
   }, [currentPlayer, bidders])
+
+  // Get all player names for reveal animation (must be before early return)
+  // Only include players that are AVAILABLE (not SOLD, not UNSOLD, not RETIRED)
+  const allPlayerNames = useMemo(() => {
+    // Filter out SOLD, UNSOLD, and RETIRED players - only show AVAILABLE players
+    const availablePlayers = players.filter(p => p.status === 'AVAILABLE')
+    
+    // If we have a pending player, make sure it's included (even if not in players array yet)
+    const allPlayers = [...availablePlayers]
+    if (pendingPlayer && !allPlayers.find(p => p.id === pendingPlayer.id)) {
+      // Only add pending player if it's AVAILABLE
+      if (pendingPlayer.status === 'AVAILABLE') {
+        allPlayers.push(pendingPlayer)
+      }
+    }
+    
+    // Extract names and filter out empty/undefined names
+    const names = allPlayers
+      .map(p => {
+        const data = p.data as any
+        return data?.name || data?.Name || data?.player_name || null
+      })
+      .filter((name): name is string => name !== null && name !== undefined && name !== '')
+    
+    console.log('🎭 All player names for animation:', {
+      totalPlayers: players.length,
+      availablePlayers: availablePlayers.length,
+      namesCount: names.length,
+      names: names.slice(0, 5) // Log first 5 names
+    })
+    
+    return names.length > 0 ? names : ['Player 1', 'Player 2', 'Player 3'] // Fallback if no names
+  }, [players, pendingPlayer])
+
+  const pendingPlayerName = useMemo(() => {
+    if (!pendingPlayer) return ''
+    const data = pendingPlayer.data as any
+    return data?.name || data?.Name || data?.player_name || 'Unknown Player'
+  }, [pendingPlayer])
+
+  // Debug logging for reveal animation state
+  useEffect(() => {
+    console.log('🔍 Reveal animation state:', { 
+      showPlayerReveal, 
+      hasPendingPlayer: !!pendingPlayer,
+      pendingPlayerName,
+      allPlayerNamesCount: allPlayerNames.length
+    })
+  }, [showPlayerReveal, pendingPlayer, pendingPlayerName, allPlayerNames])
+
+  // Cleanup fallback timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current)
+      }
+    }
+  }, [])
 
   if (!isClient) {
     // Avoid SSR/CSR markup drift by rendering after mount
@@ -880,7 +1045,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           {/* New Player Spotlight Card (presentational) - client only to avoid SSR drift */}
           {isClient && (
             <div className="mb-4 space-y-4">
-              <PlayerCard
+              {/* Player Card Container with Animation Overlay */}
+              <div className="relative">
+                {/* Player Reveal Animation - Inside Player Card */}
+                <AnimatePresence>
+                  {showPlayerReveal && pendingPlayer && (
+                    <PlayerRevealAnimation
+                      allPlayerNames={allPlayerNames}
+                      finalPlayerName={pendingPlayerName}
+                      onComplete={handleRevealComplete}
+                      duration={5000}
+                    />
+                  )}
+                </AnimatePresence>
+                
+                <PlayerCard
                 name={playerName}
                 imageUrl={(() => {
                   // Check all possible column name variations
@@ -891,47 +1070,30 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                                           playerData['profile_photo'] ||
                                           playerData['ProfilePhoto']
                   
-                  console.log('=== PROFILE PHOTO DEBUG ===')
-                  console.log('Player Name:', playerName)
-                  console.log('Profile Photo value:', profilePhotoLink)
-                  console.log('Profile Photo type:', typeof profilePhotoLink)
-                  console.log('All player data keys:', Object.keys(playerData))
-                  
                   if (!profilePhotoLink || profilePhotoLink === '') {
-                    console.log('❌ No profile photo link found')
                     return undefined
                   }
                   
                   const photoStr = String(profilePhotoLink).trim()
-                  console.log('Trimmed photo string:', photoStr)
                   
                   // Try to extract Google Drive ID from various formats
                   // Format 1: https://drive.google.com/file/d/[ID]/view
                   let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
                   if (match && match[1]) {
-                    const finalUrl = `/api/proxy-image?id=${match[1]}`
-                    console.log('✅ Extracted ID (format 1):', match[1])
-                    console.log('✅ Final URL:', finalUrl)
-                    return finalUrl
+                    return `/api/proxy-image?id=${match[1]}`
                   }
                   
                   // Format 2: https://drive.google.com/open?id=[ID]
                   match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
                   if (match && match[1]) {
-                    const finalUrl = `/api/proxy-image?id=${match[1]}`
-                    console.log('✅ Extracted ID (format 2):', match[1])
-                    console.log('✅ Final URL:', finalUrl)
-                    return finalUrl
+                    return `/api/proxy-image?id=${match[1]}`
                   }
                   
                   // If it's already a valid URL, use it directly
                   if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-                    console.log('✅ Using direct URL:', photoStr)
                     return photoStr
                   }
                   
-                  console.log('⚠️ Unknown photo format')
-                  console.log('===========================')
                   return undefined
                 })()}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price']}
@@ -946,19 +1108,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     // Extract URL from the text (handles cases like "Hey, check out... https://...")
                     const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
                     if (urlMatch && urlMatch[1]) {
-                      const extractedUrl = urlMatch[1].trim()
-                      console.log('Extracted profile URL:', extractedUrl)
-                      return extractedUrl
+                      return urlMatch[1].trim()
                     }
                   }
                   
                   return undefined
                 })()}
                 fields={(() => {
-                  // Debug: Log all available fields and the actual playerData
-                  console.log('PlayerData object:', playerData)
-                  console.log('Available player fields:', Object.keys(playerData))
-                  console.log('PlayerData entries:', Object.entries(playerData))
                   
                   const essentials: Array<{ label: string; value: string }> = []
                   const add = (label: string, keys: string[]) => {
@@ -977,6 +1133,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   return essentials
                 })()}
               />
+              </div>
               
               {/* Action Buttons Below Player Card (Admin Only) */}
               {viewMode === 'admin' && (
@@ -2126,7 +2283,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         timestamp: new Date(),
                         bidderName: bidder?.user?.name || bidder?.username || '',
                         teamName: bidder?.teamName || undefined,
-                        type: 'bid'
+                        type: 'bid',
+                        playerId: currentPlayer?.id // Associate with current player
                       }
                       setFullBidHistory(prev => [optimisticEntry, ...prev])
                       
@@ -2233,13 +2391,27 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         setPlacingBidFor(null)
                         
                         // Optimistically update state from API response
-                        setCurrentBid({
+                        const optimisticBid = {
                           bidderId: selectedBidderForBid,
                           amount: totalBid,
                           bidderName: bidder?.user?.name || bidder?.username || '',
                           teamName: bidder?.teamName || undefined
-                        })
+                        }
+                        
+                        setCurrentBid(optimisticBid)
                         setHighestBidderId(selectedBidderForBid)
+                        
+                        // Optimistically add to bid history for instant activity log update
+                        const optimisticEntry = {
+                          type: 'bid' as const,
+                          bidderId: selectedBidderForBid,
+                          amount: totalBid,
+                          timestamp: new Date(),
+                          bidderName: optimisticBid.bidderName,
+                          teamName: optimisticBid.teamName,
+                          playerId: currentPlayer?.id
+                        }
+                        setFullBidHistory(prev => [optimisticEntry, ...prev])
                         
                         // Clear selected bidder after successful bid
                         setSelectedBidderForBid(null)
