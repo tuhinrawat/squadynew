@@ -70,11 +70,12 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
         })
       }
 
-      // Calculate stats
-      const totalPlayers = auction.players.length
-      const soldPlayers = auction.players.filter(p => p.status === 'SOLD').length
-      const unsoldPlayers = auction.players.filter(p => p.status === 'UNSOLD').length
-      const availablePlayers = totalPlayers - soldPlayers - unsoldPlayers
+      // Calculate stats (excluding RETIRED players)
+      const activePlayers = auction.players.filter(p => p.status !== 'RETIRED')
+      const totalPlayers = activePlayers.length
+      const soldPlayers = activePlayers.filter(p => p.status === 'SOLD').length
+      const unsoldPlayers = activePlayers.filter(p => p.status === 'UNSOLD').length
+      const availablePlayers = activePlayers.filter(p => p.status === 'AVAILABLE').length
 
       const stats = {
         total: totalPlayers,
@@ -194,11 +195,12 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     })
   }
 
-  // Calculate stats
-  const totalPlayers = auction.players.length
-  const soldPlayers = auction.players.filter(p => p.status === 'SOLD').length
-  const unsoldPlayers = auction.players.filter(p => p.status === 'UNSOLD').length
-  const availablePlayers = totalPlayers - soldPlayers - unsoldPlayers
+  // Calculate stats (excluding RETIRED players)
+  const activePlayers = auction.players.filter(p => p.status !== 'RETIRED')
+  const totalPlayers = activePlayers.length
+  const soldPlayers = activePlayers.filter(p => p.status === 'SOLD').length
+  const unsoldPlayers = activePlayers.filter(p => p.status === 'UNSOLD').length
+  const availablePlayers = activePlayers.filter(p => p.status === 'AVAILABLE').length
 
   const stats = {
     total: totalPlayers,
