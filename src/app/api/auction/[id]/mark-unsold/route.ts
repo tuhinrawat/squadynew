@@ -36,6 +36,14 @@ export async function POST(
       where: { id: playerId }
     })
 
+    const playerName = currentPlayer?.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
+
+    // Broadcast unsold event IMMEDIATELY for instant real-time updates (before DB writes)
+    triggerAuctionEvent(params.id, 'player-unsold', {
+      playerId: playerId,
+      playerName: playerName
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
+
     // Update player status to UNSOLD
     await prisma.player.update({
       where: { id: playerId },
@@ -58,7 +66,6 @@ export async function POST(
     })
 
     // Add unsold event to bid history
-    const playerName = currentPlayer?.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
     const unsoldEvent = {
       type: 'unsold',
       playerId: playerId,

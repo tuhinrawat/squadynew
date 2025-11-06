@@ -24,8 +24,13 @@ export interface AuctionEventData {
   }
   'bid-undo': {
     bidderId: string
-    previousBid: number | null
-    currentBid: any | null
+    currentBid: {
+      bidderId: string
+      amount: number
+      bidderName: string
+      teamName?: string
+    } | null
+    countdownSeconds: number
     remainingPurse?: number // Include purse update
   }
   'player-sold': {
@@ -65,7 +70,17 @@ export function triggerAuctionEvent<T extends AuctionEventName>(
 ): Promise<Pusher.Response> {
   // Fire and forget for critical path - don't wait for Pusher response
   // The promise will resolve in background
-  return pusher.trigger(`auction-${auctionId}`, eventName, data)
+  const channelName = `auction-${auctionId}`
+  console.log(`🚀 Pusher trigger: channel=${channelName}, event=${eventName}`)
+  return pusher.trigger(channelName, eventName, data)
+    .then(response => {
+      console.log(`✅ Pusher trigger successful: channel=${channelName}, event=${eventName}`, response)
+      return response
+    })
+    .catch(error => {
+      console.error(`❌ Pusher trigger failed: channel=${channelName}, event=${eventName}`, error)
+      throw error
+    })
 }
 
 export function triggerAuctionEventToUser<T extends AuctionEventName>(

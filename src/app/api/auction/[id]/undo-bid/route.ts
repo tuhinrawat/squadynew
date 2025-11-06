@@ -75,6 +75,25 @@ export async function POST(
     // Determine previous bid for current player (strict)
     const previousBid = fullHistory.find(b => (currentPlayer && b.playerId === currentPlayer.id) && b.type !== 'sold' && b.type !== 'unsold') || null
 
+    // Reset timer (non-blocking)
+    const rules = auction.rules as any
+    const countdownSeconds = rules?.countdownSeconds || 30
+    resetTimer(params.id, countdownSeconds)
+
+    // Broadcast bid undo event BEFORE DB update for instant real-time updates
+    const undoEventData = {
+      bidderId,
+      currentBid: previousBid ? {
+        bidderId: previousBid.bidderId,
+        amount: previousBid.amount,
+        bidderName: previousBid.bidderName,
+        teamName: previousBid.teamName
+      } : null,
+      countdownSeconds
+    }
+    console.log('📤 Backend sending bid-undo event:', undoEventData)
+    triggerAuctionEvent(params.id, 'bid-undo', undoEventData as any).catch(err => console.error('Pusher error (non-critical):', err))
+
     // Persist updated history; do NOT mutate purse on undo-bid (purse is adjusted on sale only)
     await prisma.auction.update({
       where: { id: params.id },
@@ -82,18 +101,6 @@ export async function POST(
         bidHistory: fullHistory as any
       }
     })
-
-    // Reset timer (non-blocking)
-    const rules = auction.rules as any
-    const countdownSeconds = rules?.countdownSeconds || 30
-    resetTimer(params.id, countdownSeconds)
-
-    // Broadcast bid undo event
-    triggerAuctionEvent(params.id, 'bid-undo', {
-      bidderId,
-      previousBid: previousBid?.amount || null,
-      currentBid: previousBid || null
-    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 
       success: true, 

@@ -127,6 +127,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [isClient, setIsClient] = useState(false)
   const [isImageLoading, setIsImageLoading] = useState(false)
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
+  const [isMarkingSold, setIsMarkingSold] = useState(false)
+  const [isMarkingUnsold, setIsMarkingUnsold] = useState(false)
   const [customBidModalOpen, setCustomBidModalOpen] = useState(false)
   const [players, setPlayers] = useState(auction.players)
   const [bidAmount, setBidAmount] = useState(0)
@@ -135,12 +137,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [error, setError] = useState('')
   const [bidders, setBidders] = useState(auction.bidders)
   const [pinnedBidderIds, setPinnedBidderIds] = useState<string[]>([])
-  const [isBidConsoleOpen, setIsBidConsoleOpen] = useState(false)
   const [isBidConsolePinned, setIsBidConsolePinned] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     try {
       const v = localStorage.getItem('admin.bidConsole.pinned')
       return v === '1'
+    } catch {
+      return false
+    }
+  })
+  // Auto-open console if it was pinned
+  const [isBidConsoleOpen, setIsBidConsoleOpen] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try {
+      const v = localStorage.getItem('admin.bidConsole.pinned')
+      return v === '1' // Open if pinned
     } catch {
       return false
     }
@@ -277,9 +288,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       }
       setFullBidHistory(prev => {
         const last = prev[0]
-        // Deduplicate if the same top-of-list bid already exists for this player
+        // If the last entry matches (optimistic entry), replace it with server-confirmed data
         if (last && last.type === 'bid' && last.playerId === newBidEntry.playerId && last.bidderId === newBidEntry.bidderId && last.amount === newBidEntry.amount) {
-          return prev
+          // Replace optimistic entry with server-confirmed entry
+          return [newBidEntry, ...prev.slice(1)]
         }
         return [newBidEntry, ...prev]
       })
@@ -299,15 +311,30 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   }, [currentPlayer?.id])
 
   const handleBidUndo = useCallback((data: PusherBidUndoData) => {
+      console.log('🔄 handleBidUndo triggered with data:', data)
+      
       // Clear bid placement state when bid is undone
       setIsPlacingBid(false)
       setPlacingBidFor(null)
       
       // Remove last bid from history
-      setBidHistory(prev => prev.slice(1))
-      setFullBidHistory(prev => prev.slice(1))
+      console.log('Removing last bid from history')
+      setBidHistory(prev => {
+        console.log('Previous bidHistory length:', prev.length)
+        const newHistory = prev.slice(1)
+        console.log('New bidHistory length:', newHistory.length)
+        return newHistory
+      })
+      setFullBidHistory(prev => {
+        console.log('Previous fullBidHistory length:', prev.length)
+        const newHistory = prev.slice(1)
+        console.log('New fullBidHistory length:', newHistory.length)
+        return newHistory
+      })
+      
       // Update current bid
       if (data.currentBid && data.currentBid.amount > 0) {
+        console.log('Setting current bid to:', data.currentBid)
         setCurrentBid({
           bidderId: data.currentBid.bidderId,
           amount: data.currentBid.amount,
@@ -316,21 +343,28 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         })
         setHighestBidderId(data.currentBid.bidderId)
       } else {
+        console.log('Clearing current bid (no previous bid)')
         setCurrentBid(null)
         setHighestBidderId(null)
       }
-      const rules = auction.rules as AuctionRules | undefined
-      setTimer(rules?.countdownSeconds || 30)
+      
+      // Reset timer
+      const countdownSeconds = data.countdownSeconds || 30
+      console.log('Resetting timer to:', countdownSeconds)
+      setTimer(countdownSeconds)
       
       // Update purse instantly from Pusher data if available
       if (data.remainingPurse !== undefined && data.bidderId) {
+        console.log('Updating purse for bidder:', data.bidderId, 'to:', data.remainingPurse)
         setBidders(prev => prev.map(b => 
           b.id === data.bidderId 
             ? { ...b, remainingPurse: data.remainingPurse! }
             : b
         ))
       }
-  }, [auction.rules])
+      
+      console.log('✅ handleBidUndo completed')
+  }, [])
 
   const handleSaleUndo = useCallback(() => {
       // Reload to get updated state
@@ -499,8 +533,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const handleMarkSold = async () => {
     if (!currentPlayer || !currentBid) return
 
-    // Don't use optimistic state - wait for server confirmation
-    // The server will use the actual highest bidder from bid history
+    // Show loading state immediately
+    setIsMarkingSold(true)
+    toast.info('Marking player as sold...')
     
     try {
     const response = await fetch(`/api/auction/${auction.id}/mark-sold`, {
@@ -521,20 +556,24 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         setBidHistory([])
         setHighestBidderId(null)
         setSoldAnimation(false)
+        setIsMarkingSold(false)
       }, 3000)
       } else {
         const errorData = await response.json()
         toast.error(errorData.error || 'Failed to mark as sold')
+        setIsMarkingSold(false)
       }
     } catch {
       toast.error('Network error')
+      setIsMarkingSold(false)
     }
   }
 
   const handleMarkUnsold = async () => {
     if (!currentPlayer) return
 
-    // Optimistic UI - show toast immediately
+    // Show loading state immediately
+    setIsMarkingUnsold(true)
     toast.info('Marking player as unsold...')
 
     try {
@@ -551,11 +590,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setBidHistory([])
       setHighestBidderId(null)
         toast.success('Player marked as unsold')
+        setIsMarkingUnsold(false)
       } else {
         toast.error('Failed to mark as unsold')
+        setIsMarkingUnsold(false)
       }
     } catch {
       toast.error('Network error')
+      setIsMarkingUnsold(false)
     }
   }
 
@@ -629,74 +671,75 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
   return (
     <>
-    <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} p-4 sm:p-6 transition-all duration-200`}>
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} px-4 sm:px-6 lg:px-8 transition-all duration-200`}>
+      <div className="max-w-[1400px] mx-auto py-4 sm:py-6 space-y-4">
         {/* Enhanced Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
           {/* Top Section */}
-          <div className="px-6 py-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="px-3 py-3 sm:px-6 sm:py-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
               {/* Left: Title, Status, and Stats */}
               <div className="flex-1 w-full sm:w-auto">
-                <div className="flex items-center gap-3 flex-wrap mb-2">
-                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100">{auction.name}</h1>
-                  <Badge className={`px-3 py-1 text-xs sm:text-sm font-semibold rounded-full ${
+                {/* Title and Status - Compact on mobile */}
+                <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 mb-2">
+                  <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100">{auction.name}</h1>
+                  <Badge className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-sm font-semibold rounded-full flex-shrink-0 ${
                     auction.status === 'LIVE' 
-                      ? 'bg-green-500 text-white animate-pulse shadow-lg shadow-green-500/50' 
+                      ? 'bg-green-500 text-white animate-pulse' 
                       : auction.status === 'PAUSED'
                       ? 'bg-yellow-500 text-white'
                       : 'bg-gray-500 text-white'
                   }`}>
-                {auction.status}
-              </Badge>
-            </div>
+                    {auction.status}
+                  </Badge>
+                </div>
                 
                 {auction.description && (
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2">{auction.description}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-2 hidden sm:block">{auction.description}</p>
                 )}
                 
-                {/* Inline Stats with Progress - Stack on mobile */}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-                  <div className="flex items-center gap-1">
+                {/* Inline Stats - Compact grid on mobile */}
+                <div className="grid grid-cols-4 gap-1.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3 text-[10px] sm:text-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1">
                     <span className="font-medium text-gray-600 dark:text-gray-400">Total:</span>
                     <span className="font-bold text-gray-900 dark:text-gray-100">{initialStats.total}</span>
-          </div>
-                  <div className="flex items-center gap-1">
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1">
                     <span className="font-medium text-gray-600 dark:text-gray-400">Sold:</span>
                     <span className="font-bold text-green-600">{initialStats.sold}</span>
-          </div>
-                  <div className="flex items-center gap-1">
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1">
                     <span className="font-medium text-gray-600 dark:text-gray-400">Unsold:</span>
                     <span className="font-bold text-yellow-600">{initialStats.unsold}</span>
-        </div>
-                  <div className="flex items-center gap-1">
-                    <span className="font-medium text-gray-600 dark:text-gray-400">Remaining:</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1">
+                    <span className="font-medium text-gray-600 dark:text-gray-400">Left:</span>
                     <span className="font-bold text-purple-600">{initialStats.remaining}</span>
-            </div>
-                  {/* Progress indicator */}
-                  <div className="flex items-center gap-2 pl-2 border-l border-gray-300 dark:border-gray-600">
-                    <div className="w-20 sm:w-24 lg:w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  </div>
+                  {/* Progress indicator - Full width on mobile */}
+                  <div className="col-span-4 sm:col-span-1 flex items-center gap-2 sm:pl-2 sm:border-l border-gray-300 dark:border-gray-600 mt-1 sm:mt-0">
+                    <div className="flex-1 sm:w-24 lg:w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 sm:h-2">
                       <div 
                         className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
                         style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
                       />
-            </div>
-                    <span className="font-bold text-blue-600 dark:text-blue-400 text-xs">
+                    </div>
+                    <span className="font-bold text-blue-600 dark:text-blue-400 text-[10px] sm:text-xs flex-shrink-0">
                       {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}%
                     </span>
-            </div>
+                  </div>
                 </div>
               </div>
               
               {/* Right: Share and Admin Controls - Always visible */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                 <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-2 sm:px-3"
+                    className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
                   >
-                    <Trophy className="h-4 w-4 sm:mr-2" />
+                    <Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
                     <span className="hidden sm:inline">Team Stats</span>
                   </Button>
                 </Link>
@@ -712,9 +755,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       toast.error('Failed to copy link')
                     })
                   }}
-                  className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 px-2 sm:px-3"
+                  className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
                 >
-                  <Share2 className="h-4 w-4 sm:mr-2" />
+                  <Share2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
                   <span className="hidden sm:inline">Share</span>
                 </Button>
                 
@@ -723,18 +766,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     <Button
                       onClick={() => setIsBidConsoleOpen(true)}
                       size="sm"
-                      className="text-xs sm:text-sm px-2 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-white hidden sm:inline-flex"
+                      className="text-xs sm:text-sm px-2 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-white hidden sm:inline-flex h-9"
                       title="Open Bidding Console"
                     >
                       Console
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="px-2 sm:px-3 min-w-[36px]">
-                          <MoreVertical className="h-4 w-4" />
+                        <Button variant="outline" size="sm" className="h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3">
+                          <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 z-[100] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                      <DropdownMenuContent align="end" className="w-48 z-[100] bg-white dark:bg-gray-800 shadow-xl">
                         <DropdownMenuItem 
                           onSelect={() => setIsBidConsoleOpen(true)}
                           className="text-gray-900 dark:text-gray-100 cursor-pointer sm:hidden"
@@ -785,10 +828,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         {/* Stats cards removed - now inline in header */}
 
         {/* Main Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Center Stage - Spotlight */}
           <div className="col-span-1 lg:col-span-2 order-1">
-            <Card className="min-h-[300px] sm:min-h-[500px] bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 dark:from-gray-800 dark:via-blue-900/10 dark:to-indigo-900/10 border-2 border-blue-100 dark:border-blue-900 shadow-xl">
+            <Card className="min-h-[300px] sm:min-h-[500px] bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/30 dark:from-gray-800 dark:via-blue-900/10 dark:to-indigo-900/10 border-0">
               <AnimatePresence>
                 {soldAnimation && (
                   <motion.div
@@ -836,23 +879,74 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               
           {/* New Player Spotlight Card (presentational) - client only to avoid SSR drift */}
           {isClient && (
-            <div className="mb-4">
+            <div className="mb-4 space-y-4">
               <PlayerCard
                 name={playerName}
-                imageUrl={undefined}
-                tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
-                fields={(() => {
-                  const essentials: Array<{ label: string; value: string }> = []
-                  const add = (label: string, key: string) => {
-                    const v = (playerData as any)[key]
-                    if (v) essentials.push({ label, value: String(v) })
+                imageUrl={(() => {
+                  const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
+                  if (!profilePhotoLink) return undefined
+                  const match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                  if (match && match[1]) {
+                    return `/api/proxy-image?id=${match[1]}`
                   }
-                  add('Speciality', 'Speciality')
-                  add('Batting Type', 'Batting Type')
-                  add('Bowling Type', 'Bowling Type')
+                  return profilePhotoLink
+                })()}
+                basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price']}
+                tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
+                profileLink={(() => {
+                  // Get the Cricheroes Profile link field
+                  const link = (playerData as any)?.['Cricheroes Profile link'] || 
+                               (playerData as any)?.[' Cricheroes Profile link'] ||
+                               (playerData as any)?.['cricheroes profile link']
+                  
+                  if (link && typeof link === 'string') {
+                    // Extract URL from the text (handles cases like "Hey, check out... https://...")
+                    const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
+                    if (urlMatch && urlMatch[1]) {
+                      const extractedUrl = urlMatch[1].trim()
+                      console.log('Extracted profile URL:', extractedUrl)
+                      return extractedUrl
+                    }
+                  }
+                  
+                  return undefined
+                })()}
+                fields={(() => {
+                  // Debug: Log all available fields and the actual playerData
+                  console.log('PlayerData object:', playerData)
+                  console.log('Available player fields:', Object.keys(playerData))
+                  console.log('PlayerData entries:', Object.entries(playerData))
+                  
+                  const essentials: Array<{ label: string; value: string }> = []
+                  const add = (label: string, keys: string[]) => {
+                    for (const key of keys) {
+                      const v = (playerData as any)[key]
+                      if (v) {
+                        essentials.push({ label, value: String(v) })
+                        return
+                      }
+                    }
+                  }
+                  add('Batting', ['Batting', 'batting', 'Batting Type', 'batting type', 'BAT', 'Bat'])
+                  add('Bowling', ['Bowling', 'bowling', 'Bowling Type', 'bowling type', 'BOWL', 'Bowl'])
+                  add('Fielding', ['Fielding', 'fielding', 'FIELD', 'Field'])
+                  add('Speciality', ['Speciality', 'speciality', 'Specialty', 'specialty', 'Role', 'role'])
                   return essentials
                 })()}
               />
+              
+              {/* Action Buttons Below Player Card (Admin Only) */}
+              {viewMode === 'admin' && (
+                <div className="px-4">
+                  <ActionButtons
+                    onMarkSold={handleMarkSold}
+                    onMarkUnsold={handleMarkUnsold}
+                    onUndoSale={() => setUndoSaleDialogOpen(true)}
+                    isMarkingSold={isMarkingSold}
+                    isMarkingUnsold={isMarkingUnsold}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -1053,32 +1147,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
           {/* Right Sidebar: Bid History (sticky) */}
           <div className="order-2 lg:order-1 hidden lg:block space-y-4">
-            {/* Admin Controls - Above Live Activity */}
-            {viewMode === 'admin' && (
-              <div className="space-y-3">
-                <ActionButtons
-                  onMarkSold={handleMarkSold}
-                  onMarkUnsold={handleMarkUnsold}
-                  onUndoSale={() => setUndoSaleDialogOpen(true)}
-                />
-                <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Undo Last Sale?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will restore the last sold player back to the auction and refund the bidder. This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700 text-white">
-                        Undo Sale
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
             
             {/* Bid console moved to sliding drawer */}
             {/* Bidder Controls - Show at top of sidebar for bidders */}
@@ -1246,35 +1314,46 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             )}
 
           {/* Bid History */}
-            <Card className="shadow-lg border-2 border-blue-100 dark:border-blue-900 lg:sticky lg:top-[calc(theme(spacing.4)+theme(spacing.4)+theme(spacing.4))]">
-              <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+            <Card className="border-0 lg:sticky lg:top-[calc(theme(spacing.4)+theme(spacing.4)+theme(spacing.4))]">
+              <CardHeader className="p-4 sm:p-6">
                 <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   <span>📋</span> Live Activity
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 sm:p-4">
                 <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-2">
-                  {isClient && (
-                    <ActivityLog
-                      items={bidHistory as any}
-                      onUndoBid={async (entry) => {
-                        try {
-                          if (!entry.bidderId) return
-                          const response = await fetch(`/api/auction/${auction.id}/undo-bid`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bidderId: entry.bidderId })
-                          })
-                          if (!response.ok) {
-                            const data = await response.json()
-                            toast.error(data.error || 'Failed to undo bid')
-                          }
-                        } catch {
-                          toast.error('Failed to undo bid')
-                        }
-                      }}
-                    />
-                  )}
+                  <ActivityLog
+                    items={bidHistory as any}
+        onUndoBid={viewMode === 'admin' ? async (entry) => {
+          console.log('🎯 Undo button clicked for entry:', entry)
+          try {
+            if (!entry.bidderId) {
+              console.log('❌ No bidderId in entry')
+              return
+            }
+            console.log('📡 Calling undo-bid API with bidderId:', entry.bidderId)
+            const response = await fetch(`/api/auction/${auction.id}/undo-bid`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bidderId: entry.bidderId })
+            })
+            console.log('📡 API response status:', response.status)
+            if (!response.ok) {
+              const data = await response.json()
+              console.log('❌ API error:', data)
+              toast.error(data.error || 'Failed to undo bid')
+            } else {
+              console.log('✅ API success')
+              toast.success('Bid undone successfully')
+              // Reload page to show updated state (Pusher real-time not working due to React Strict Mode)
+              setTimeout(() => window.location.reload(), 500)
+            }
+          } catch (error) {
+            console.log('❌ Exception:', error)
+            toast.error('Failed to undo bid')
+          }
+        } : undefined}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -1698,7 +1777,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           />
         )}
         {/* Panel */}
-        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%] bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 border-l-4 border-emerald-500 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto">
+        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%] bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto">
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1733,7 +1812,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   .map(id => bidders.find(b => b.id === id))
                   .filter((b): b is BidderWithUser => Boolean(b))
                   .map(bidder => (
-                    <div key={bidder.id} className={`p-2 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                    <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
@@ -1741,11 +1820,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 w-32">
-                          <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
-                            disabled={bidder.id === highestBidderId || isPlacingBid}
+                          <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
+                            disabled={bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id}
                             onClick={async (e) => {
-                              // Prevent multiple simultaneous bids
-                              if (isPlacingBid) return
+                              // Prevent multiple simultaneous bids for the same bidder
+                              if (isPlacingBid || placingBidFor === bidder.id) return
                               
                               // Instant feedback: disable button imperatively (before React re-render)
                               const btn = e.currentTarget
@@ -1772,14 +1851,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                               })
                               setHighestBidderId(bidder.id)
                               
-                              // Optimistic activity log entry
+                              // Optimistic activity log entry (include playerId for proper deduplication)
                               const optimisticEntry: BidHistoryEntry = {
                                 bidderId: bidder.id,
                                 amount: totalBid,
                                 timestamp: new Date(),
                                 bidderName: bidder.user?.name || bidder.username,
                                 teamName: bidder.teamName || undefined,
-                                type: 'bid'
+                                type: 'bid',
+                                playerId: currentPlayer?.id
                               }
                               setFullBidHistory(prev => [optimisticEntry, ...prev])
                               
@@ -1844,7 +1924,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </div>
             <div className="grid grid-cols-2 gap-2">
               {bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse).map(bidder => (
-                <div key={bidder.id} className={`p-2 rounded-lg border shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'border-green-500 bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'}`}>
+                <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
@@ -1852,10 +1932,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 w-32">
-                      <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
-                        disabled={bidder.id === highestBidderId || isPlacingBid}
+                      <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
+                        disabled={bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id}
                         onClick={async (e) => {
-                          if (isPlacingBid) return
+                          // Prevent multiple simultaneous bids for the same bidder
+                          if (isPlacingBid || placingBidFor === bidder.id) return
                           
                           // Instant feedback: disable button imperatively (before React re-render)
                           const btn = e.currentTarget
@@ -1882,14 +1963,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           })
                           setHighestBidderId(bidder.id)
                           
-                          // Optimistic activity log entry
+                          // Optimistic activity log entry (include playerId for proper deduplication)
                           const optimisticEntry: BidHistoryEntry = {
                             bidderId: bidder.id,
                             amount: totalBid,
                             timestamp: new Date(),
                             bidderName: bidder.user?.name || bidder.username,
                             teamName: bidder.teamName || undefined,
-                            type: 'bid'
+                            type: 'bid',
+                            playerId: currentPlayer?.id
                           }
                           setFullBidHistory(prev => [optimisticEntry, ...prev])
                           
@@ -2058,7 +2140,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   onChange={(e) => setCustomBidAmount(e.target.value)}
                   min="1000"
                   step="1000"
-                  className="flex-1 h-8 text-xs bg-white dark:bg-gray-800"
+                  className="flex-1 h-8 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 />
                 <Button
                   size="sm"
@@ -2088,15 +2170,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     setIsPlacingBid(true)
                     setPlacingBidFor(selectedBidderForBid)
                     
-                    // Optimistically update purse only (not highestBidderId - wait for Pusher)
-                    const previousPurse = bidder?.remainingPurse || 0
-                    if (bidder) {
-                      setBidders(prev => prev.map(b => 
-                        b.id === selectedBidderForBid 
-                          ? { ...b, remainingPurse: b.remainingPurse - incrementAmount }
-                          : b
-                      ))
-                    }
+                    // Note: We do NOT update purse here - purse only changes on final sale
                     
                     try {
                       const response = await fetch(`/api/auction/${auction.id}/bid`, {
@@ -2107,19 +2181,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       if (!response.ok) {
                         const error = await response.json()
                         toast.error(error.error || 'Failed to place bid')
-                        // Revert optimistic purse update on error
-                        if (bidder) {
-                          setBidders(prev => prev.map(b => 
-                            b.id === selectedBidderForBid 
-                              ? { ...b, remainingPurse: previousPurse }
-                              : b
-                          ))
-                        }
                         setIsPlacingBid(false)
                         setPlacingBidFor(null)
                       } else {
                         // Re-enable buttons immediately after successful API response
-                        const data = await response.json()
                         setIsPlacingBid(false)
                         setPlacingBidFor(null)
                         
@@ -2132,15 +2197,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         })
                         setHighestBidderId(selectedBidderForBid)
                         
-                        // Use API response purse if available
-                        if (data.remainingPurse !== undefined && bidder) {
-                          setBidders(prev => prev.map(b => 
-                            b.id === selectedBidderForBid 
-                              ? { ...b, remainingPurse: data.remainingPurse }
-                              : b
-                          ))
-                        }
-                        
                         // Clear selected bidder after successful bid
                         setSelectedBidderForBid(null)
                         setCustomBidAmount('')
@@ -2148,14 +2204,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       // Pusher event will still arrive and correct any state, but we don't block on it
                     } catch {
                       toast.error('Network error')
-                      // Revert on network error
-                      if (bidder) {
-                        setBidders(prev => prev.map(b => 
-                          b.id === selectedBidderForBid 
-                            ? { ...b, remainingPurse: previousPurse }
-                            : b
-                        ))
-                      }
                       setIsPlacingBid(false)
                       setPlacingBidFor(null)
                     }
@@ -2183,6 +2231,24 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
     {/* Public Chat */}
     <PublicChat auctionId={auction.id} rightOffsetClass={isBidConsoleOpen ? 'lg:right-[calc(30%+24px)]' : 'lg:right-20'} />
+    
+    {/* Undo Sale Dialog */}
+    <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Undo Last Sale?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will restore the last sold player back to the auction and refund the bidder. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700 text-white">
+            Undo Sale
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   )
 }

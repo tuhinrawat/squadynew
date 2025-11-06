@@ -10,6 +10,8 @@ import { usePusher } from '@/lib/pusher-client'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { ActivityLog } from '@/components/activity-log'
+import PlayerCard from '@/components/player-card'
+import BidAmountStrip from '@/components/bid-amount-strip'
 import { toast } from 'sonner'
 
 interface BidderAuctionViewProps {

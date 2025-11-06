@@ -120,6 +120,19 @@ export async function POST(
     // Calculate new remaining purse
     const newRemainingPurse = winningBidder.remainingPurse - highestBid.amount
 
+    // Broadcast player sold event IMMEDIATELY for instant real-time updates (before DB writes)
+    const playerName = currentPlayer.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
+    triggerAuctionEvent(params.id, 'player-sold', {
+      playerId: currentPlayer.id,
+      bidderId: winningBidder.id,
+      amount: highestBid.amount,
+      playerName: playerName,
+      bidderName: winningBidder.user?.name || winningBidder.username,
+      teamName: winningBidder.teamName,
+      bidderRemainingPurse: newRemainingPurse,
+      updatedBidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }]
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
+
     // Update player and bidder in parallel for better performance
     await Promise.all([
       prisma.player.update({
@@ -151,7 +164,6 @@ export async function POST(
     })
 
     // Add sold event to bid history
-    const playerName = currentPlayer.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
     const soldEvent = {
       type: 'sold',
       playerId: currentPlayer.id,
@@ -174,16 +186,6 @@ export async function POST(
         bidHistory: updatedHistory as any
       }
     })
-
-    // Broadcast player sold event with purse update (fire and forget for speed)
-    triggerAuctionEvent(params.id, 'player-sold', {
-      playerId: currentPlayer.id,
-      bidderId: winningBidder.id,
-      amount: highestBid.amount,
-      playerName: currentPlayer.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player',
-      bidderRemainingPurse: newRemainingPurse, // Include for instant UI update
-      updatedBidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }] // Batch format for team stats
-    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     // Broadcast new player if exists
     if (nextPlayer) {

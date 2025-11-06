@@ -14,9 +14,33 @@ export function initializePusher(): Pusher {
     return pusherClient
   }
 
+  console.log('🔧 Initializing Pusher with key:', process.env.NEXT_PUBLIC_PUSHER_KEY?.substring(0, 10) + '...')
+  console.log('🔧 Pusher cluster:', process.env.NEXT_PUBLIC_PUSHER_CLUSTER)
+
+  // Enable Pusher logging for debugging
+  Pusher.logToConsole = true
+
   pusherClient = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
     cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
     forceTLS: true,
+    enabledTransports: ['ws', 'wss'],
+  })
+  
+  // Add connection state listeners
+  pusherClient.connection.bind('connected', () => {
+    console.log('✅ Pusher connection established')
+  })
+  
+  pusherClient.connection.bind('disconnected', () => {
+    console.log('❌ Pusher connection disconnected')
+  })
+  
+  pusherClient.connection.bind('error', (err: any) => {
+    console.error('❌ Pusher connection error:', err)
+  })
+  
+  pusherClient.connection.bind('failed', () => {
+    console.error('❌ Pusher connection failed')
   })
 
   return pusherClient
@@ -34,8 +58,13 @@ export interface AuctionEventData {
   }
   'bid-undo': {
     bidderId: string
-    previousBid: number | null
-    currentBid: any | null
+    currentBid: {
+      bidderId: string
+      amount: number
+      bidderName: string
+      teamName?: string
+    } | null
+    countdownSeconds: number
     remainingPurse?: number // Added for instant UI updates
   }
   'player-sold': {
@@ -101,85 +130,130 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
       const pusher = initializePusher()
       pusherRef.current = pusher
 
-      const channel = pusher.subscribe(`auction-${auctionId}`)
-      channelRef.current = channel
+      const channelName = `auction-${auctionId}`
+      console.log('🔌 Attempting to subscribe to Pusher channel:', channelName)
+      console.log('🔌 Pusher connection state:', pusher.connection.state)
+      
+      const setupChannel = () => {
+        // Get or subscribe to the channel
+        const existingChannel = pusher.channel(channelName)
+        if (existingChannel) {
+          console.log('♻️ Channel already exists and has bindings, skipping setup')
+          // Channel already exists with bindings from first mount
+          // Do NOT unbind or rebind - just reuse it as-is
+          channelRef.current = existingChannel
+          if (existingChannel.subscribed) {
+            setIsConnected(true)
+          }
+          return // Exit early, don't rebind
+        }
+        const channel = pusher.subscribe(channelName)
+        channelRef.current = channel
+        
+        console.log('📍 Channel state after subscribe:', {
+          name: channel.name,
+          subscribed: channel.subscribed,
+          subscriptionPending: channel.subscriptionPending,
+          subscriptionCancelled: channel.subscriptionCancelled
+        })
+        
+        // Bind subscription events
+        channel.bind('pusher:subscription_succeeded', () => {
+          console.log('✅ Pusher subscription successful:', channelName)
+          setIsConnected(true)
+        })
+        
+        channel.bind('pusher:subscription_error', (error: any) => {
+          console.error('❌ Pusher subscription error:', channelName, error)
+          setError('Subscription failed')
+        })
+        
+        // If channel is already subscribed, manually trigger success
+        if (channel.subscribed) {
+          console.log('✅ Channel already subscribed, setting connected state')
+          setIsConnected(true)
+        }
 
-      // Set up event listeners using refs to get latest callbacks
-      // Wrap each callback to always call the latest version from ref
-      if (options.onNewBid) {
-        channel.bind('new-bid', (data: any) => callbacksRef.current.onNewBid?.(data))
+        // Set up event listeners using refs to get latest callbacks
+        console.log('🔗 Binding event listeners:', { 
+          hasNewBid: !!options.onNewBid, 
+          hasBidUndo: !!options.onBidUndo,
+          hasPlayerSold: !!options.onPlayerSold
+        })
+        
+        if (options.onNewBid) {
+          console.log('🔗 Binding new-bid handler to channel')
+          channel.bind('new-bid', (data: any) => {
+            console.log('📨 Pusher received new-bid:', data)
+            callbacksRef.current.onNewBid?.(data)
+          })
+          console.log('✅ new-bid handler bound successfully')
+        }
+        if (options.onBidUndo) {
+          console.log('🔗 Binding bid-undo handler to channel')
+          channel.bind('bid-undo', (data: any) => {
+            console.log('📨 Pusher client received bid-undo event:', data)
+            callbacksRef.current.onBidUndo?.(data)
+          })
+          console.log('✅ bid-undo handler bound successfully')
+        }
+        if (options.onPlayerSold) {
+          channel.bind('player-sold', (data: any) => callbacksRef.current.onPlayerSold?.(data))
+        }
+        if (options.onSaleUndo) {
+          channel.bind('sale-undo', (data: any) => callbacksRef.current.onSaleUndo?.(data))
+        }
+        if (options.onNewPlayer) {
+          channel.bind('new-player', (data: any) => callbacksRef.current.onNewPlayer?.(data))
+        }
+        if (options.onTimerUpdate) {
+          channel.bind('timer-update', (data: any) => callbacksRef.current.onTimerUpdate?.(data))
+        }
+        if (options.onAuctionPaused) {
+          channel.bind('auction-paused', (data: any) => callbacksRef.current.onAuctionPaused?.(data))
+        }
+        if (options.onAuctionResumed) {
+          channel.bind('auction-resumed', (data: any) => callbacksRef.current.onAuctionResumed?.(data))
+        }
+        if (options.onAuctionEnded) {
+          channel.bind('auction-ended', (data: any) => callbacksRef.current.onAuctionEnded?.(data))
+        }
+        if (options.onPlayersUpdated) {
+          channel.bind('players-updated', (data: any) => callbacksRef.current.onPlayersUpdated?.(data))
+        }
       }
-      if (options.onBidUndo) {
-        channel.bind('bid-undo', (data: any) => callbacksRef.current.onBidUndo?.(data))
-      }
-      if (options.onPlayerSold) {
-        channel.bind('player-sold', (data: any) => callbacksRef.current.onPlayerSold?.(data))
-      }
-      if (options.onSaleUndo) {
-        channel.bind('sale-undo', (data: any) => callbacksRef.current.onSaleUndo?.(data))
-      }
-      if (options.onNewPlayer) {
-        channel.bind('new-player', (data: any) => callbacksRef.current.onNewPlayer?.(data))
-      }
-      if (options.onTimerUpdate) {
-        channel.bind('timer-update', (data: any) => callbacksRef.current.onTimerUpdate?.(data))
-      }
-      if (options.onAuctionPaused) {
-        channel.bind('auction-paused', (data: any) => callbacksRef.current.onAuctionPaused?.(data))
-      }
-      if (options.onAuctionResumed) {
-        channel.bind('auction-resumed', (data: any) => callbacksRef.current.onAuctionResumed?.(data))
-      }
-      if (options.onAuctionEnded) {
-        channel.bind('auction-ended', (data: any) => callbacksRef.current.onAuctionEnded?.(data))
-      }
-      if (options.onPlayersUpdated) {
-        channel.bind('players-updated', (data: any) => callbacksRef.current.onPlayersUpdated?.(data))
-      }
-
-      // Connection status handlers
+      
+      // Setup channel immediately (Pusher will queue subscriptions if not connected yet)
+      setupChannel()
+      
+      // Connection status handlers - these are redundant, already handled in initializePusher
       const handleConnected = () => {
-        setIsConnected(true)
-        setError(null)
+        console.log('🔄 Connection state changed to connected')
       }
       
       const handleDisconnected = () => {
-        setIsConnected(false)
+        console.log('🔄 Connection state changed to disconnected')
       }
       
       const handleError = (err: any) => {
+        console.error('🔄 Connection error:', err)
         setError(err.message || 'Connection error')
-        setIsConnected(false)
       }
 
+      pusher.connection.bind('state_change', (states: any) => {
+        console.log('🔄 Pusher connection state change:', states.previous, '→', states.current)
+      })
       pusher.connection.bind('connected', handleConnected)
       pusher.connection.bind('disconnected', handleDisconnected)
       pusher.connection.bind('error', handleError)
 
       // Cleanup
       return () => {
-        // Unbind all event listeners
-        channel.unbind('new-bid')
-        channel.unbind('bid-undo')
-        channel.unbind('player-sold')
-        channel.unbind('sale-undo')
-        channel.unbind('new-player')
-        channel.unbind('timer-update')
-        channel.unbind('auction-paused')
-        channel.unbind('auction-resumed')
-        channel.unbind('auction-ended')
-        channel.unbind('players-updated')
-        
-        // Unbind connection handlers
-        pusher.connection.unbind('connected', handleConnected)
-        pusher.connection.unbind('disconnected', handleDisconnected)
-        pusher.connection.unbind('error', handleError)
-        
-        // Unsubscribe channel
-        if (channelRef.current) {
-          pusher.unsubscribe(`auction-${auctionId}`)
-          channelRef.current = null
-        }
+        console.log('🧹 Cleanup called for:', channelName, '- doing nothing to preserve Pusher bindings')
+        // Do NOTHING in cleanup
+        // React 18 Strict Mode will call this and remount immediately
+        // If we unbind anything, the channel bindings break and never recover
+        // The channel and all bindings will persist across remounts
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize Pusher')

@@ -15,6 +15,8 @@ import { logger } from '@/lib/logger'
 import { useViewerCount } from '@/hooks/use-viewer-count'
 import { PublicChat } from '@/components/public-chat'
 import { ActivityLog } from '@/components/activity-log'
+import PlayerCard from '@/components/player-card'
+import BidAmountStrip from '@/components/bid-amount-strip'
 
 interface BidHistoryEntry {
   bidderId: string
@@ -294,59 +296,98 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   return (
     <div className="p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-4">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-center bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 shadow gap-2 sm:gap-0">
-          <div>
-            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">{auction.name}</h1>
-            <div className="flex gap-2 mt-2">
-              <Badge className="bg-green-500 text-white text-xs sm:text-sm">
-                LIVE
-              </Badge>
-              <Badge variant="outline" className="text-xs sm:text-sm text-gray-900 bg-white border-gray-300 hover:bg-gray-50 dark:text-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:hover:bg-gray-700">Public Viewer</Badge>
+        {/* Compact Dark Header */}
+        <div className="relative bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Title & Badges */}
+            <div className="flex items-center gap-3">
+              <h1 className="text-lg sm:text-xl font-black text-white uppercase">{auction.name}</h1>
+              <Badge className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 animate-pulse">● LIVE</Badge>
+              <Badge className="bg-white/10 text-white border-white/20 text-[10px] font-semibold px-2 py-0.5 hidden sm:inline-flex">Public Viewer</Badge>
+              {viewerCount > 0 && (
+                <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] font-semibold px-2 py-0.5 animate-pulse">
+                  <Eye className="h-3 w-3 mr-1" />
+                  {viewerCount}
+                </Badge>
+              )}
+            </div>
+            
+            {/* Right: Stats & Button */}
+            <div className="flex items-center gap-4">
+              {/* Inline Stats */}
+              <div className="hidden sm:flex items-center gap-3 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400">Total:</span>
+                  <span className="font-bold text-white">{initialStats.total}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400">Sold:</span>
+                  <span className="font-bold text-green-400">{initialStats.sold}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400">Unsold:</span>
+                  <span className="font-bold text-yellow-400">{initialStats.unsold}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400">Left:</span>
+                  <span className="font-bold text-purple-400">{initialStats.remaining}</span>
+                </div>
+                <div className="flex items-center gap-2 pl-3 border-l border-white/20">
+                  <div className="w-20 bg-white/10 rounded-full h-1.5">
+                    <div 
+                      className="h-full bg-gradient-to-r from-green-500 to-blue-500 rounded-full transition-all"
+                      style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-blue-400">
+                    {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+              
+              <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
+                <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
+                  <Trophy className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Teams</span>
+                </Button>
+              </Link>
             </div>
           </div>
           
-          <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              <Trophy className="h-4 w-4 mr-2" />
-              Team Stats
-            </Button>
-          </Link>
-        </div>
-
-        {/* Stats */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-4 shadow border border-gray-200 dark:border-gray-700">
-          <div className="flex flex-wrap items-center justify-between gap-4 sm:gap-6">
-            <div className="flex flex-wrap gap-4 sm:gap-6">
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Players:</span>
-                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">{initialStats.total}</span>
+          {/* Mobile Stats - Two Rows */}
+          <div className="sm:hidden mt-3 space-y-2">
+            {/* Stats Row */}
+            <div className="flex items-center justify-between text-[10px]">
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400">Total:</span>
+                <span className="font-bold text-white">{initialStats.total}</span>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Sold:</span>
-                <span className="text-lg font-bold text-green-600">{initialStats.sold}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400">Sold:</span>
+                <span className="font-bold text-green-400">{initialStats.sold}</span>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Unsold:</span>
-                <span className="text-lg font-bold text-yellow-600">{initialStats.unsold}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400">Unsold:</span>
+                <span className="font-bold text-yellow-400">{initialStats.unsold}</span>
               </div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Remaining:</span>
-                <span className="text-lg font-bold text-blue-600">{initialStats.remaining}</span>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-400">Left:</span>
+                <span className="font-bold text-purple-400">{initialStats.remaining}</span>
               </div>
             </div>
-            {/* Live Viewer Count */}
-            {viewerCount > 0 && (
-              <Badge variant="secondary" className="flex items-center gap-1.5 px-3 py-1 text-sm animate-pulse">
-                <Eye className="h-4 w-4 text-red-500" />
-                <span className="font-semibold">{viewerCount}</span>
-                <span className="text-gray-600 dark:text-gray-400">watching</span>
-              </Badge>
-            )}
+            
+            {/* Progress Bar Row */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-white/10 rounded-full h-1.5">
+                <div 
+                  className="h-full bg-gradient-to-r from-green-500 to-blue-500 rounded-full transition-all"
+                  style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
+                />
+              </div>
+              <span className="text-xs font-bold text-blue-400">
+                {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}%
+              </span>
+            </div>
           </div>
         </div>
 
@@ -386,7 +427,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4">
           {/* Center Stage */}
           <div className="col-span-1 lg:col-span-2 order-1">
-            <Card className="min-h-[300px] sm:min-h-[500px]">
+            {/* Sold Animation */}
+            <Card className="min-h-[300px] sm:min-h-[500px] relative overflow-hidden">
               <AnimatePresence>
                 {soldAnimation && (
                   <motion.div
@@ -399,7 +441,67 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   </motion.div>
                 )}
               </AnimatePresence>
-              <CardHeader>
+              
+              <CardContent className="p-4 space-y-4">
+                {/* New Player Card */}
+                {isClient && (
+                  <PlayerCard
+                    name={playerName}
+                    imageUrl={(() => {
+                      const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
+                      if (!profilePhotoLink) return undefined
+                      const match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                      if (match && match[1]) {
+                        return `/api/proxy-image?id=${match[1]}`
+                      }
+                      return profilePhotoLink
+                    })()}
+                    basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price']}
+                    tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
+                    profileLink={(() => {
+                      const link = (playerData as any)?.['Cricheroes Profile link'] || 
+                                   (playerData as any)?.[' Cricheroes Profile link'] ||
+                                   (playerData as any)?.['cricheroes profile link']
+                      
+                      if (link && typeof link === 'string') {
+                        const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
+                        if (urlMatch && urlMatch[1]) {
+                          return urlMatch[1].trim()
+                        }
+                      }
+                      return undefined
+                    })()}
+                    fields={(() => {
+                      const essentials: Array<{ label: string; value: string }> = []
+                      const add = (label: string, keys: string[]) => {
+                        for (const key of keys) {
+                          const v = (playerData as any)[key]
+                          if (v) {
+                            essentials.push({ label, value: String(v) })
+                            return
+                          }
+                        }
+                      }
+                      add('Batting', ['Batting', 'batting', 'Batting Type', 'batting type', 'BAT', 'Bat'])
+                      add('Bowling', ['Bowling', 'bowling', 'Bowling Type', 'bowling type', 'BOWL', 'Bowl'])
+                      add('Fielding', ['Fielding', 'fielding', 'FIELD', 'Field'])
+                      add('Speciality', ['Speciality', 'speciality', 'Specialty', 'specialty', 'Role', 'role'])
+                      return essentials
+                    })()}
+                  />
+                )}
+                
+                {/* Bid Amount Strip */}
+                {isClient && (
+                  <BidAmountStrip
+                    currentBid={currentBid}
+                    timer={timer}
+                    basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 0}
+                  />
+                )}
+              </CardContent>
+              
+              <CardHeader className="hidden">
                 <div className="flex flex-col items-center gap-3">
                   {(() => {
                     // Try to find profile photo with various field name patterns
@@ -489,7 +591,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   })()}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
+              <CardContent className="hidden space-y-3 sm:space-y-4 p-3 sm:p-6">
                 {/* Essential Fields */}
                 <div className="space-y-3">
                   {(() => {
@@ -819,4 +921,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     </div>
   )
 }
+
+
 

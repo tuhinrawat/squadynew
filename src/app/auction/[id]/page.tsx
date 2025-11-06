@@ -295,7 +295,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       />
       
       {/* Footer */}
-      <footer className="mt-auto bg-gray-900 dark:bg-black text-white py-6 px-4">
+      <footer className="mt-auto bg-gray-900 dark:bg-black text-white py-6 px-4 sticky top-[100vh]">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
