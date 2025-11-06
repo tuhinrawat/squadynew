@@ -79,28 +79,34 @@ export async function POST(
     const body = await request.json()
     const { name, teamName, email, username, password, purseAmount, logoUrl } = body
 
-    // Validate required fields
-    if (!name || !email || !username || !password || !purseAmount) {
+    // Validate required fields (only name and teamName are required)
+    if (!name || !teamName) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Bidder Name and Team Name are required' },
         { status: 400 }
       )
     }
 
-    // Validate password length
-    if (password.length < 6) {
+    // Validate password length if provided
+    if (password && password.length < 6) {
       return NextResponse.json(
         { error: 'Password must be at least 6 characters' },
         { status: 400 }
       )
     }
 
+    // Generate defaults for optional fields
+    const finalUsername = username || `bidder_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    const finalEmail = email || `${finalUsername}@noemail.com`
+    const finalPassword = password || Math.random().toString(36).substring(2, 10)
+    const finalPurseAmount = purseAmount || 10000000
+
     // Check if username is unique for this auction
     const existingBidder = await prisma.bidder.findUnique({
       where: {
         auctionId_username: {
           auctionId: params.id,
-          username: username
+          username: finalUsername
         }
       }
     })
@@ -114,17 +120,17 @@ export async function POST(
 
     // Check if email already exists
     let user = await prisma.user.findUnique({
-      where: { email }
+      where: { email: finalEmail }
     })
 
     if (!user) {
       // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10)
+      const hashedPassword = await bcrypt.hash(finalPassword, 10)
 
       // Create user
       user = await prisma.user.create({
         data: {
-          email,
+          email: finalEmail,
           name,
           password: hashedPassword,
           // role defaults to ADMIN in schema, but we want BIDDER
@@ -145,10 +151,10 @@ export async function POST(
       data: {
         userId: user.id,
         auctionId: params.id,
-        teamName: teamName || null,
-        username,
-        purseAmount: Number(purseAmount),
-        remainingPurse: Number(purseAmount),
+        teamName: teamName,
+        username: finalUsername,
+        purseAmount: Number(finalPurseAmount),
+        remainingPurse: Number(finalPurseAmount),
         logoUrl: logoUrl || null
       },
       include: {
@@ -167,8 +173,8 @@ export async function POST(
       message: 'Bidder created successfully',
       bidder: {
         ...bidder,
-        username,
-        password // Return password so admin can share it
+        username: finalUsername,
+        password: finalPassword // Return password so admin can share it
       }
     })
   } catch (error) {

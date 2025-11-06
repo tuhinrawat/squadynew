@@ -257,8 +257,11 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    value={bidAmount || ''}
-                    onChange={(e) => setBidAmount(Number(e.target.value))}
+                    value={bidAmount === 0 ? '' : bidAmount}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Number(e.target.value)
+                      setBidAmount(value)
+                    }}
                     placeholder={`Min: ₹${nextValidBid.toLocaleString('en-IN')}`}
                     disabled={isPlacingBid || isHighestBidder}
                     className="flex-1"

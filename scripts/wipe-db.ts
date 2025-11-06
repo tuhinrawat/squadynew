@@ -38,11 +38,13 @@ function resolveDatabaseUrl(): string {
 	return first
 }
 
+// Initialize Prisma Client outside main so it's accessible in cleanup handlers
+const prisma = new PrismaClient()
+
 async function main() {
 	// Force Prisma Client to use a direct URL for this maintenance script
 	process.env.DATABASE_URL = resolveDatabaseUrl()
 
-	const prisma = new PrismaClient()
 	const keepUsers = process.argv.includes('--keep-users')
 
 	console.log('Wiping database...')

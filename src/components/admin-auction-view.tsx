@@ -59,14 +59,14 @@ interface PusherBidData {
 
 interface PusherBidUndoData {
   bidderId: string
-  previousBid: number | null
-  remainingPurse?: number // Added for instant UI updates
-  currentBid?: {
+  currentBid: {
     bidderId: string
     amount: number
     bidderName: string
     teamName?: string
-  }
+  } | null
+  countdownSeconds: number
+  remainingPurse?: number // Added for instant UI updates
 }
 
 interface PusherSoldData {
@@ -883,13 +883,56 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               <PlayerCard
                 name={playerName}
                 imageUrl={(() => {
-                  const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
-                  if (!profilePhotoLink) return undefined
-                  const match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
-                  if (match && match[1]) {
-                    return `/api/proxy-image?id=${match[1]}`
+                  // Check all possible column name variations
+                  const profilePhotoLink = playerData['Profile Photo'] || 
+                                          playerData['profile photo'] || 
+                                          playerData['Profile photo'] || 
+                                          playerData['PROFILE PHOTO'] || 
+                                          playerData['profile_photo'] ||
+                                          playerData['ProfilePhoto']
+                  
+                  console.log('=== PROFILE PHOTO DEBUG ===')
+                  console.log('Player Name:', playerName)
+                  console.log('Profile Photo value:', profilePhotoLink)
+                  console.log('Profile Photo type:', typeof profilePhotoLink)
+                  console.log('All player data keys:', Object.keys(playerData))
+                  
+                  if (!profilePhotoLink || profilePhotoLink === '') {
+                    console.log('❌ No profile photo link found')
+                    return undefined
                   }
-                  return profilePhotoLink
+                  
+                  const photoStr = String(profilePhotoLink).trim()
+                  console.log('Trimmed photo string:', photoStr)
+                  
+                  // Try to extract Google Drive ID from various formats
+                  // Format 1: https://drive.google.com/file/d/[ID]/view
+                  let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                  if (match && match[1]) {
+                    const finalUrl = `/api/proxy-image?id=${match[1]}`
+                    console.log('✅ Extracted ID (format 1):', match[1])
+                    console.log('✅ Final URL:', finalUrl)
+                    return finalUrl
+                  }
+                  
+                  // Format 2: https://drive.google.com/open?id=[ID]
+                  match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+                  if (match && match[1]) {
+                    const finalUrl = `/api/proxy-image?id=${match[1]}`
+                    console.log('✅ Extracted ID (format 2):', match[1])
+                    console.log('✅ Final URL:', finalUrl)
+                    return finalUrl
+                  }
+                  
+                  // If it's already a valid URL, use it directly
+                  if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+                    console.log('✅ Using direct URL:', photoStr)
+                    return photoStr
+                  }
+                  
+                  console.log('⚠️ Unknown photo format')
+                  console.log('===========================')
+                  return undefined
                 })()}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price']}
                 tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
@@ -1235,14 +1278,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       <Input
                         type="number"
                         placeholder="Enter amount in thousands"
-                        value={bidAmount}
+                        value={bidAmount === 0 ? '' : bidAmount}
                         onChange={(e) => {
-                          setBidAmount(Number(e.target.value))
+                          const value = e.target.value === '' ? 0 : Number(e.target.value)
+                          setBidAmount(value)
                           setError('')
                         }}
                         min="1000"
                         step="1000"
-                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                       />
                       <Button 
                         className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap px-6"

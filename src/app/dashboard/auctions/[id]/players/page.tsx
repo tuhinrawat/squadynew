@@ -37,6 +37,9 @@ export default function PlayerManagement() {
   const [newPlayerData, setNewPlayerData] = useState<Record<string, string>>({})
   const [addingPlayer, setAddingPlayer] = useState(false)
   const [auctionRules, setAuctionRules] = useState<any>(null)
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
+  const [batchProcessing, setBatchProcessing] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([])
 
   // Fetch players and auction details on component mount
   useEffect(() => {
@@ -53,6 +56,10 @@ export default function PlayerManagement() {
         // Load saved column order if available
         if (data.auction.columnOrder && Array.isArray(data.auction.columnOrder)) {
           setColumns(data.auction.columnOrder)
+        }
+        // Load saved visible columns if available
+        if (data.auction.visibleColumns && Array.isArray(data.auction.visibleColumns)) {
+          setVisibleColumns(data.auction.visibleColumns)
         }
         // Store auction rules
         if (data.auction.rules) {
@@ -244,6 +251,20 @@ export default function PlayerManagement() {
     setColumns(newColumnOrder)
   }
 
+  const handleVisibleColumnsChange = async (newVisibleColumns: string[]) => {
+    setVisibleColumns(newVisibleColumns)
+    // Save to backend
+    try {
+      await fetch(`/api/auctions/${auctionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibleColumns: newVisibleColumns })
+      })
+    } catch (error) {
+      logger.error('Error saving visible columns:', error)
+    }
+  }
+
   const handleEditPlayer = async (player: any) => {
     logger.log('Edit player clicked')
     // For now, just show an alert with player data
@@ -356,6 +377,94 @@ export default function PlayerManagement() {
     }
   }
 
+  const handleBatchMarkIcon = async (markAsIcon: boolean) => {
+    if (selectedPlayerIds.size === 0) {
+      setError('Please select at least one player')
+      return
+    }
+
+    const action = markAsIcon ? 'mark as icon players' : 'remove icon player status from'
+    if (!confirm(`Are you sure you want to ${action} ${selectedPlayerIds.size} player(s)?`)) return
+
+    setBatchProcessing(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/auctions/${auctionId}/players/batch-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerIds: Array.from(selectedPlayerIds),
+          updates: { isIcon: markAsIcon }
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSuccess(data.message || `Successfully updated ${selectedPlayerIds.size} player(s)!`)
+        setSelectedPlayerIds(new Set()) // Clear selection
+        await fetchPlayers()
+      } else {
+        setError(data.error || `Failed to update players`)
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+    } finally {
+      setBatchProcessing(false)
+      // Clear messages after 5 seconds
+      setTimeout(() => {
+        setError('')
+        setSuccess('')
+      }, 5000)
+    }
+  }
+
+  const handleBatchRetire = async (retire: boolean) => {
+    if (selectedPlayerIds.size === 0) {
+      setError('Please select at least one player')
+      return
+    }
+
+    const action = retire ? 'retire' : 'unretire'
+    if (!confirm(`Are you sure you want to ${action} ${selectedPlayerIds.size} player(s)?`)) return
+
+    setBatchProcessing(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/auctions/${auctionId}/players/batch-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerIds: Array.from(selectedPlayerIds),
+          updates: { status: retire ? 'RETIRED' : 'AVAILABLE' }
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSuccess(data.message || `Successfully ${action}d ${selectedPlayerIds.size} player(s)!`)
+        setSelectedPlayerIds(new Set()) // Clear selection
+        await fetchPlayers()
+      } else {
+        setError(data.error || `Failed to ${action} players`)
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+    } finally {
+      setBatchProcessing(false)
+      // Clear messages after 5 seconds
+      setTimeout(() => {
+        setError('')
+        setSuccess('')
+      }, 5000)
+    }
+  }
+
   // Convert players to DataTable format and sort by isIcon (icon players first)
   const tableData = players.map(player => ({
     ...player.data,
@@ -384,13 +493,49 @@ export default function PlayerManagement() {
       key: 'isIcon',
       label: 'Icon Player',
       sortable: true,
-      filterable: true
+      filterable: true,
+      render: (value: boolean) => (
+        value ? (
+          <Badge className="bg-purple-600 text-white font-semibold">
+            ⭐ Icon Player
+          </Badge>
+        ) : (
+          <span className="text-gray-400 text-sm">-</span>
+        )
+      )
     },
     {
       key: 'status',
       label: 'Status',
       sortable: true,
-      filterable: true
+      filterable: true,
+      render: (value: string) => {
+        if (value === 'RETIRED') {
+          return (
+            <Badge className="bg-orange-600 text-white font-semibold">
+              🏁 Retired
+            </Badge>
+          )
+        } else if (value === 'SOLD') {
+          return (
+            <Badge className="bg-green-600 text-white font-semibold">
+              ✓ Sold
+            </Badge>
+          )
+        } else if (value === 'UNSOLD') {
+          return (
+            <Badge className="bg-gray-600 text-white font-semibold">
+              ✗ Unsold
+            </Badge>
+          )
+        } else {
+          return (
+            <Badge className="bg-blue-600 text-white font-semibold">
+              Available
+            </Badge>
+          )
+        }
+      }
     },
     {
       key: 'createdAt',
@@ -586,17 +731,79 @@ export default function PlayerManagement() {
               )}
             </div>
 
+            {/* Batch Action Buttons */}
+            {selectedPlayerIds.size > 0 && (
+              <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        {selectedPlayerIds.size} player(s) selected
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedPlayerIds(new Set())}
+                        className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                      >
+                        Clear selection
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        onClick={() => handleBatchMarkIcon(true)}
+                        disabled={batchProcessing}
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        {batchProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        ⭐ Mark as Icon
+                      </Button>
+                      <Button
+                        onClick={() => handleBatchMarkIcon(false)}
+                        disabled={batchProcessing}
+                        variant="outline"
+                        className="border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                      >
+                        {batchProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Remove Icon
+                      </Button>
+                      <Button
+                        onClick={() => handleBatchRetire(true)}
+                        disabled={batchProcessing}
+                        className="bg-orange-600 hover:bg-orange-700 text-white"
+                      >
+                        {batchProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Mark as Retired
+                      </Button>
+                      <Button
+                        onClick={() => handleBatchRetire(false)}
+                        disabled={batchProcessing}
+                        variant="outline"
+                        className="border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                      >
+                        {batchProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Mark as Available
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="overflow-x-auto max-w-full">
               <DataTable
                 data={tableData}
                 columns={tableColumns}
                 onEdit={handleEditPlayer}
                 onDelete={handleDeletePlayer}
-                onRetire={handleRetirePlayer}
-                onIconPlayerToggle={handleToggleIconPlayer}
                 onColumnReorder={handleColumnReorder}
                 searchPlaceholder="Search players..."
                 emptyMessage="No players found. Upload a file or add players manually."
+                enableSelection={true}
+                selectedItems={selectedPlayerIds}
+                onSelectionChange={setSelectedPlayerIds}
+                visibleColumnsInitial={visibleColumns}
+                onVisibleColumnsChange={handleVisibleColumnsChange}
                 title={
                   <div className="flex items-center gap-2">
                     <span>Players ({players.length})</span>

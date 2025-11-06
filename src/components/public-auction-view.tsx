@@ -448,11 +448,22 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   <PlayerCard
                     name={playerName}
                     imageUrl={(() => {
-                      const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
+                      const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo'] || playerData['PROFILE PHOTO'] || playerData['profile_photo']
                       if (!profilePhotoLink) return undefined
-                      const match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                      // Try to extract Google Drive ID from various formats
+                      // Format 1: https://drive.google.com/file/d/[ID]/view
+                      let match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
                       if (match && match[1]) {
                         return `/api/proxy-image?id=${match[1]}`
+                      }
+                      // Format 2: https://drive.google.com/open?id=[ID]
+                      match = profilePhotoLink.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+                      if (match && match[1]) {
+                        return `/api/proxy-image?id=${match[1]}`
+                      }
+                      // If it's already a valid URL, use it directly
+                      if (typeof profilePhotoLink === 'string' && (profilePhotoLink.startsWith('http://') || profilePhotoLink.startsWith('https://'))) {
+                        return profilePhotoLink
                       }
                       return profilePhotoLink
                     })()}
@@ -494,9 +505,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 {/* Bid Amount Strip */}
                 {isClient && (
                   <BidAmountStrip
-                    currentBid={currentBid}
-                    timer={timer}
-                    basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 0}
+                    amount={currentBid?.amount ?? null}
+                    bidderName={currentBid?.bidderName}
+                    teamName={currentBid?.teamName}
+                    timerSeconds={timer}
+                    nextMin={(currentBid?.amount || 0) + ((auction.rules as any)?.minBidIncrement || 1000)}
                   />
                 )}
               </CardContent>

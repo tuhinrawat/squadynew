@@ -41,6 +41,10 @@ export interface AuctionEventData {
     bidderRemainingPurse?: number // Include purse update
     updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch purse updates
   }
+  'player-unsold': {
+    playerId: string
+    playerName: string
+  }
   'sale-undo': {
     playerId: string
     updatedBidders?: Array<{ id: string; remainingPurse: number }>

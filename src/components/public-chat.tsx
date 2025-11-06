@@ -194,11 +194,13 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
 
     // Listen for emoji reactions from other users
     channel.bind('emoji-reaction', (data: { emoji: string; userId: string; timestamp: number }) => {
+      console.log('🎭 Received emoji reaction event:', data)
       // Create flying emoji animation for all users
       const id = `${data.timestamp}-${Math.random()}`
       const left = Math.random() * 70 + 15 // Random position between 15% and 85%
       
       setFlyingEmojis(prev => [...prev, { id, emoji: data.emoji, left }])
+      console.log('✨ Added flying emoji:', data.emoji, 'at', left + '%')
       
       // Remove after animation completes
       setTimeout(() => {
@@ -283,8 +285,9 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
 
   const sendEmojiReaction = useCallback(async (emoji: string) => {
     // Send emoji to server to broadcast to all users
+    console.log('🎭 Sending emoji reaction:', emoji)
     try {
-      await fetch(`/api/auction/${auctionId}/chat`, {
+      const response = await fetch(`/api/auction/${auctionId}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -293,6 +296,11 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
           emoji 
         })
       })
+      if (response.ok) {
+        console.log('✅ Emoji reaction sent successfully')
+      } else {
+        console.error('❌ Emoji reaction failed:', response.status)
+      }
     } catch (error) {
       console.error('Failed to send emoji reaction:', error)
     }
@@ -436,9 +444,13 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
                     {quickEmojis.map((emoji) => (
                       <motion.button
                         key={emoji}
-                        onClick={() => sendEmojiReaction(emoji)}
+                        onClick={() => {
+                          console.log('🎯 Emoji clicked:', emoji, 'hasUsername:', hasSetUsername, 'username:', username)
+                          sendEmojiReaction(emoji)
+                        }}
                         whileTap={{ scale: 1.5 }}
-                        className="text-3xl hover:scale-125 transition-transform active:scale-150"
+                        disabled={!hasSetUsername}
+                        className="text-3xl hover:scale-125 transition-transform active:scale-150 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {emoji}
                       </motion.button>
@@ -489,6 +501,41 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
       {/* Desktop Compact Chat Window - Facebook Style */}
       {!isMobile && isOpen && (
         <div className="fixed bottom-6 right-24 z-50 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+          {/* Flying Emojis Overlay */}
+          <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden rounded-lg">
+            {flyingEmojis.map(({ id, emoji, left }) => {
+              // Random zigzag offset
+              const zigzagOffset = (Math.random() - 0.5) * 40 // -20 to +20
+              
+              return (
+                <motion.div
+                  key={id}
+                  initial={{ 
+                    bottom: '15%', // Start from emoji bar area
+                    left: `${left}%`,
+                    opacity: 0, 
+                    scale: 0.8 
+                  }}
+                  animate={{ 
+                    bottom: ['15%', '50%', '100%'], // Flow upward in stages
+                    left: [`${left}%`, `${left + zigzagOffset}%`, `${left + zigzagOffset * 0.5}%`], // Zigzag motion
+                    opacity: [0, 1, 1, 0.7, 0],
+                    scale: [0.8, 1.2, 1, 0.8, 0.5],
+                    rotate: [0, 10, -5, 15, 0]
+                  }}
+                  transition={{ 
+                    duration: 3, 
+                    ease: 'easeOut',
+                    times: [0, 0.3, 1] // Timing for keyframes
+                  }}
+                  className="absolute text-2xl"
+                >
+                  {emoji}
+                </motion.div>
+              )
+            })}
+          </div>
+          
           {/* Compact Header */}
           <div className="bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -550,8 +597,12 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
                   {quickEmojis.map((emoji) => (
                     <button
                       key={emoji}
-                      onClick={() => sendEmojiReaction(emoji)}
-                      className="text-2xl hover:scale-125 transition-transform"
+                      onClick={() => {
+                        console.log('🎯 Emoji clicked:', emoji, 'hasUsername:', hasSetUsername, 'username:', username)
+                        sendEmojiReaction(emoji)
+                      }}
+                      disabled={!hasSetUsername}
+                      className="text-2xl hover:scale-125 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {emoji}
                     </button>

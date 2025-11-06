@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ChevronDown, Search, Filter, ArrowUpDown, Eye, EyeOff, GripVertical } from 'lucide-react'
 import { logger } from '@/lib/logger'
 
@@ -17,6 +18,7 @@ export interface DataTableColumn {
   type?: 'string' | 'number' | 'date'
   sortable?: boolean
   filterable?: boolean
+  render?: (value: any, item: Record<string, any>) => React.ReactNode
 }
 
 export interface DataTableProps {
@@ -31,6 +33,11 @@ export interface DataTableProps {
   onColumnReorder?: (reorderedColumns: DataTableColumn[]) => void
   title?: string | React.ReactNode
   description?: string
+  enableSelection?: boolean
+  selectedItems?: Set<string>
+  onSelectionChange?: (selectedIds: Set<string>) => void
+  visibleColumnsInitial?: string[]
+  onVisibleColumnsChange?: (visibleColumns: string[]) => void
 }
 
 type SortConfig = {
@@ -56,13 +63,21 @@ export function DataTable({
   emptyMessage = "No data available",
   onColumnReorder,
   title,
-  description
+  description,
+  enableSelection = false,
+  selectedItems = new Set(),
+  onSelectionChange,
+  visibleColumnsInitial,
+  onVisibleColumnsChange
 }: DataTableProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null)
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(
-    new Set(columns.slice(0, 6).map(col => col.key))
-  )
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+    if (visibleColumnsInitial && visibleColumnsInitial.length > 0) {
+      return new Set(visibleColumnsInitial)
+    }
+    return new Set(columns.slice(0, 6).map(col => col.key))
+  })
   logger.log('DataTable columns init')
   const [filters, setFilters] = useState<FilterConfig>({})
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null)
@@ -144,6 +159,10 @@ export function DataTable({
         logger.log('Added column', key)
       }
       logger.log('New visible columns size', newSet.size)
+      // Notify parent of change
+      if (onVisibleColumnsChange) {
+        onVisibleColumnsChange(Array.from(newSet))
+      }
       return newSet
     })
   }
@@ -287,12 +306,18 @@ export function DataTable({
               className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
               onClick={() => {
                 const isShowingAll = visibleColumns.size === columns.length
+                let newColumns: Set<string>
                 if (isShowingAll) {
                   // Show only first 6 columns
-                  setVisibleColumns(new Set(columns.slice(0, 6).map(col => col.key)))
+                  newColumns = new Set(columns.slice(0, 6).map(col => col.key))
                 } else {
                   // Show all columns
-                  setVisibleColumns(new Set(columns.map(col => col.key)))
+                  newColumns = new Set(columns.map(col => col.key))
+                }
+                setVisibleColumns(newColumns)
+                // Notify parent of change
+                if (onVisibleColumnsChange) {
+                  onVisibleColumnsChange(Array.from(newColumns))
                 }
               }}
             >
@@ -353,6 +378,24 @@ export function DataTable({
               <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
+                    {enableSelection && (
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedItems.size === filteredAndSortedData.length && filteredAndSortedData.length > 0}
+                          onCheckedChange={(checked) => {
+                            if (onSelectionChange) {
+                              if (checked) {
+                                // Select all
+                                onSelectionChange(new Set(filteredAndSortedData.map(item => item.id)))
+                              } else {
+                                // Deselect all
+                                onSelectionChange(new Set())
+                              }
+                            }
+                          }}
+                        />
+                      </TableHead>
+                    )}
                     {visibleColumnsList.map(column => (
                       <TableHead 
                         key={column.key} 
@@ -447,11 +490,33 @@ export function DataTable({
                 <TableBody>
                   {filteredAndSortedData.map((item, index) => (
                     <TableRow key={index}>
+                      {enableSelection && (
+                        <TableCell className="w-12">
+                          <Checkbox
+                            checked={selectedItems.has(item.id)}
+                            onCheckedChange={(checked) => {
+                              if (onSelectionChange) {
+                                const newSelection = new Set(selectedItems)
+                                if (checked) {
+                                  newSelection.add(item.id)
+                                } else {
+                                  newSelection.delete(item.id)
+                                }
+                                onSelectionChange(newSelection)
+                              }
+                            }}
+                          />
+                        </TableCell>
+                      )}
                       {visibleColumnsList.map(column => (
                         <TableCell key={column.key} className="min-w-[120px]">
-                          <div className="truncate max-w-[200px]" title={item[column.key]?.toString() || '-'}>
-                            {item[column.key]?.toString() || '-'}
-                          </div>
+                          {column.render ? (
+                            column.render(item[column.key], item)
+                          ) : (
+                            <div className="truncate max-w-[200px]" title={item[column.key]?.toString() || '-'}>
+                              {item[column.key]?.toString() || '-'}
+                            </div>
+                          )}
                         </TableCell>
                       ))}
                       {(onEdit || onDelete || onRetire || onIconPlayerToggle) && (

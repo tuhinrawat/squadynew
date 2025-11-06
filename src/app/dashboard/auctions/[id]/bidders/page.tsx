@@ -347,26 +347,27 @@ export default function BidderManagement() {
           <form onSubmit={handleCreateBidder} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
+                <Label htmlFor="name">Bidder Name *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Full name"
+                  placeholder="Bidder full name"
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="teamName">Team Name</Label>
+                <Label htmlFor="teamName">Team Name *</Label>
                 <Input
                   id="teamName"
                   value={formData.teamName}
                   onChange={(e) => setFormData({ ...formData, teamName: e.target.value })}
-                  placeholder="Team name (optional)"
+                  placeholder="Team name"
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="logoFile">Team Profile Photo</Label>
+                <Label htmlFor="logoFile">Team Photo *</Label>
                 <Input
                   id="logoFile"
                   type="file"
@@ -384,55 +385,52 @@ export default function BidderManagement() {
                     }
                   }}
                   className="cursor-pointer"
+                  required
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400">Optional. Will be displayed in team stats</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Required. Will be displayed in team stats</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email *</Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="email@example.com"
-                  required
+                  placeholder="email@example.com (optional)"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="username">Username *</Label>
+                <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
                   value={formData.username}
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                  placeholder="Unique username"
-                  required
+                  placeholder="Unique username (optional)"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Password *</Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Min 6 characters"
+                  placeholder="Min 6 characters (optional)"
                   minLength={6}
-                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="purseAmount">Initial Purse Amount (₹) *</Label>
+                <Label htmlFor="purseAmount">Initial Purse Amount (₹)</Label>
                 <Input
                   id="purseAmount"
                   type="number"
                   value={formData.purseAmount}
                   onChange={(e) => setFormData({ ...formData, purseAmount: Number(e.target.value) })}
-                  placeholder="₹ 1,00,00,000"
-                  required
+                  placeholder="₹ 1,00,00,000 (optional)"
                 />
               </div>
             </div>
