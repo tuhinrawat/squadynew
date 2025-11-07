@@ -98,10 +98,8 @@ export async function POST(
           currentAuctionData = updatedAuction
           availablePlayers = updatedAuction.players.filter(p => p.status === 'AVAILABLE')
           
-          // Broadcast that unsold players have been recycled
-          await triggerAuctionEvent(params.id, 'unsold-players-recycled', {
-            count: unsoldPlayers.length
-          } as any).catch(err => console.error('Pusher error (non-critical):', err))
+          // Broadcast players updated event to notify clients of recycled players
+          triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
         }
       }
     }

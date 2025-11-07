@@ -320,7 +320,17 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
 
   if (auction.status === 'COMPLETED') {
     // Show results view
-    return <ResultsView auction={auction} userId={session.user.id} userRole={session.user.role} />
+    if (session) {
+      return <ResultsView auction={auction} userId={session.user.id} userRole={session.user.role} />
+    }
+    // If no session (public access), use empty userId and BIDDER role (same pattern as line 68)
+    return <ResultsView auction={auction} userId="" userRole="BIDDER" />
+  }
+
+  // At this point, we should have a session (non-published auctions require auth, published ones return early)
+  // But add a safety check for TypeScript
+  if (!session) {
+    redirect('/signin')
   }
 
   // Use AdminAuctionView for all authenticated users
@@ -328,20 +338,21 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
   const viewMode = isSuperAdmin || (isAdmin && isCreator) ? 'admin' : 'bidder'
   
   // Determine breadcrumb paths based on user role
-  const homePath = session.user?.role === 'BIDDER' || isParticipant ? '/bidder/auctions' : '/dashboard'
-  const homeLabel = session.user?.role === 'BIDDER' || isParticipant ? 'My Auctions' : 'Dashboard'
+  const homePath = session.user.role === 'BIDDER' || isParticipant ? '/bidder/auctions' : '/dashboard'
+  const homeLabel = session.user.role === 'BIDDER' || isParticipant ? 'My Auctions' : 'Dashboard'
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Pre-Auction Banner - Show when published but not live */}
-      {auction.isPublished && auction.status !== 'LIVE' && auction.status !== 'COMPLETED' && auction.scheduledStartDate && (
+      {/* Note: COMPLETED status is already handled earlier, so this won't execute for COMPLETED */}
+      {auction.isPublished && auction.status !== 'LIVE' && auction.scheduledStartDate && (
         <PreAuctionBanner 
           scheduledStartDate={auction.scheduledStartDate}
           auctionName={auction.name}
         />
       )}
       {/* Header with Logo and User Info */}
-      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${auction.isPublished && auction.status !== 'LIVE' && auction.status !== 'COMPLETED' && auction.scheduledStartDate ? 'mt-[88px]' : ''}`}>
+      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${auction.isPublished && auction.status !== 'LIVE' && auction.scheduledStartDate ? 'mt-[88px]' : ''}`}>
         <div className="max-w-full mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
@@ -357,7 +368,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
               </a>
               <div className="hidden sm:flex items-center gap-2 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">Welcome,</span>
-                <span className="font-semibold text-gray-900 dark:text-gray-100">{session.user.name}</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">{session?.user?.name || 'User'}</span>
               </div>
               <form action="/api/auth/signout" method="post">
                 <Button type="submit" variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
@@ -413,7 +424,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             </div>
             <div className="flex items-center gap-6 text-sm text-gray-400">
               <span>Status: {auction.status}</span>
-              {session.user?.role === 'SUPER_ADMIN' && (
+              {session?.user?.role === 'SUPER_ADMIN' && (
                 <span>Super Admin Mode</span>
               )}
             </div>

@@ -98,8 +98,9 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     // Parse scheduledStartDate if it exists
     let scheduledStartDate = ''
     let scheduledStartTime = ''
-    if (auction.scheduledStartDate) {
-      const date = new Date(auction.scheduledStartDate)
+    const auctionWithDate = auction as any // Type assertion to access scheduledStartDate
+    if (auctionWithDate.scheduledStartDate) {
+      const date = new Date(auctionWithDate.scheduledStartDate)
       scheduledStartDate = date.toISOString().split('T')[0]
       scheduledStartTime = date.toTimeString().slice(0, 5) // HH:MM format
     }
