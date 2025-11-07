@@ -161,11 +161,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const soldAnimationRef = useRef(false)
+  const showPlayerRevealRef = useRef(false)
+  const pendingPlayerRef = useRef<Player | null>(null)
   
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     soldAnimationRef.current = soldAnimation
   }, [soldAnimation])
+  
+  useEffect(() => {
+    showPlayerRevealRef.current = showPlayerReveal
+  }, [showPlayerReveal])
+  
+  useEffect(() => {
+    pendingPlayerRef.current = pendingPlayer
+  }, [pendingPlayer])
 
   useEffect(() => {
     try {
@@ -186,6 +196,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       if (data.auction?.bidHistory && Array.isArray(data.auction.bidHistory)) {
         // Update full bid history - the useEffect will filter it for current player
         setFullBidHistory(data.auction.bidHistory)
+      }
+      
+      // Also update bidders to ensure balance is current
+      if (data.auction?.bidders) {
+        console.log('🔄 Refreshing bidders balance from server')
+        setBidders(data.auction.bidders)
       }
     } catch (error) {
       console.error('Failed to refresh auction state:', error)
@@ -452,22 +468,34 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       // Store the new player
       setPendingPlayer(data.player)
       
+      console.log('🎬 handleNewPlayer called (from Pusher):', {
+        hasPlayer: !!data.player,
+        playerName: (data.player?.data as any)?.Name || (data.player?.data as any)?.name,
+        showPlayerReveal: showPlayerRevealRef.current,
+        hasPendingPlayer: !!pendingPlayerRef.current
+      })
+      
+      // If animation is already showing (triggered from handleMarkSold/handleMarkUnsold),
+      // just update the pending player - don't restart the animation
+      if (showPlayerRevealRef.current) {
+        console.log('🎬 Animation already running, just updating pending player')
+        // Animation is already running, just ensure pending player is updated
+        // The animation will use the updated pendingPlayer
+        return
+      }
+      
+      // If animation is not showing yet, start it
       // Check if sold animation is showing - if so, delay reveal animation until after it closes
-      // The sold animation shows for 3 seconds, so wait for it to complete
-      // Use ref to avoid stale closure issues
       if (soldAnimationRef.current) {
         console.log('⏳ Sold animation is showing, delaying reveal animation by 3s')
         setTimeout(() => {
+          console.log('🎬 Delayed reveal animation starting now (from Pusher)')
           setShowPlayerReveal(true)
-          console.log('🎬 Reveal animation started after sold banner closed')
         }, 3000)
       } else {
         // Show reveal animation immediately if sold animation is not showing
+        console.log('🎬 No sold animation, starting reveal animation immediately (from Pusher)')
         setShowPlayerReveal(true)
-        console.log('🎬 Animation state set immediately:', {
-          showPlayerReveal: true,
-          hasPendingPlayer: !!data.player
-        })
       }
       
       // Don't update current player yet - wait for animation to complete
@@ -619,25 +647,40 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setSoldAnimation(true)
       toast.success('Player marked as sold!')
       
-      // Try to use Pusher event for animation, but have fallback if it doesn't arrive
+      // Trigger reveal animation immediately if we have next player
+      // Don't wait for Pusher - start animation right away for better UX
       if (data.nextPlayer) {
+        console.log('🎬 Triggering reveal animation immediately with next player from API')
+        // Store the next player for animation
+        setPendingPlayer(data.nextPlayer)
+        
         // Clear any existing fallback timeout
         if (fallbackTimeoutRef.current) {
           clearTimeout(fallbackTimeoutRef.current)
+          fallbackTimeoutRef.current = null
         }
         
-        // Set a timeout fallback in case Pusher event doesn't arrive
-        // Wait for sold animation (3s) + buffer (1.5s) = 4.5s total
+        // Start reveal animation after sold animation closes (3 seconds)
+        // The sold animation shows for 3 seconds, so delay reveal by 3s
+        setTimeout(() => {
+          console.log('🎬 Starting reveal animation after sold banner closed')
+          setShowPlayerReveal(true)
+        }, 3000)
+        
+        // Set a timeout fallback in case animation doesn't complete
+        // Wait for sold animation (3s) + reveal animation (5s) + buffer (1.5s) = 9.5s total
         fallbackTimeoutRef.current = setTimeout(() => {
-          // If we reach here, Pusher event didn't arrive in time
-          console.warn('⚠️ Pusher new-player event not received within 4.5s, using fallback')
+          // If we reach here, something went wrong with animation
+          console.warn('⚠️ Animation not completed within 9.5s, using fallback')
           setCurrentPlayer(data.nextPlayer)
           setCurrentBid(null)
           setBidHistory([])
           setHighestBidderId(null)
           setIsMarkingSold(false)
+          // Refresh bidders balance when next player is set
+          refreshAuctionState()
           fallbackTimeoutRef.current = null
-        }, 4500) // 3s for sold animation + 1.5s buffer
+        }, 9500) // 3s sold animation + 5s reveal animation + 1.5s buffer
       }
       
       setTimeout(() => {
@@ -677,24 +720,37 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       const data = await response.json()
       toast.success('Player marked as unsold')
       
-      // Try to use Pusher event for animation, but have fallback if it doesn't arrive
+      // Trigger reveal animation immediately if we have next player
+      // Don't wait for Pusher - start animation right away for better UX
       if (data.nextPlayer) {
+        console.log('🎬 Triggering reveal animation immediately with next player from API (unsold)')
+        // Store the next player for animation
+        setPendingPlayer(data.nextPlayer)
+        
         // Clear any existing fallback timeout
         if (fallbackTimeoutRef.current) {
           clearTimeout(fallbackTimeoutRef.current)
+          fallbackTimeoutRef.current = null
         }
         
-        // Set a timeout fallback in case Pusher event doesn't arrive
+        // Start reveal animation immediately (no sold banner for unsold)
+        console.log('🎬 Starting reveal animation immediately (unsold)')
+        setShowPlayerReveal(true)
+        
+        // Set a timeout fallback in case animation doesn't complete
+        // Wait for reveal animation (5s) + buffer (1.5s) = 6.5s total
         fallbackTimeoutRef.current = setTimeout(() => {
-          // If we reach here, Pusher event didn't arrive in time
-          console.warn('⚠️ Pusher new-player event not received within 1.5s, using fallback')
+          // If we reach here, something went wrong with animation
+          console.warn('⚠️ Animation not completed within 6.5s, using fallback')
           setCurrentPlayer(data.nextPlayer)
           setCurrentBid(null)
           setBidHistory([])
           setHighestBidderId(null)
           setIsMarkingUnsold(false)
+          // Refresh bidders balance when next player is set
+          refreshAuctionState()
           fallbackTimeoutRef.current = null
-        }, 1500)
+        }, 6500)
       } else {
         setIsMarkingUnsold(false)
       }
@@ -816,8 +872,27 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       showPlayerReveal, 
       hasPendingPlayer: !!pendingPlayer,
       pendingPlayerName,
-      allPlayerNamesCount: allPlayerNames.length
+      allPlayerNamesCount: allPlayerNames.length,
+      shouldRender: showPlayerReveal && !!pendingPlayer
     })
+  }, [showPlayerReveal, pendingPlayer, pendingPlayerName, allPlayerNames])
+  
+  // Debug logging for when animation should render
+  useEffect(() => {
+    if (showPlayerReveal && pendingPlayer) {
+      console.log('🎭 Animation SHOULD be rendering now:', {
+        showPlayerReveal,
+        hasPendingPlayer: !!pendingPlayer,
+        pendingPlayerName,
+        allPlayerNamesCount: allPlayerNames.length
+      })
+    } else {
+      console.log('🎭 Animation NOT rendering:', {
+        showPlayerReveal,
+        hasPendingPlayer: !!pendingPlayer,
+        reason: !showPlayerReveal ? 'showPlayerReveal is false' : 'pendingPlayer is null'
+      })
+    }
   }, [showPlayerReveal, pendingPlayer, pendingPlayerName, allPlayerNames])
 
   // Cleanup fallback timeout on unmount
@@ -1048,9 +1123,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               {/* Player Card Container with Animation Overlay */}
               <div className="relative">
                 {/* Player Reveal Animation - Inside Player Card */}
-                <AnimatePresence>
+                <AnimatePresence mode="wait">
                   {showPlayerReveal && pendingPlayer && (
                     <PlayerRevealAnimation
+                      key={`reveal-${pendingPlayer.id}`}
                       allPlayerNames={allPlayerNames}
                       finalPlayerName={pendingPlayerName}
                       onComplete={handleRevealComplete}
@@ -1336,7 +1412,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       bidderName={currentBid?.bidderName}
                       teamName={currentBid?.teamName}
                       timerSeconds={timer}
-                      nextMin={(currentBid?.amount || 0) + ((auction.rules as any)?.minBidIncrement || 1000)}
+                      nextMin={(() => {
+                        const currentBidAmount = currentBid?.amount || 0
+                        const rules = auction.rules as any
+                        const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                        return currentBidAmount + minIncrement
+                      })()}
                     />
                   </div>
                 )}
@@ -1387,9 +1468,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         return
                       }
                       
+                      // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+                      const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
-                      const minIncrement = rules?.minBidIncrement || 1000
-                      const totalBid = (currentBid?.amount || 0) + minIncrement
+                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const totalBid = currentBidAmount + minIncrement
                       
                       if (totalBid > userBidder.remainingPurse) {
                         setError('Insufficient remaining purse')
@@ -1458,17 +1541,19 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                             return
                           }
 
-                          // Validate bid is a multiple of 1000
-                          if (bidAmount % 1000 !== 0) {
-                            setError('Bid amount must be in multiples of ₹1,000')
+                          // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+                          const currentBidAmount = currentBid?.amount || 0
+                          const rules = auction.rules as AuctionRules | undefined
+                          const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                          
+                          // Validate bid is a multiple of the minimum increment
+                          if (bidAmount % minIncrement !== 0) {
+                            setError(`Bid amount must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
                             return
                           }
-
-                          const rules = auction.rules as AuctionRules | undefined
-                          const minIncrement = rules?.minBidIncrement || 1000
                           
-                          if (bidAmount < (currentBid?.amount || 0) + minIncrement) {
-                            setError(`Bid must be at least ₹${((currentBid?.amount || 0) + minIncrement).toLocaleString('en-IN')}`)
+                          if (bidAmount < currentBidAmount + minIncrement) {
+                            setError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
                             return
                           }
 
@@ -2144,9 +2229,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           btn.disabled = true
                           btn.style.opacity = '0.5'
                           
+                          // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+                          const currentBidAmount = currentBid?.amount || 0
                           const rules = auction.rules as AuctionRules | undefined
-                          const minInc = rules?.minBidIncrement || 1000
-                          const totalBid = (currentBid?.amount || 0) + minInc
+                          const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                          const totalBid = currentBidAmount + minInc
                           
                           // Optimistic state updates
                           setIsPlacingBid(true)
@@ -2231,7 +2318,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           </div>
           
           {/* Custom Bid Section - Appears at bottom when a bidder is selected */}
-          {selectedBidderForBid && (
+          {selectedBidderForBid && (() => {
+            // Dynamic increment amounts: 2k minimum when current bid >= 10000
+            const currentBidAmount = currentBid?.amount || 0
+            const minIncrement = currentBidAmount >= 10000 ? 2000 : 1000
+            const incrementAmounts = currentBidAmount >= 10000 
+              ? [2000, 3000, 5000, 7000] // 2k, 3k, 5k, 7k when bid >= 10k
+              : [1000, 2000, 3000, 5000] // 1k, 2k, 3k, 5k when bid < 10k
+            
+            return (
             <div className="p-3 border-t-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
               <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
                 Custom Bid: {(() => {
@@ -2242,7 +2337,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               
               {/* Quick increment buttons */}
               <div className="grid grid-cols-4 gap-1 mb-2">
-                {[1000, 2000, 3000, 5000].map((amount) => (
+                {incrementAmounts.map((amount) => (
                   <Button
                     key={amount}
                     size="sm"
@@ -2337,11 +2432,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               <div className="flex gap-2">
                 <Input
                   type="number"
-                  placeholder="Custom (₹1000s)"
+                  placeholder={currentBidAmount >= 10000 ? "Custom (₹2000s)" : "Custom (₹1000s)"}
                   value={customBidAmount}
                   onChange={(e) => setCustomBidAmount(e.target.value)}
-                  min="1000"
-                  step="1000"
+                  min={minIncrement.toString()}
+                  step={minIncrement.toString()}
                   className="flex-1 h-8 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 />
                 <Button
@@ -2359,9 +2454,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       return
                     }
                     
-                    // Validate bid is a multiple of 1000
-                    if (incrementAmount % 1000 !== 0) {
-                      toast.error('Bid amount must be in multiples of ₹1,000')
+                    // Validate bid meets minimum increment requirement
+                    if (incrementAmount < minIncrement) {
+                      toast.error(`Bid increment must be at least ₹${minIncrement.toLocaleString('en-IN')}`)
+                      return
+                    }
+                    
+                    // Validate bid is a multiple of the minimum increment
+                    if (incrementAmount % minIncrement !== 0) {
+                      toast.error(`Bid amount must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
                       return
                     }
                     
@@ -2440,7 +2541,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 </Button>
               </div>
             </div>
-          )}
+            )
+          })()}
         </div>
       </div>
     )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
 
@@ -19,6 +19,17 @@ export function PlayerRevealAnimation({
 }: PlayerRevealAnimationProps) {
   const [currentName, setCurrentName] = useState('')
   const [isRevealing, setIsRevealing] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const slowIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const finalTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const onCompleteRef = useRef(onComplete)
+  const currentNameRef = useRef('')
+
+  // Keep onComplete ref updated
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+  }, [onComplete])
 
   useEffect(() => {
     console.log('🎭 PlayerRevealAnimation mounted!', { 
@@ -27,64 +38,135 @@ export function PlayerRevealAnimation({
       duration 
     })
     
+    // Clear any existing intervals/timeouts
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    if (slowIntervalRef.current) clearInterval(slowIntervalRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    if (finalTimeoutRef.current) clearTimeout(finalTimeoutRef.current)
+    
     if (allPlayerNames.length === 0) {
       console.log('⚠️ No player names available, completing immediately')
-      onComplete()
+      onCompleteRef.current()
       return
     }
 
     // Filter out the final player to avoid showing it early
     const otherNames = allPlayerNames.filter(name => name !== finalPlayerName)
     
+    console.log('🎭 Filtered names for animation:', {
+      totalNames: allPlayerNames.length,
+      otherNamesCount: otherNames.length,
+      finalPlayerName,
+      otherNames: otherNames.slice(0, 5)
+    })
+    
     // If no other names available, just show the final name
     if (otherNames.length === 0) {
+      console.log('⚠️ No other names available, showing final name immediately')
+      currentNameRef.current = finalPlayerName
       setCurrentName(finalPlayerName)
       setIsRevealing(true)
-      setTimeout(onComplete, 2000)
+      finalTimeoutRef.current = setTimeout(() => {
+        onCompleteRef.current()
+      }, 2000)
       return
     }
 
     // Start with a random name immediately
     const initialName = otherNames[Math.floor(Math.random() * otherNames.length)]
+    console.log('🎭 Starting with initial name:', initialName)
+    currentNameRef.current = initialName
     setCurrentName(initialName)
 
-    let intervalId: NodeJS.Timeout
-    let timeoutId: NodeJS.Timeout
-    
     // Phase 1: Fast random cycling (first 3 seconds)
     const fastCycleSpeed = 150 // Change name every 150ms
-    intervalId = setInterval(() => {
-      const randomName = otherNames[Math.floor(Math.random() * otherNames.length)]
-      setCurrentName(randomName)
+    console.log('🎭 Starting fast cycle (150ms intervals)')
+    intervalRef.current = setInterval(() => {
+      // Ensure we pick a different name than the current one
+      let randomName = otherNames[Math.floor(Math.random() * otherNames.length)]
+      // If we picked the same name and there are other options, try again
+      if (randomName === currentNameRef.current && otherNames.length > 1) {
+        const filtered = otherNames.filter(n => n !== currentNameRef.current)
+        if (filtered.length > 0) {
+          randomName = filtered[Math.floor(Math.random() * filtered.length)]
+        }
+      }
+      if (randomName !== currentNameRef.current) {
+        console.log('🔄 Fast cycle name change:', randomName, '(was:', currentNameRef.current + ')')
+        currentNameRef.current = randomName
+        setCurrentName(randomName)
+      }
     }, fastCycleSpeed)
 
     // Phase 2: Slow down (last 1.5 seconds)
-    setTimeout(() => {
-      clearInterval(intervalId)
+    timeoutRef.current = setTimeout(() => {
+      console.log('🎭 Switching to slow cycle (300ms intervals)')
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
       
       // Slow cycling
       const slowCycleSpeed = 300
-      intervalId = setInterval(() => {
-        const randomName = otherNames[Math.floor(Math.random() * otherNames.length)]
-        setCurrentName(randomName)
+      slowIntervalRef.current = setInterval(() => {
+        let randomName = otherNames[Math.floor(Math.random() * otherNames.length)]
+        // If we picked the same name and there are other options, try again
+        if (randomName === currentNameRef.current && otherNames.length > 1) {
+          const filtered = otherNames.filter(n => n !== currentNameRef.current)
+          if (filtered.length > 0) {
+            randomName = filtered[Math.floor(Math.random() * filtered.length)]
+          }
+        }
+        if (randomName !== currentNameRef.current) {
+          console.log('🔄 Slow cycle name change:', randomName, '(was:', currentNameRef.current + ')')
+          currentNameRef.current = randomName
+          setCurrentName(randomName)
+        }
       }, slowCycleSpeed)
     }, duration - 1500)
 
     // Phase 3: Final reveal
-    timeoutId = setTimeout(() => {
-      clearInterval(intervalId)
+    finalTimeoutRef.current = setTimeout(() => {
+      console.log('🎭 Final reveal:', finalPlayerName)
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (slowIntervalRef.current) {
+        clearInterval(slowIntervalRef.current)
+        slowIntervalRef.current = null
+      }
       setIsRevealing(true)
+      currentNameRef.current = finalPlayerName
       setCurrentName(finalPlayerName)
       
       // Complete after showing final name for 1.5 seconds
-      setTimeout(onComplete, 1500)
+      setTimeout(() => {
+        console.log('✅ Animation complete, calling onComplete')
+        onCompleteRef.current()
+      }, 1500)
     }, duration)
 
     return () => {
-      clearInterval(intervalId)
-      clearTimeout(timeoutId)
+      console.log('🧹 Cleaning up animation intervals/timeouts')
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      if (slowIntervalRef.current) {
+        clearInterval(slowIntervalRef.current)
+        slowIntervalRef.current = null
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      if (finalTimeoutRef.current) {
+        clearTimeout(finalTimeoutRef.current)
+        finalTimeoutRef.current = null
+      }
     }
-  }, [allPlayerNames, finalPlayerName, onComplete, duration])
+  }, [allPlayerNames, finalPlayerName, duration]) // Removed onComplete from deps to prevent re-running
 
   console.log('🎭 PlayerRevealAnimation RENDERING', {
     allPlayerNamesCount: allPlayerNames.length,

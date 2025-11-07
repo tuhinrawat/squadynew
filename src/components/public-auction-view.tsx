@@ -563,7 +563,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     bidderName={currentBid?.bidderName}
                     teamName={currentBid?.teamName}
                     timerSeconds={timer}
-                    nextMin={(currentBid?.amount || 0) + ((auction.rules as any)?.minBidIncrement || 1000)}
+                    nextMin={(() => {
+                      const currentBidAmount = currentBid?.amount || 0
+                      const rules = auction.rules as any
+                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      return currentBidAmount + minIncrement
+                    })()}
                   />
                 )}
               </CardContent>

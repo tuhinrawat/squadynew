@@ -33,7 +33,10 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Find current user's bidder profile
   const userBidder = auction.bidders.find((b: any) => b.userId === session?.user?.id)
   const rules = auction.rules as any
-  const minIncrement = rules?.minBidIncrement || 1000
+  
+  // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+  const currentBidAmount = currentBid?.amount || 0
+  const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
 
   // Calculate next valid bid
   const nextValidBid = currentBid ? currentBid.amount + minIncrement : 0
