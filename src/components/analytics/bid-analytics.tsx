@@ -52,6 +52,14 @@ interface AnalyticsData {
       averageBid: number
       highestBid: number
       competitionLevel: 'low' | 'medium' | 'high'
+      remainingPoolImpact?: 'high' | 'medium' | 'low'
+      remainingPoolSummary?: {
+        bowlersLeft: number
+        battersLeft: number
+        allroundersLeft: number
+        keepersLeft: number
+        totalLeft: number
+      }
       teamNeeds: Array<{
         bidderId: string
         teamName: string

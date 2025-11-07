@@ -7,6 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Player } from '@prisma/client'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { parseExcelFile, ParsedPlayerData } from '@/lib/excel-parser'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface PlayerTableProps {
   players: Player[]
@@ -20,9 +24,10 @@ interface PlayerTableProps {
     } | null
   }>
   analyticsVisibleColumns?: string[] // Loaded from auction
+  onPlayersUpdate?: (players: Player[]) => void // Callback when players are updated
 }
 
-export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColumns }: PlayerTableProps) {
+export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColumns, onPlayersUpdate }: PlayerTableProps) {
   const [searchTerm, setSearchTerm] = useState('')
   
   // Default visible columns for analytics table
@@ -38,6 +43,15 @@ export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColum
   
   const [showAddColumn, setShowAddColumn] = useState(false)
   const [newColumnName, setNewColumnName] = useState('')
+  
+  // Upload stats state
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [uploadedData, setUploadedData] = useState<ParsedPlayerData[] | null>(null)
+  const [uploadColumns, setUploadColumns] = useState<string[]>([])
+  const [uploadError, setUploadError] = useState<string>('')
+  const [uploadSuccess, setUploadSuccess] = useState<string>('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadResults, setUploadResults] = useState<any>(null)
   
   // Load saved columns on mount if provided
   useEffect(() => {
@@ -143,6 +157,96 @@ export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColum
     }
   }
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadError('')
+    setUploadSuccess('')
+    setUploadedData(null)
+    setUploadResults(null)
+
+    // Validate file type
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-excel', // .xls
+      'text/csv' // .csv
+    ]
+
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+      setUploadError('Please upload a valid Excel (.xlsx, .xls) or CSV file')
+      return
+    }
+
+    try {
+      const result = await parseExcelFile(file)
+      
+      if (!result.success) {
+        setUploadError(result.error || 'Failed to parse file')
+        return
+      }
+
+      if (!result.data || result.data.length === 0) {
+        setUploadError('No player data found in the file')
+        return
+      }
+
+      // Check if file has Name column
+      const firstPlayer = result.data[0]
+      if (!firstPlayer.Name && !firstPlayer.name) {
+        setUploadError('File must contain a "Name" or "name" column to match players')
+        return
+      }
+
+      setUploadedData(result.data)
+      setUploadColumns(result.columns || [])
+      setUploadDialogOpen(true)
+    } catch (error) {
+      setUploadError('Failed to parse file. Please check the format.')
+      console.error('Upload error:', error)
+    }
+  }
+
+  const handleConfirmUpload = async () => {
+    if (!uploadedData || uploadedData.length === 0) return
+
+    setIsUploading(true)
+    setUploadError('')
+    setUploadSuccess('')
+
+    try {
+      // Get the key from URL
+      const urlParams = new URLSearchParams(window.location.search)
+      const key = urlParams.get('key') || 'tushkiKILLS'
+
+      const response = await fetch(`/api/analytics/${auctionId}/upload-stats?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ players: uploadedData })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to upload stats' }))
+        throw new Error(errorData.error || 'Failed to upload stats')
+      }
+
+      const result = await response.json()
+      setUploadResults(result.results)
+      setUploadSuccess(`Successfully updated ${result.results.matched} players!`)
+      
+      // Refresh page after 2 seconds to show updated data
+      // This ensures all new columns and updated player data are visible
+      setTimeout(() => {
+        window.location.reload()
+      }, 2000)
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload stats')
+      console.error('Upload error:', error)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -155,12 +259,29 @@ export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColum
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64"
             />
-            <Button
-              variant="outline"
-              onClick={() => setShowAddColumn(!showAddColumn)}
-            >
-              {showAddColumn ? 'Hide' : 'Add Column'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <input
+                id="upload-stats-file"
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <label htmlFor="upload-stats-file">
+                <Button variant="outline" type="button" className="cursor-pointer" asChild>
+                  <span>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Stats
+                  </span>
+                </Button>
+              </label>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddColumn(!showAddColumn)}
+              >
+                {showAddColumn ? 'Hide' : 'Add Column'}
+              </Button>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -276,6 +397,178 @@ export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColum
           Showing {filteredPlayers.length} of {players.length} players
         </div>
       </CardContent>
+
+      {/* Upload Stats Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Upload Player Stats</DialogTitle>
+            <DialogDescription>
+              Review the uploaded data before confirming. Players will be matched by name.
+            </DialogDescription>
+          </DialogHeader>
+
+          {uploadError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{uploadError}</AlertDescription>
+            </Alert>
+          )}
+
+          {uploadSuccess && (
+            <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+              <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <AlertDescription className="text-green-800 dark:text-green-200">
+                {uploadSuccess}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {uploadResults && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                    {uploadResults.matched}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Matched</div>
+                </div>
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                    {uploadResults.unmatched}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Unmatched</div>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {uploadResults.newColumns?.length || 0}
+                  </div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">New Columns</div>
+                </div>
+              </div>
+
+              {uploadResults.matchedDetails && uploadResults.matchedDetails.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Matched Players:</h4>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {uploadResults.matchedDetails.map((item: any, idx: number) => (
+                      <div key={idx} className="text-sm text-gray-600 dark:text-gray-400">
+                        • {item.uploadedName} → {item.playerName}
+                        <span className="text-xs text-gray-500 dark:text-gray-500 ml-2">
+                          ({item.columnsUpdated?.length || 0} columns, matched via: {item.matchMethod || 'name'})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {uploadResults.unmatchedDetails && uploadResults.unmatchedDetails.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Unmatched Players:</h4>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {uploadResults.unmatchedDetails.map((item: any, idx: number) => (
+                      <div key={idx} className="text-sm text-gray-600 dark:text-gray-400">
+                        • {item.uploadedName} - {item.reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {uploadResults.newColumns && uploadResults.newColumns.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">New Columns Added:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {uploadResults.newColumns.map((col: string) => (
+                      <Badge key={col} variant="outline">{col}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {uploadedData && !uploadResults && (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Found <strong>{uploadedData.length}</strong> players in the file. 
+                Players will be matched by name (case-insensitive).
+              </div>
+              
+              <div className="max-h-60 overflow-y-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                    <tr>
+                      {uploadColumns.slice(0, 5).map(col => (
+                        <th key={col} className="px-3 py-2 text-left font-semibold">
+                          {col}
+                        </th>
+                      ))}
+                      {uploadColumns.length > 5 && (
+                        <th className="px-3 py-2 text-left font-semibold">
+                          ... (+{uploadColumns.length - 5} more)
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {uploadedData.slice(0, 10).map((player, idx) => (
+                      <tr key={idx} className="border-b">
+                        {uploadColumns.slice(0, 5).map(col => (
+                          <td key={col} className="px-3 py-2">
+                            {String(player[col] || '-')}
+                          </td>
+                        ))}
+                        {uploadColumns.length > 5 && <td className="px-3 py-2">...</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {uploadedData.length > 10 && (
+                  <div className="p-2 text-xs text-gray-500 text-center">
+                    Showing first 10 of {uploadedData.length} players
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setUploadDialogOpen(false)
+                setUploadedData(null)
+                setUploadError('')
+                setUploadSuccess('')
+                setUploadResults(null)
+              }}
+              disabled={isUploading}
+            >
+              {uploadResults ? 'Close' : 'Cancel'}
+            </Button>
+            {!uploadResults && (
+              <Button
+                onClick={handleConfirmUpload}
+                disabled={isUploading || !uploadedData}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Confirm Upload
+                  </>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

@@ -21,8 +21,8 @@ export function formatCurrency(
   const formatted = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: showDecimals ? minimumFractionDigits : 0,
-    maximumFractionDigits: showDecimals ? maximumFractionDigits : 0,
+    minimumFractionDigits: showDecimals ? Math.max(0, Math.min(20, minimumFractionDigits)) : 0,
+    maximumFractionDigits: showDecimals ? Math.max(0, Math.min(20, maximumFractionDigits || 2)) : 0,
   }).format(amount)
 
   return formatted

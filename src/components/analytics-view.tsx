@@ -173,6 +173,13 @@ export function AnalyticsView({ auction, currentPlayer, bidHistory }: AnalyticsV
               auctionId={localAuction.id}
               bidders={localAuction.bidders}
               analyticsVisibleColumns={(localAuction as any).analyticsVisibleColumns}
+              onPlayersUpdate={(updatedPlayers) => {
+                // Update local auction with new player data
+                setLocalAuction(prev => ({
+                  ...prev,
+                  players: updatedPlayers
+                }))
+              }}
             />
           </TabsContent>
 

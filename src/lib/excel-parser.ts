@@ -118,12 +118,12 @@ export function parseExcelFile(file: File): Promise<ParseResult> {
 export function validatePlayerData(data: ParsedPlayerData[]): { valid: boolean; errors: string[] } {
   const errors: string[] = []
   
-  console.log('Validating player data:', { count: data.length, sample: data[0] })
-  
-  if (!data || data.length === 0) {
+  if (!data || !Array.isArray(data) || data.length === 0) {
     errors.push('No player data provided')
     return { valid: false, errors }
   }
+  
+  console.log('Validating player data:', { count: data.length, sample: data[0] })
 
   // Check for required fields (at minimum, we need some identifying field)
   const hasRequiredFields = data.every(player => {
