@@ -77,6 +77,10 @@ export interface AuctionEventData {
   }
   'sale-undo': {
     playerId: string
+    player?: any // Updated player data after undo
+    bidderId?: string
+    refundedAmount?: number
+    bidderRemainingPurse?: number
     updatedBidders?: Array<{ id: string; remainingPurse: number }>
   }
   'new-player': {
@@ -190,10 +194,24 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
               callbacksRef.current.onPlayerSold?.(data)
             })
             
-            channel.bind('sale-undo', (data: any) => {
-              console.log('📨 Pusher received sale-undo:', data)
-              callbacksRef.current.onSaleUndo?.(data)
-            })
+            // Create a named function for sale-undo to ensure it's properly tracked by Pusher
+            const handleSaleUndoEvent = (data: any) => {
+              console.log('📨 Pusher received sale-undo event:', data)
+              console.log('📨 Callbacks ref has onSaleUndo?', !!callbacksRef.current.onSaleUndo)
+              if (callbacksRef.current.onSaleUndo) {
+                console.log('✅ Calling onSaleUndo callback')
+                try {
+                  callbacksRef.current.onSaleUndo(data)
+                } catch (error) {
+                  console.error('❌ Error calling onSaleUndo:', error)
+                }
+              } else {
+                console.error('❌ onSaleUndo callback is missing from callbacksRef!')
+                console.log('📨 Current callbacks:', Object.keys(callbacksRef.current))
+              }
+            }
+            channel.bind('sale-undo', handleSaleUndoEvent)
+            console.log('✅ Bound sale-undo event handler')
             
             // Create a named function for new-player to ensure it's properly tracked by Pusher
             const handleNewPlayerEvent = (data: any) => {

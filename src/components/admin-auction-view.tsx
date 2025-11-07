@@ -25,14 +25,15 @@ import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 
 interface BidHistoryEntry {
-  bidderId: string
-  amount: number
+  bidderId?: string // Optional for sale-undo events
+  amount?: number // Optional for sale-undo events
   timestamp: Date
-  bidderName: string
+  bidderName?: string // Optional for sale-undo events
   teamName?: string
-  type?: 'bid' | 'sold' | 'unsold'
+  type?: 'bid' | 'sold' | 'unsold' | 'sale-undo'
   playerId?: string
   playerName?: string
+  refundedAmount?: number // For sale-undo events
 }
 
 interface BidderWithUser extends Bidder {
@@ -79,6 +80,15 @@ interface PusherSoldData {
   playerName: string
   bidderRemainingPurse?: number // Added for instant UI updates
   updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch updates
+}
+
+interface PusherSaleUndoData {
+  playerId: string
+  player?: any // Updated player data after undo
+  bidderId?: string
+  refundedAmount?: number
+  bidderRemainingPurse?: number
+  updatedBidders?: Array<{ id: string; remainingPurse: number }>
 }
 
 interface PusherTimerData {
@@ -244,23 +254,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // Filter bid history for current player whenever player changes
   useEffect(() => {
     if (currentPlayer?.id) {
-      setBidHistory(playerBidHistory)
+      // Filter out non-bid entries (sold, unsold, sale-undo) for display
+      const displayBidHistory = playerBidHistory.filter(bid => 
+        !bid.type || bid.type === 'bid'
+      )
+      setBidHistory(displayBidHistory)
       
       // Get the most recent bid (first item, since latest is first)
-      const latestBid = playerBidHistory.length > 0 ? playerBidHistory[0] : null
+      // Only consider actual bid entries, not sold/unsold/sale-undo
+      const latestBid = displayBidHistory.length > 0 ? displayBidHistory[0] : null
       
-      // Update current bid to the latest bid (only if it's a bid event, not a sale event)
-      if (latestBid && (!latestBid.type || latestBid.type === 'bid')) {
-        // Only update if there's actually a valid bid
-        if (latestBid.amount && latestBid.bidderId) {
+      // Update current bid to the latest bid (only if it's a bid event)
+      if (latestBid && latestBid.amount && latestBid.bidderId) {
         setCurrentBid({
-            bidderId: latestBid.bidderId,
-            amount: latestBid.amount,
-            bidderName: latestBid.bidderName,
-            teamName: latestBid.teamName
-          })
-          setHighestBidderId(latestBid.bidderId)
-        }
+          bidderId: latestBid.bidderId,
+          amount: latestBid.amount,
+          bidderName: latestBid.bidderName,
+          teamName: latestBid.teamName
+        })
+        setHighestBidderId(latestBid.bidderId)
+      } else {
+        // No valid bids, clear current bid
+        setCurrentBid(null)
+        setHighestBidderId(null)
       }
     } else {
       setBidHistory([])
@@ -392,9 +408,86 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       console.log('✅ handleBidUndo completed')
   }, [])
 
-  const handleSaleUndo = useCallback(() => {
-      // Reload to get updated state
-      window.location.reload()
+  const handleSaleUndo = useCallback((data: PusherSaleUndoData) => {
+      console.log('🔄 Sale undo event received:', data)
+      
+      // Update player status if player data is provided
+      if (data.player) {
+        setPlayers(prev => prev.map(p => 
+          p.id === data.playerId ? data.player : p
+        ))
+        
+        // When a sale is undone, the API sets this player as currentPlayerId
+        // So we should update the current player to this undone player
+        setCurrentPlayer(data.player)
+      } else {
+        // Fallback: update player status to AVAILABLE
+        setPlayers(prev => {
+          const updated = prev.map(p => 
+            p.id === data.playerId 
+              ? { ...p, status: 'AVAILABLE' as const, soldTo: null, soldPrice: null }
+              : p
+          )
+          
+          // Find the undone player and set it as current
+          const undonePlayer = updated.find(p => p.id === data.playerId)
+          if (undonePlayer) {
+            setCurrentPlayer({
+              ...undonePlayer,
+              status: 'AVAILABLE' as const,
+              soldTo: null,
+              soldPrice: null
+            })
+          }
+          
+          return updated
+        })
+      }
+      
+      // Update bidder balance
+      if (data.bidderRemainingPurse !== undefined && data.bidderId) {
+        setBidders(prev => prev.map(b => 
+          b.id === data.bidderId 
+            ? { ...b, remainingPurse: data.bidderRemainingPurse! }
+            : b
+        ))
+      } else if (data.updatedBidders) {
+        // Batch update multiple bidders
+        setBidders(prev => prev.map(b => {
+          const update = data.updatedBidders!.find(ub => ub.id === b.id)
+          return update ? { ...b, remainingPurse: update.remainingPurse } : b
+        }))
+      }
+      
+      // Reset current bid and highest bidder since the player is back to being available
+      setCurrentBid(null)
+      setHighestBidderId(null)
+      
+      // Remove the "sold" entry and all bids for this player, then add undo event to bid history
+      const playerData = data.player?.data as any
+      const playerName = playerData?.Name || playerData?.name || 'Player'
+      const undoEvent: BidHistoryEntry = {
+        type: 'sale-undo' as const,
+        playerId: data.playerId,
+        playerName: playerName,
+        timestamp: new Date(),
+        refundedAmount: data.refundedAmount
+      }
+      setFullBidHistory(prev => {
+        // Remove the "sold" entry and all bid entries for this player
+        // (keep unsold and sale-undo entries for other players)
+        const filtered = prev.filter(entry => 
+          !(entry.playerId === data.playerId && (entry.type === 'sold' || entry.type === 'bid'))
+        )
+        // Add the undo event at the beginning
+        return [undoEvent, ...filtered]
+      })
+      
+      // Clear bid history for this player to start fresh
+      setBidHistory([])
+      
+      // Show success toast
+      toast.success(`Sale undone! Player restored and ₹${data.refundedAmount?.toLocaleString('en-IN') || 'amount'} refunded`)
   }, [])
 
   const handleTimerUpdate = useCallback((data: PusherTimerData) => {
@@ -765,14 +858,62 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   }
 
   const handleUndoSaleConfirm = async () => {
-    const response = await fetch(`/api/auction/${auction.id}/undo-sale`, { method: 'POST' })
-    const data = await response.json()
-    if (response.ok) {
-      setUndoSaleDialogOpen(false)
-      // Refetch auction to get updated state
-      window.location.reload()
-    } else {
-      alert(data.error || 'Failed to undo sale')
+    try {
+      const response = await fetch(`/api/auction/${auction.id}/undo-sale`, { method: 'POST' })
+      const data = await response.json()
+      if (response.ok) {
+        setUndoSaleDialogOpen(false)
+        // Real-time updates will come via Pusher event (handleSaleUndo)
+        // But we can also update optimistically from API response
+        if (data.player && data.bidder) {
+          console.log('🔄 Updating state from API response (optimistic)')
+          
+          // Calculate refund amount from bidder balance change
+          const oldBidder = bidders.find(b => b.id === data.bidder.id)
+          const refundAmount = oldBidder ? data.bidder.remainingPurse - oldBidder.remainingPurse : 0
+          
+          setPlayers(prev => prev.map(p => 
+            p.id === data.player.id ? data.player : p
+          ))
+          setBidders(prev => prev.map(b => 
+            b.id === data.bidder.id ? data.bidder : b
+          ))
+          // Set the undone player as current player (API sets it as currentPlayerId)
+          setCurrentPlayer(data.player)
+          
+          // Reset bid state
+          setCurrentBid(null)
+          setHighestBidderId(null)
+          
+          // Remove the "sold" entry and all bids for this player from activity log
+          const playerData = data.player.data as any
+          const playerName = playerData?.Name || playerData?.name || 'Player'
+          setFullBidHistory(prev => {
+            // Remove the "sold" entry and all bid entries for this player
+            const filtered = prev.filter(entry => 
+              !(entry.playerId === data.player.id && (entry.type === 'sold' || entry.type === 'bid'))
+            )
+            // Add undo event at the beginning
+            const undoEvent: BidHistoryEntry = {
+              type: 'sale-undo' as const,
+              playerId: data.player.id,
+              playerName: playerName,
+              timestamp: new Date(),
+              refundedAmount: refundAmount
+            }
+            return [undoEvent, ...filtered]
+          })
+          
+          // Clear bid history for this player to start fresh
+          setBidHistory([])
+        }
+        // Toast will be shown by handleSaleUndo when Pusher event arrives
+      } else {
+        toast.error(data.error || 'Failed to undo sale')
+      }
+    } catch (error) {
+      console.error('Error undoing sale:', error)
+      toast.error('Network error while undoing sale')
     }
   }
 
@@ -789,6 +930,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     playerData.name || playerData.Name || 'No Player Selected',
     [playerData]
   )
+
+  // Check if there are any sold players (for showing Undo Last Sale button)
+  const hasSoldPlayers = useMemo(() => {
+    return players.some(p => p.status === 'SOLD')
+  }, [players])
 
   // Preload images when player or bidders change
   useEffect(() => {
@@ -1217,7 +1363,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   <ActionButtons
                     onMarkSold={handleMarkSold}
                     onMarkUnsold={handleMarkUnsold}
-                    onUndoSale={() => setUndoSaleDialogOpen(true)}
+                    onUndoSale={hasSoldPlayers ? () => setUndoSaleDialogOpen(true) : undefined}
                     isMarkingSold={isMarkingSold}
                     isMarkingUnsold={isMarkingUnsold}
                   />
@@ -1940,7 +2086,47 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   )
                 }
                 
-                // Handle regular bids
+                if (bid.type === 'sale-undo') {
+                  const bidTime = new Date(bid.timestamp)
+                  let timeAgo = ''
+                  if (isClient) {
+                    const now = new Date()
+                    const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                    timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  } else {
+                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }
+                  
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-sm border-l-4 border-purple-500 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/40 dark:to-pink-900/40 rounded-lg p-3 mb-2 shadow-md"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-2xl">↩️</span>
+                        <div className="font-bold text-lg text-purple-800 dark:text-purple-300">
+                          {bid.playerName} - SALE UNDONE
+                      </div>
+                      </div>
+                      {bid.refundedAmount && (
+                        <div className="text-sm text-purple-700 dark:text-purple-400 mb-1">
+                          Refunded ₹{bid.refundedAmount.toLocaleString('en-IN')} • Player restored to available
+                        </div>
+                      )}
+                      <div className="text-xs text-purple-600 dark:text-purple-400">
+                        ⏰ {timeAgo}
+                    </div>
+                    </motion.div>
+                  )
+                }
+                
+                // Handle regular bids - ensure amount exists
+                if (!bid.amount) {
+                  return null // Skip entries without amount
+                }
                 const bidTime = new Date(bid.timestamp)
                 
                 let timeAgo = ''
@@ -2101,8 +2287,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
-                          <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
+                          <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
+                          {bidder.user?.name && bidder.teamName && (
+                            <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user.name}</div>
+                          )}
                           <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 w-32">
@@ -2213,8 +2401,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.username}</div>
-                      <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user?.name || bidder.username}</div>
+                      <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
+                      {bidder.user?.name && bidder.teamName && (
+                        <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user.name}</div>
+                      )}
                       <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 w-32">

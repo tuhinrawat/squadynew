@@ -6,7 +6,7 @@ import { Clock } from 'lucide-react'
 export type ActivityLogEntry = {
 	// Common
 	timestamp: Date | string
-	type?: 'bid' | 'sold' | 'unsold'
+	type?: 'bid' | 'sold' | 'unsold' | 'sale-undo'
 	// Bid
 	bidderId?: string
 	bidderName?: string
@@ -15,6 +15,8 @@ export type ActivityLogEntry = {
 	// Player context
 	playerId?: string
 	playerName?: string
+	// Sale undo
+	refundedAmount?: number
 }
 
 export interface ActivityLogProps {
@@ -56,6 +58,7 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 					const isBid = !it.type || it.type === 'bid'
 					const isSold = it.type === 'sold'
 					const isUnsold = it.type === 'unsold'
+					const isSaleUndo = it.type === 'sale-undo'
 					return (
                         <li
                             key={idx}
@@ -64,18 +67,25 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
                                     ? 'bg-green-50/70 dark:bg-green-900/10'
                                     : isUnsold
                                     ? 'bg-orange-50/70 dark:bg-orange-900/10'
+                                    : isSaleUndo
+                                    ? 'bg-purple-50/70 dark:bg-purple-900/10'
                                     : 'bg-white/60 dark:bg-gray-900/20 hover:bg-blue-50/40 dark:hover:bg-blue-900/10'}
                             `}
                         >
 							{/* Avatar placeholder with initial */}
-							<div className={`h-7 w-7 sm:h-8 sm:w-8 shrink-0 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold ${isSold ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : isUnsold ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+							<div className={`h-7 w-7 sm:h-8 sm:w-8 shrink-0 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold ${
+								isSold ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
+								: isUnsold ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+								: isSaleUndo ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+								: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+							}`}>
 								{(it.bidderName || it.playerName || '•').charAt(0).toUpperCase()}
 							</div>
 							<div className="min-w-0 flex-1">
                                 {/* Main line - all info in one line */}
                                 <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                                     <span className="font-semibold text-gray-900 dark:text-gray-100 whitespace-normal break-words">
-										{isBid ? (it.bidderName ?? 'Bid') : (it.playerName ?? '')}
+										{isBid ? (it.bidderName ?? 'Bid') : isSaleUndo ? (it.playerName ?? 'Player') : (it.playerName ?? '')}
 									</span>
 									{isBid && (
 										<>
@@ -104,6 +114,17 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 									)}
 									{isUnsold && (
                                         <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 font-semibold text-[11px] sm:text-xs">UNSOLD</span>
+									)}
+									{isSaleUndo && (
+										<>
+                                            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 font-semibold text-[11px] sm:text-xs">SALE UNDONE</span>
+											{it.refundedAmount && (
+												<>
+													<span className="text-gray-500 dark:text-gray-400 hidden sm:inline">refunded</span>
+													<span className="font-semibold text-xs sm:text-sm">₹{it.refundedAmount.toLocaleString('en-IN')}</span>
+												</>
+											)}
+										</>
 									)}
 								</div>
 								{/* Timestamp line below */}

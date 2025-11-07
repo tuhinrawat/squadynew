@@ -47,6 +47,10 @@ export interface AuctionEventData {
   }
   'sale-undo': {
     playerId: string
+    player?: any // Updated player data after undo
+    bidderId?: string
+    refundedAmount?: number
+    bidderRemainingPurse?: number
     updatedBidders?: Array<{ id: string; remainingPurse: number }>
   }
   'new-player': {

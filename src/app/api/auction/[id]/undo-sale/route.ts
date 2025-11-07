@@ -26,25 +26,62 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    // Get the most recently sold player
-    const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
-    if (soldPlayers.length === 0) {
+    // Parse bid history to find the most recent sale
+    let bidHistory: any[] = []
+    if (auction.bidHistory && typeof auction.bidHistory === 'object') {
+      const bidHistoryData = auction.bidHistory as any
+      if (Array.isArray(bidHistoryData)) {
+        bidHistory = bidHistoryData
+      }
+    }
+
+    // Find the most recent 'sold' event in bid history
+    const soldEvents = bidHistory.filter((bid: any) => bid.type === 'sold' && bid.playerId)
+    if (soldEvents.length === 0) {
       return NextResponse.json({ error: 'No sold players to undo' }, { status: 400 })
     }
 
-    // Get the last sold player ordered by when it was sold
-    const lastSoldPlayer = await prisma.player.findFirst({
-      where: {
-        auctionId: params.id,
-        status: 'SOLD'
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
+    // Sort by timestamp (most recent first) - timestamps are ISO strings or Date objects
+    soldEvents.sort((a: any, b: any) => {
+      const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : (a.timestamp?.getTime?.() || 0)
+      const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : (b.timestamp?.getTime?.() || 0)
+      return timeB - timeA // Most recent first
     })
 
-    if (!lastSoldPlayer || !lastSoldPlayer.soldTo || !lastSoldPlayer.soldPrice) {
-      return NextResponse.json({ error: 'Invalid sale data' }, { status: 400 })
+    const mostRecentSale = soldEvents[0]
+    const lastSoldPlayerId = mostRecentSale.playerId
+
+    // Get the last sold player
+    let lastSoldPlayer = await prisma.player.findUnique({
+      where: { id: lastSoldPlayerId }
+    })
+
+    // Fallback: if player not found or not sold, get any sold player
+    if (!lastSoldPlayer || lastSoldPlayer.status !== 'SOLD') {
+      const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
+      if (soldPlayers.length === 0) {
+        return NextResponse.json({ error: 'No sold players to undo' }, { status: 400 })
+      }
+      // Get the last one from the array (assuming they're in order)
+      const fallbackPlayer = soldPlayers[soldPlayers.length - 1]
+      if (!fallbackPlayer) {
+        return NextResponse.json({ error: 'No sold players to undo' }, { status: 400 })
+      }
+      const foundPlayer = await prisma.player.findUnique({
+        where: { id: fallbackPlayer.id }
+      })
+      if (!foundPlayer || foundPlayer.status !== 'SOLD') {
+        return NextResponse.json({ error: 'Player not found or not sold' }, { status: 404 })
+      }
+      lastSoldPlayer = foundPlayer
+    }
+
+    if (!lastSoldPlayer.soldTo) {
+      return NextResponse.json({ error: 'Player has no buyer assigned' }, { status: 400 })
+    }
+
+    if (!lastSoldPlayer.soldPrice || lastSoldPlayer.soldPrice <= 0) {
+      return NextResponse.json({ error: 'Invalid sale price' }, { status: 400 })
     }
 
     // Get the bidder who purchased
@@ -56,24 +93,16 @@ export async function POST(
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
     }
 
-    // Parse bid history to restore previous state
-    let bidHistory: any[] = []
-    if (auction.bidHistory && typeof auction.bidHistory === 'object') {
-      const bidHistoryData = auction.bidHistory as any
-      if (Array.isArray(bidHistoryData)) {
-        bidHistory = bidHistoryData
-      }
+    // Ensure remainingPurse is a valid number
+    if (typeof bidder.remainingPurse !== 'number' || isNaN(bidder.remainingPurse)) {
+      return NextResponse.json({ error: 'Invalid bidder purse amount' }, { status: 400 })
     }
 
-    // Get the bids for this player (they should still be in history before undo)
-    const playerBids = bidHistory.filter(bid => {
-      // We need to track which bids were for which player
-      // This requires storing playerId in bid history
-      // For now, we'll keep the last bid from history before the sale
-      return true
-    })
+    // Calculate the refund amount
+    const refundAmount = lastSoldPlayer.soldPrice
+    const newPurseAmount = bidder.remainingPurse + refundAmount
 
-    // Revert the sale
+    // Revert the sale in a transaction
     await prisma.$transaction([
       prisma.player.update({
         where: { id: lastSoldPlayer.id },
@@ -86,7 +115,7 @@ export async function POST(
       prisma.bidder.update({
         where: { id: bidder.id },
         data: {
-          remainingPurse: bidder.remainingPurse + lastSoldPlayer.soldPrice
+          remainingPurse: newPurseAmount
         }
       }),
       prisma.auction.update({
@@ -98,15 +127,47 @@ export async function POST(
       })
     ])
 
-    // Broadcast sale undo event
-    await triggerAuctionEvent(params.id, 'sale-undo', {
-      playerId: lastSoldPlayer.id
+    // Get updated player and bidder data after undo
+    const updatedPlayer = await prisma.player.findUnique({
+      where: { id: lastSoldPlayer.id }
     })
 
-    return NextResponse.json({ success: true })
+    const updatedBidder = await prisma.bidder.findUnique({
+      where: { id: bidder.id }
+    })
+
+    if (!updatedPlayer) {
+      return NextResponse.json({ error: 'Player not found after undo' }, { status: 404 })
+    }
+
+    if (!updatedBidder) {
+      return NextResponse.json({ error: 'Bidder not found after undo' }, { status: 404 })
+    }
+
+    // Broadcast sale undo event with full data for real-time updates
+    await triggerAuctionEvent(params.id, 'sale-undo', {
+      playerId: lastSoldPlayer.id,
+      player: updatedPlayer,
+      bidderId: bidder.id,
+      refundedAmount: refundAmount,
+      bidderRemainingPurse: updatedBidder.remainingPurse,
+      updatedBidders: [{ id: bidder.id, remainingPurse: updatedBidder.remainingPurse }]
+    })
+
+    return NextResponse.json({ 
+      success: true,
+      player: updatedPlayer,
+      bidder: updatedBidder
+    })
   } catch (error) {
     console.error('Error undoing sale:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    console.error('Error details:', { errorMessage, errorStack })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+    }, { status: 500 })
   }
 }
 
