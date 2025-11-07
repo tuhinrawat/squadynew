@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, description, rules, isPublished, registrationOpen } = await request.json()
+    const { name, description, rules, isPublished, registrationOpen, scheduledStartDate } = await request.json()
 
     // Validate input
     if (!name || !rules) {
@@ -89,16 +89,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Create auction
+    const auctionData: any = {
+      name,
+      description: description || null,
+      rules: rules as any, // Store as JSON
+      isPublished: isPublished || false,
+      registrationOpen: registrationOpen !== false, // Default to true
+      createdById: session.user.id,
+      status: 'DRAFT'
+    }
+    
+    // Only include scheduledStartDate if it's provided
+    if (scheduledStartDate) {
+      auctionData.scheduledStartDate = new Date(scheduledStartDate)
+    }
+    
+    // Check if scheduledStartDate is being set and handle database schema mismatch
+    // If scheduledStartDate column doesn't exist, we need to exclude it
     const auction = await prisma.auction.create({
-      data: {
-        name,
-        description: description || null,
-        rules: rules as any, // Store as JSON
-        isPublished: isPublished || false,
-        registrationOpen: registrationOpen !== false, // Default to true
-        createdById: session.user.id,
-        status: 'DRAFT'
-      },
+      data: auctionData,
       include: {
         _count: {
           select: {
@@ -107,6 +116,28 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }).catch(async (error: any) => {
+      // Handle case where scheduledStartDate column doesn't exist in database
+      if (error?.code === 'P2022' && (error?.meta?.column === 'scheduledStartDate' || error?.meta?.column === 'auctions.scheduledStartDate')) {
+        console.error('⚠️ scheduledStartDate column does not exist in database.')
+        console.error('📝 Please run this command to add the column: npx prisma db push')
+        console.error('📝 Or apply the migration: npx prisma migrate deploy')
+        
+        // Remove scheduledStartDate and try again
+        const { scheduledStartDate: _, ...dataWithoutDate } = auctionData
+        return await prisma.auction.create({
+          data: dataWithoutDate,
+          include: {
+            _count: {
+              select: {
+                players: true,
+                bidders: true
+              }
+            }
+          }
+        })
+      }
+      throw error
     })
 
     return NextResponse.json({

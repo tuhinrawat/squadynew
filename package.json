@@ -14,7 +14,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:add-scheduled-date": "tsx scripts/add-scheduled-start-date.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

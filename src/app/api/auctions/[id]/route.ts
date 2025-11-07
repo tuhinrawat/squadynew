@@ -69,7 +69,7 @@ export async function PUT(
       )
     }
 
-    const { name, description, rules, status, isPublished, registrationOpen, customFields, columnOrder, visibleColumns, analyticsVisibleColumns } = await request.json()
+    const { name, description, rules, status, isPublished, registrationOpen, customFields, columnOrder, visibleColumns, analyticsVisibleColumns, scheduledStartDate } = await request.json()
 
     // Check if auction exists and belongs to user
     const existingAuction = await prisma.auction.findFirst({
@@ -86,42 +86,92 @@ export async function PUT(
       )
     }
 
-    // Update auction
-    const auction = await prisma.auction.update({
-      where: {
-        id: params.id
-      },
-      data: {
-        ...(name && { name }),
-        ...(description !== undefined && { description }),
-        ...(rules && { rules: rules as any }),
-        ...(status && { status }),
-        ...(isPublished !== undefined && { isPublished }),
-        ...(registrationOpen !== undefined && { registrationOpen }),
-        ...(customFields !== undefined && { customFields: customFields as any }),
-        ...(columnOrder !== undefined && { columnOrder: columnOrder as any }),
-        ...(visibleColumns !== undefined && { visibleColumns: visibleColumns as any }),
-        ...(analyticsVisibleColumns !== undefined && { analyticsVisibleColumns: analyticsVisibleColumns as any })
-      },
-      include: {
-        _count: {
-          select: {
-            players: true,
-            bidders: true
+    // Prepare update data
+    const updateData: any = {}
+    
+    if (name) updateData.name = name
+    if (description !== undefined) updateData.description = description
+    if (rules) updateData.rules = rules as any
+    if (status) updateData.status = status
+    if (isPublished !== undefined) updateData.isPublished = isPublished
+    if (registrationOpen !== undefined) updateData.registrationOpen = registrationOpen
+    if (customFields !== undefined) updateData.customFields = customFields as any
+    if (columnOrder !== undefined) updateData.columnOrder = columnOrder as any
+    if (visibleColumns !== undefined) updateData.visibleColumns = visibleColumns as any
+    if (analyticsVisibleColumns !== undefined) updateData.analyticsVisibleColumns = analyticsVisibleColumns as any
+    
+    // Handle scheduledStartDate safely - only include if column exists
+    if (scheduledStartDate !== undefined) {
+      try {
+        // Only try to set if we have a valid date string or null
+        if (scheduledStartDate === null || scheduledStartDate === '') {
+          updateData.scheduledStartDate = null
+        } else {
+          const date = new Date(scheduledStartDate)
+          if (!isNaN(date.getTime())) {
+            updateData.scheduledStartDate = date
           }
         }
+      } catch (dateError) {
+        console.error('Error parsing scheduledStartDate:', dateError)
+        // Don't include scheduledStartDate in update if parsing fails
       }
-    })
+    }
+
+    // Update auction
+    let auction
+    try {
+      auction = await prisma.auction.update({
+        where: {
+          id: params.id
+        },
+        data: updateData,
+        include: {
+          _count: {
+            select: {
+              players: true,
+              bidders: true
+            }
+          }
+        }
+      })
+    } catch (updateError: any) {
+      // If update fails and it's related to scheduledStartDate column not existing,
+      // retry without that field
+      if (updateError?.code === 'P2021' || updateError?.message?.includes('scheduledStartDate') || updateError?.message?.includes('does not exist')) {
+        console.warn('scheduledStartDate column may not exist, retrying without it:', updateError.message)
+        // Remove scheduledStartDate from update data and retry
+        const { scheduledStartDate, ...updateDataWithoutDate } = updateData
+        auction = await prisma.auction.update({
+          where: {
+            id: params.id
+          },
+          data: updateDataWithoutDate,
+          include: {
+            _count: {
+              select: {
+                players: true,
+                bidders: true
+              }
+            }
+          }
+        })
+      } else {
+        // Re-throw if it's a different error
+        throw updateError
+      }
+    }
 
     return NextResponse.json({
       message: 'Auction updated successfully',
       auction
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating auction:', error)
+    const errorMessage = error?.message || 'Internal server error'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: errorMessage, details: process.env.NODE_ENV === 'development' ? error?.stack : undefined },
       { status: 500 }
     )
   }

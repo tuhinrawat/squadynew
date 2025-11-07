@@ -29,26 +29,32 @@ export default withAuth(
       }
     }
 
-    // Protect /auction/[id] routes - check if user has access
-    if (pathname.startsWith('/auction/')) {
-      // We'll check auction access in the page component
-      // since we need to query the database
-    }
-
+    // /auction/[id] routes are handled by page component - allow through
     return NextResponse.next()
   },
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        // Allow access to public routes
+        const pathname = req.nextUrl.pathname
+        
+        // Allow access to public routes (no auth required)
         const publicRoutes = ['/', '/signin', '/register', '/signup']
-        if (publicRoutes.includes(req.nextUrl.pathname)) {
+        if (publicRoutes.includes(pathname)) {
           return true
         }
 
-        // Require authentication for protected routes
+        // Allow access to auction routes without auth - page component will check if published
+        // This must return true to prevent withAuth from redirecting to signin
+        if (pathname.startsWith('/auction/')) {
+          return true
+        }
+
+        // For all other routes, require authentication
         return !!token
       },
+    },
+    pages: {
+      signIn: '/signin',
     },
   }
 )

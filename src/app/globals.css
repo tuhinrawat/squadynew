@@ -178,3 +178,63 @@ body {
     display: none;
   }
 }
+
+/* Futuristic countdown timer animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 10px rgba(0,240,255,0.8)) drop-shadow(0 0 20px rgba(139,92,246,0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(0,240,255,1)) drop-shadow(0 0 40px rgba(139,92,246,0.8)) drop-shadow(0 0 60px rgba(236,72,153,0.4));
+  }
+}
+
+@keyframes border-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0,240,255,0.4), 0 0 40px rgba(139,92,246,0.2), inset 0 0 20px rgba(0,240,255,0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0,240,255,0.6), 0 0 60px rgba(139,92,246,0.4), 0 0 90px rgba(236,72,153,0.2), inset 0 0 30px rgba(0,240,255,0.2);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-border-glow {
+  animation: border-glow 3s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}

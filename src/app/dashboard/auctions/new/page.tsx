@@ -15,6 +15,8 @@ export default function NewAuction() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    scheduledStartDate: '',
+    scheduledStartTime: '',
     minBidIncrement: 1000,
     countdownSeconds: 15,
     maxTeamSize: '',
@@ -93,6 +95,9 @@ export default function NewAuction() {
         body: JSON.stringify({
           name: formData.name,
           description: formData.description || null,
+          scheduledStartDate: formData.scheduledStartDate && formData.scheduledStartTime 
+            ? new Date(`${formData.scheduledStartDate}T${formData.scheduledStartTime}`).toISOString()
+            : null,
           rules,
           isPublished: formData.isPublished,
           registrationOpen: formData.registrationOpen,
@@ -194,6 +199,34 @@ export default function NewAuction() {
                 placeholder="Enter auction description (optional)"
                 rows={3}
               />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="scheduledStartDate">Scheduled Start Date</Label>
+                <Input
+                  id="scheduledStartDate"
+                  name="scheduledStartDate"
+                  type="date"
+                  value={formData.scheduledStartDate}
+                  onChange={handleChange}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                <p className="text-xs text-gray-500">When the auction is scheduled to start (optional)</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="scheduledStartTime">Scheduled Start Time</Label>
+                <Input
+                  id="scheduledStartTime"
+                  name="scheduledStartTime"
+                  type="time"
+                  value={formData.scheduledStartTime}
+                  onChange={handleChange}
+                  disabled={!formData.scheduledStartDate}
+                />
+                <p className="text-xs text-gray-500">Time when the auction starts (optional)</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

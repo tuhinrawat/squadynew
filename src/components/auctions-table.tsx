@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2 } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 
@@ -66,6 +66,8 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   const [editFormData, setEditFormData] = useState({
     name: '',
     description: '',
+    scheduledStartDate: '',
+    scheduledStartTime: '',
     minBidIncrement: 1000,
     countdownSeconds: 15,
     maxTeamSize: '',
@@ -93,9 +95,20 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     // Extract rules from auction
     const rules = auction.rules as any
     
+    // Parse scheduledStartDate if it exists
+    let scheduledStartDate = ''
+    let scheduledStartTime = ''
+    if (auction.scheduledStartDate) {
+      const date = new Date(auction.scheduledStartDate)
+      scheduledStartDate = date.toISOString().split('T')[0]
+      scheduledStartTime = date.toTimeString().slice(0, 5) // HH:MM format
+    }
+    
     setEditFormData({
       name: auction.name,
       description: auction.description || '',
+      scheduledStartDate,
+      scheduledStartTime,
       minBidIncrement: rules?.minBidIncrement || 1000,
       countdownSeconds: rules?.countdownSeconds || 15,
       maxTeamSize: rules?.maxTeamSize?.toString() || '',
@@ -121,14 +134,30 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     }
 
     try {
+      // Prepare request body
+      const requestBody: any = {
+        name: editFormData.name,
+        description: editFormData.description,
+        rules: rules
+      }
+
+      // Only include scheduledStartDate if both date and time are provided
+      if (editFormData.scheduledStartDate && editFormData.scheduledStartTime) {
+        try {
+          requestBody.scheduledStartDate = new Date(`${editFormData.scheduledStartDate}T${editFormData.scheduledStartTime}`).toISOString()
+        } catch (dateError) {
+          console.error('Error creating date:', dateError)
+          // If date creation fails, don't include it
+        }
+      } else if (editFormData.scheduledStartDate || editFormData.scheduledStartTime) {
+        // If only one is provided, clear it by sending null
+        requestBody.scheduledStartDate = null
+      }
+
       const response = await fetch(`/api/auctions/${selectedAuction.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: editFormData.name, 
-          description: editFormData.description,
-          rules: rules
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (response.ok) {
@@ -184,6 +213,15 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
       console.error('Error publishing auction:', error)
       toast.error('Failed to publish auction')
     }
+  }
+
+  const handleCopyUrl = (auctionId: string) => {
+    const url = `${window.location.origin}/auction/${auctionId}`
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success('Auction URL copied to clipboard!')
+    }).catch(() => {
+      toast.error('Failed to copy URL')
+    })
   }
 
   const handleDelete = (auction: Auction) => {
@@ -295,6 +333,12 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     <DropdownMenuItem onClick={() => handlePublish(auction.id)}>
                       <Globe className="mr-2 h-4 w-4" />
                       Publish
+                    </DropdownMenuItem>
+                  )}
+                  {auction.isPublished && (
+                    <DropdownMenuItem onClick={() => handleCopyUrl(auction.id)}>
+                      <Link2 className="mr-2 h-4 w-4" />
+                      Copy URL
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
@@ -420,6 +464,12 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                       Publish
                     </DropdownMenuItem>
                   )}
+                  {auction.isPublished && (
+                    <DropdownMenuItem onClick={() => handleCopyUrl(auction.id)}>
+                      <Link2 className="mr-2 h-4 w-4" />
+                      Copy URL
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem variant="destructive" onClick={() => handleDelete(auction)}>
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete
@@ -429,8 +479,8 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
             </TableCell>
           </TableRow>
         ))}
-          </TableBody>
-        </Table>
+      </TableBody>
+    </Table>
       </div>
       
       {/* Dialogs */}
@@ -463,6 +513,32 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   rows={3}
                   placeholder="Enter auction description (optional)"
                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-scheduledStartDate">Scheduled Start Date</Label>
+                  <Input
+                    id="edit-scheduledStartDate"
+                    type="date"
+                    value={editFormData.scheduledStartDate}
+                    onChange={(e) => setEditFormData({ ...editFormData, scheduledStartDate: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                  <p className="text-xs text-gray-500">When the auction is scheduled to start (optional)</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-scheduledStartTime">Scheduled Start Time</Label>
+                  <Input
+                    id="edit-scheduledStartTime"
+                    type="time"
+                    value={editFormData.scheduledStartTime}
+                    onChange={(e) => setEditFormData({ ...editFormData, scheduledStartTime: e.target.value })}
+                    disabled={!editFormData.scheduledStartDate}
+                  />
+                  <p className="text-xs text-gray-500">Time when the auction starts (optional)</p>
+                </div>
               </div>
 
               {/* Bidding Rules */}

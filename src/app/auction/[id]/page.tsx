@@ -12,6 +12,10 @@ import Image from 'next/image'
 import { ResultsView } from '@/components/results-view'
 import { ChevronRight, Home } from 'lucide-react'
 import FloatingPromoChip from '@/components/floating-promo-chip'
+import { PreAuctionBanner } from '@/components/pre-auction-banner'
+import { FullScreenCountdown } from '@/components/full-screen-countdown'
+import { ProfessioPromoButton } from '@/components/professio-promo-button'
+import { CountdownToLiveWrapper } from '@/components/countdown-to-live-wrapper'
 
 export default async function LiveAuctionPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -54,14 +58,85 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     isParticipant = auction.bidders.some(b => b.userId === session.user?.id)
   }
 
-  // If auction is published and live/paused/completed, allow public viewing without auth
-  if (auction.isPublished && (auction.status === 'LIVE' || auction.status === 'PAUSED' || auction.status === 'COMPLETED')) {
+  // If auction is published, allow public viewing without auth (regardless of status)
+  // This allows users to see published auctions even if they're in DRAFT status
+  if (auction.isPublished) {
     if (!session) {
       // If completed, show results view for public
       if (auction.status === 'COMPLETED') {
         // Need to provide a dummy userId and role for public access
         return <ResultsView auction={auction} userId="" userRole="BIDDER" />
       }
+
+      // If published but DRAFT status - show ONLY full-page countdown (nothing else)
+      if (auction.status === 'DRAFT') {
+        // Check if scheduledStartDate exists and is valid
+        const hasScheduledDate = auction.scheduledStartDate && new Date(auction.scheduledStartDate).getTime() > Date.now()
+        
+        if (hasScheduledDate) {
+          // Calculate stats for wrapper
+          const activePlayers = auction.players.filter(p => p.status !== 'RETIRED')
+          const totalPlayers = activePlayers.length
+          const soldPlayers = activePlayers.filter(p => p.status === 'SOLD').length
+          const unsoldPlayers = activePlayers.filter(p => p.status === 'UNSOLD').length
+          const availablePlayers = activePlayers.filter(p => p.status === 'AVAILABLE').length
+
+          const stats = {
+            total: totalPlayers,
+            sold: soldPlayers,
+            unsold: unsoldPlayers,
+            remaining: availablePlayers
+          }
+
+          // Parse bid history
+          let bidHistory: any[] = []
+          if (auction.bidHistory && typeof auction.bidHistory === 'object') {
+            const bidHistoryData = auction.bidHistory as any
+            if (Array.isArray(bidHistoryData)) {
+              bidHistory = bidHistoryData
+            }
+          }
+
+          // Get current player if exists
+          let currentPlayer = null
+          if (auction.currentPlayerId) {
+            currentPlayer = await prisma.player.findUnique({
+              where: { id: auction.currentPlayerId }
+            })
+          }
+
+          // Use wrapper component that handles countdown to live transition
+          return (
+            <CountdownToLiveWrapper
+              auction={auction}
+              initialCurrentPlayer={currentPlayer}
+              initialStats={stats}
+              initialBidHistory={bidHistory}
+              bidders={auction.bidders}
+            />
+          )
+        } else {
+          // No scheduled date or invalid date - show message with instructions
+          return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+              <div className="text-center px-4 max-w-2xl">
+                <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">{auction.name}</h1>
+                <p className="text-xl md:text-2xl text-gray-300 mb-6">Published Auction</p>
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 mt-8">
+                  <p className="text-lg md:text-xl text-gray-300 mb-4">
+                    ⏰ Scheduled start date not set
+                  </p>
+                  <p className="text-md md:text-lg text-gray-400">
+                    To display the countdown timer, please set a scheduled start date and time for this auction in the dashboard.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )
+        }
+      }
+
+      // For LIVE and PAUSED status, show full auction view
       // Get current player if exists
       let currentPlayer = null
       if (auction.currentPlayerId) {
@@ -95,8 +170,32 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+          {/* Banner for LIVE/PAUSED published auctions */}
+          {auction.status === 'LIVE' && (
+            <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 shadow-lg">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div className="flex items-center justify-center gap-3 text-white">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                    <h2 className="text-lg md:text-xl font-bold">{auction.name}</h2>
+                  </div>
+                  <span className="text-sm md:text-base text-green-100">• LIVE - Open to Public</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {auction.status === 'PAUSED' && (
+            <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 shadow-lg">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                <div className="flex items-center justify-center gap-3 text-white">
+                  <h2 className="text-lg md:text-xl font-bold">{auction.name}</h2>
+                  <span className="text-sm md:text-base text-yellow-100">• PAUSED - Open to Public</span>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Header for Public View */}
-          <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+          <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${(auction.status === 'LIVE' || auction.status === 'PAUSED') ? 'mt-[88px]' : ''}`}>
             <div className="max-w-full mx-auto px-4 sm:px-6">
               <div className="flex justify-between items-center h-16">
                 <Link href="/" className="flex items-center">
@@ -159,8 +258,9 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     }
   }
 
-  // For non-published or non-live auctions, require authentication and proper access
-  if (!session) {
+  // For non-published auctions, require authentication and proper access
+  // (Published auctions are already handled above)
+  if (!auction.isPublished && !session) {
     redirect('/signin')
   }
 
@@ -233,8 +333,15 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      {/* Pre-Auction Banner - Show when published but not live */}
+      {auction.isPublished && auction.status !== 'LIVE' && auction.status !== 'COMPLETED' && auction.scheduledStartDate && (
+        <PreAuctionBanner 
+          scheduledStartDate={auction.scheduledStartDate}
+          auctionName={auction.name}
+        />
+      )}
       {/* Header with Logo and User Info */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${auction.isPublished && auction.status !== 'LIVE' && auction.status !== 'COMPLETED' && auction.scheduledStartDate ? 'mt-[88px]' : ''}`}>
         <div className="max-w-full mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Auction, Player } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +18,7 @@ import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
+import { GoingLiveBanner } from '@/components/going-live-banner'
 
 interface BidHistoryEntry {
   bidderId: string
@@ -71,11 +72,54 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [biddersState, setBiddersState] = useState(bidders)
   const [showPlayerReveal, setShowPlayerReveal] = useState(false)
   const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
+  const [showGoingLiveBanner, setShowGoingLiveBanner] = useState(false)
+  const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
+  const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [localCurrentPlayer, setLocalCurrentPlayer] = useState(currentPlayer)
 
   // Set client-side rendered flag
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Update local current player when prop changes
+  useEffect(() => {
+    setLocalCurrentPlayer(currentPlayer)
+  }, [currentPlayer])
+
+  // Detect when auction goes live and show banner
+  useEffect(() => {
+    // Check if auction status changed from DRAFT/PAUSED to LIVE
+    const wasNotLive = previousAuctionStatus !== 'LIVE'
+    const isNowLive = auction.status === 'LIVE'
+    const hasCurrentPlayer = localCurrentPlayer !== null
+
+    if (wasNotLive && isNowLive && hasCurrentPlayer) {
+      console.log('🎬 Auction just went LIVE - showing going live banner (public view)')
+      setShowGoingLiveBanner(true)
+      
+      // Clear any existing timeout
+      if (goingLiveBannerTimeoutRef.current) {
+        clearTimeout(goingLiveBannerTimeoutRef.current)
+      }
+      
+      // Hide banner after 4 seconds
+      goingLiveBannerTimeoutRef.current = setTimeout(() => {
+        setShowGoingLiveBanner(false)
+        goingLiveBannerTimeoutRef.current = null
+      }, 4000)
+    }
+
+    // Update previous status
+    setPreviousAuctionStatus(auction.status)
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (goingLiveBannerTimeoutRef.current) {
+        clearTimeout(goingLiveBannerTimeoutRef.current)
+      }
+    }
+  }, [auction.status, localCurrentPlayer, previousAuctionStatus])
 
   // Track page view
   useEffect(() => {
@@ -360,6 +404,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   return (
     <>
+      {/* Going Live Banner - Full Page Overlay */}
+      <GoingLiveBanner 
+        show={showGoingLiveBanner} 
+        onComplete={() => setShowGoingLiveBanner(false)}
+      />
+      
+      {/* Hide main content when banner is showing */}
+      {!showGoingLiveBanner && (
     <div className="p-2 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-2 sm:space-y-4">
         {/* Title Only (Mobile Only - Top) - Compact */}
@@ -991,6 +1043,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       {/* Public Chat */}
       <PublicChat auctionId={auction.id} />
     </div>
+      )}
     </>
   )
 }

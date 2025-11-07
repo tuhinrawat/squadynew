@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,7 @@ import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
+import { GoingLiveBanner } from '@/components/going-live-banner'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
@@ -169,10 +170,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   })
   const [showPlayerReveal, setShowPlayerReveal] = useState(false)
   const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
+  const [showGoingLiveBanner, setShowGoingLiveBanner] = useState(false)
+  const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const soldAnimationRef = useRef(false)
   const showPlayerRevealRef = useRef(false)
   const pendingPlayerRef = useRef<Player | null>(null)
+  const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -238,6 +242,40 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Detect when auction goes live and show banner
+  useEffect(() => {
+    // Check if auction status changed from DRAFT/PAUSED to LIVE
+    const wasNotLive = previousAuctionStatus !== 'LIVE'
+    const isNowLive = auction.status === 'LIVE'
+    const hasCurrentPlayer = currentPlayer !== null
+
+    if (wasNotLive && isNowLive && hasCurrentPlayer) {
+      console.log('🎬 Auction just went LIVE - showing going live banner')
+      setShowGoingLiveBanner(true)
+      
+      // Clear any existing timeout
+      if (goingLiveBannerTimeoutRef.current) {
+        clearTimeout(goingLiveBannerTimeoutRef.current)
+      }
+      
+      // Hide banner after 4 seconds
+      goingLiveBannerTimeoutRef.current = setTimeout(() => {
+        setShowGoingLiveBanner(false)
+        goingLiveBannerTimeoutRef.current = null
+      }, 4000)
+    }
+
+    // Update previous status
+    setPreviousAuctionStatus(auction.status)
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (goingLiveBannerTimeoutRef.current) {
+        clearTimeout(goingLiveBannerTimeoutRef.current)
+      }
+    }
+  }, [auction.status, currentPlayer, previousAuctionStatus])
 
   // Memoize player bid history for performance
   const playerBidHistory = useMemo(() => {
@@ -728,62 +766,62 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     toast.info('Marking player as sold...')
     
     try {
-    const response = await fetch(`/api/auction/${auction.id}/mark-sold`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId: currentPlayer.id })
-    })
+      const response = await fetch(`/api/auction/${auction.id}/mark-sold`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: currentPlayer.id })
+      })
 
-    if (response.ok) {
-      const data = await response.json()
-      // Show sold animation after server confirms
-      setSoldAnimation(true)
-      toast.success('Player marked as sold!')
-      
-      // Trigger reveal animation immediately if we have next player
-      // Don't wait for Pusher - start animation right away for better UX
-      if (data.nextPlayer) {
-        console.log('🎬 Triggering reveal animation immediately with next player from API')
-        // Store the next player for animation
-        setPendingPlayer(data.nextPlayer)
+      if (response.ok) {
+        const data = await response.json()
+        // Show sold animation after server confirms
+        setSoldAnimation(true)
+        toast.success('Player marked as sold!')
         
-        // Clear any existing fallback timeout
-        if (fallbackTimeoutRef.current) {
-          clearTimeout(fallbackTimeoutRef.current)
-          fallbackTimeoutRef.current = null
+        // Trigger reveal animation immediately if we have next player
+        // Don't wait for Pusher - start animation right away for better UX
+        if (data.nextPlayer) {
+          console.log('🎬 Triggering reveal animation immediately with next player from API')
+          // Store the next player for animation
+          setPendingPlayer(data.nextPlayer)
+          
+          // Clear any existing fallback timeout
+          if (fallbackTimeoutRef.current) {
+            clearTimeout(fallbackTimeoutRef.current)
+            fallbackTimeoutRef.current = null
+          }
+          
+          // Start reveal animation after sold animation closes (3 seconds)
+          // The sold animation shows for 3 seconds, so delay reveal by 3s
+          setTimeout(() => {
+            console.log('🎬 Starting reveal animation after sold banner closed')
+            setShowPlayerReveal(true)
+          }, 3000)
+          
+          // Set a timeout fallback in case animation doesn't complete
+          // Wait for sold animation (3s) + reveal animation (5s) + buffer (1.5s) = 9.5s total
+          fallbackTimeoutRef.current = setTimeout(() => {
+            // If we reach here, something went wrong with animation
+            console.warn('⚠️ Animation not completed within 9.5s, using fallback')
+            setCurrentPlayer(data.nextPlayer)
+            setCurrentBid(null)
+            setBidHistory([])
+            setHighestBidderId(null)
+            setIsMarkingSold(false)
+            // Refresh bidders balance when next player is set
+            refreshAuctionState()
+            fallbackTimeoutRef.current = null
+          }, 9500) // 3s sold animation + 5s reveal animation + 1.5s buffer
         }
         
-        // Start reveal animation after sold animation closes (3 seconds)
-        // The sold animation shows for 3 seconds, so delay reveal by 3s
         setTimeout(() => {
-          console.log('🎬 Starting reveal animation after sold banner closed')
-          setShowPlayerReveal(true)
-        }, 3000)
-        
-        // Set a timeout fallback in case animation doesn't complete
-        // Wait for sold animation (3s) + reveal animation (5s) + buffer (1.5s) = 9.5s total
-        fallbackTimeoutRef.current = setTimeout(() => {
-          // If we reach here, something went wrong with animation
-          console.warn('⚠️ Animation not completed within 9.5s, using fallback')
-          setCurrentPlayer(data.nextPlayer)
+          setSoldAnimation(false)
+          // Don't set isMarkingSold to false here - let fallback or animation completion handle it
+          // Clear current bid and history - new player will be set by Pusher event or fallback
           setCurrentBid(null)
           setBidHistory([])
           setHighestBidderId(null)
-          setIsMarkingSold(false)
-          // Refresh bidders balance when next player is set
-          refreshAuctionState()
-          fallbackTimeoutRef.current = null
-        }, 9500) // 3s sold animation + 5s reveal animation + 1.5s buffer
-      }
-      
-      setTimeout(() => {
-        setSoldAnimation(false)
-        // Don't set isMarkingSold to false here - let fallback or animation completion handle it
-        // Clear current bid and history - new player will be set by Pusher event or fallback
-        setCurrentBid(null)
-        setBidHistory([])
-        setHighestBidderId(null)
-      }, 3000)
+        }, 3000)
       } else {
         const errorData = await response.json()
         toast.error(errorData.error || 'Failed to mark as sold')
@@ -803,50 +841,50 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     toast.info('Marking player as unsold...')
 
     try {
-    const response = await fetch(`/api/auction/${auction.id}/mark-unsold`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId: currentPlayer.id })
-    })
+      const response = await fetch(`/api/auction/${auction.id}/mark-unsold`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: currentPlayer.id })
+      })
 
-    if (response.ok) {
-      const data = await response.json()
-      toast.success('Player marked as unsold')
-      
-      // Trigger reveal animation immediately if we have next player
-      // Don't wait for Pusher - start animation right away for better UX
-      if (data.nextPlayer) {
-        console.log('🎬 Triggering reveal animation immediately with next player from API (unsold)')
-        // Store the next player for animation
-        setPendingPlayer(data.nextPlayer)
+      if (response.ok) {
+        const data = await response.json()
+        toast.success('Player marked as unsold')
         
-        // Clear any existing fallback timeout
-        if (fallbackTimeoutRef.current) {
-          clearTimeout(fallbackTimeoutRef.current)
-          fallbackTimeoutRef.current = null
-        }
-        
-        // Start reveal animation immediately (no sold banner for unsold)
-        console.log('🎬 Starting reveal animation immediately (unsold)')
-        setShowPlayerReveal(true)
-        
-        // Set a timeout fallback in case animation doesn't complete
-        // Wait for reveal animation (5s) + buffer (1.5s) = 6.5s total
-        fallbackTimeoutRef.current = setTimeout(() => {
-          // If we reach here, something went wrong with animation
-          console.warn('⚠️ Animation not completed within 6.5s, using fallback')
-          setCurrentPlayer(data.nextPlayer)
-          setCurrentBid(null)
-          setBidHistory([])
-          setHighestBidderId(null)
+        // Trigger reveal animation immediately if we have next player
+        // Don't wait for Pusher - start animation right away for better UX
+        if (data.nextPlayer) {
+          console.log('🎬 Triggering reveal animation immediately with next player from API (unsold)')
+          // Store the next player for animation
+          setPendingPlayer(data.nextPlayer)
+          
+          // Clear any existing fallback timeout
+          if (fallbackTimeoutRef.current) {
+            clearTimeout(fallbackTimeoutRef.current)
+            fallbackTimeoutRef.current = null
+          }
+          
+          // Start reveal animation immediately (no sold banner for unsold)
+          console.log('🎬 Starting reveal animation immediately (unsold)')
+          setShowPlayerReveal(true)
+          
+          // Set a timeout fallback in case animation doesn't complete
+          // Wait for reveal animation (5s) + buffer (1.5s) = 6.5s total
+          fallbackTimeoutRef.current = setTimeout(() => {
+            // If we reach here, something went wrong with animation
+            console.warn('⚠️ Animation not completed within 6.5s, using fallback')
+            setCurrentPlayer(data.nextPlayer)
+            setCurrentBid(null)
+            setBidHistory([])
+            setHighestBidderId(null)
+            setIsMarkingUnsold(false)
+            // Refresh bidders balance when next player is set
+            refreshAuctionState()
+            fallbackTimeoutRef.current = null
+          }, 6500)
+        } else {
           setIsMarkingUnsold(false)
-          // Refresh bidders balance when next player is set
-          refreshAuctionState()
-          fallbackTimeoutRef.current = null
-        }, 6500)
-      } else {
-        setIsMarkingUnsold(false)
-      }
+        }
       } else {
         toast.error('Failed to mark as unsold')
         setIsMarkingUnsold(false)
@@ -926,10 +964,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
   // Memoize player data extraction for performance
   const playerData = useMemo(() => getPlayerData(currentPlayer), [currentPlayer])
-  const playerName = useMemo(() => 
-    playerData.name || playerData.Name || 'No Player Selected',
-    [playerData]
-  )
+  const playerName = useMemo(() => {
+    return playerData.name || playerData.Name || 'No Player Selected'
+  }, [playerData])
 
   // Check if there are any sold players (for showing Undo Last Sale button)
   const hasSoldPlayers = useMemo(() => {
@@ -1012,35 +1049,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     return data?.name || data?.Name || data?.player_name || 'Unknown Player'
   }, [pendingPlayer])
 
-  // Debug logging for reveal animation state
-  useEffect(() => {
-    console.log('🔍 Reveal animation state:', { 
-      showPlayerReveal, 
-      hasPendingPlayer: !!pendingPlayer,
-      pendingPlayerName,
-      allPlayerNamesCount: allPlayerNames.length,
-      shouldRender: showPlayerReveal && !!pendingPlayer
-    })
-  }, [showPlayerReveal, pendingPlayer, pendingPlayerName, allPlayerNames])
-  
-  // Debug logging for when animation should render
-  useEffect(() => {
-    if (showPlayerReveal && pendingPlayer) {
-      console.log('🎭 Animation SHOULD be rendering now:', {
-        showPlayerReveal,
-        hasPendingPlayer: !!pendingPlayer,
-        pendingPlayerName,
-        allPlayerNamesCount: allPlayerNames.length
-      })
-    } else {
-      console.log('🎭 Animation NOT rendering:', {
-        showPlayerReveal,
-        hasPendingPlayer: !!pendingPlayer,
-        reason: !showPlayerReveal ? 'showPlayerReveal is false' : 'pendingPlayer is null'
-      })
-    }
-  }, [showPlayerReveal, pendingPlayer, pendingPlayerName, allPlayerNames])
-
   // Cleanup fallback timeout on unmount
   useEffect(() => {
     return () => {
@@ -1050,14 +1058,23 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     }
   }, [])
 
+  // Early return for SSR
   if (!isClient) {
-    // Avoid SSR/CSR markup drift by rendering after mount
     return null
   }
 
+  // Main return
   return (
     <>
-    <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} px-4 sm:px-6 lg:px-8 transition-all duration-200`}>
+      {/* Going Live Banner - Full Page Overlay */}
+      <GoingLiveBanner 
+        show={showGoingLiveBanner} 
+        onComplete={() => setShowGoingLiveBanner(false)}
+      />
+      
+      {/* Hide main content when banner is showing */}
+      {!showGoingLiveBanner && (
+        <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} px-4 sm:px-6 lg:px-8 transition-all duration-200`}>
       <div className="max-w-[1400px] mx-auto py-4 sm:py-6 space-y-4">
         {/* Enhanced Header */}
         <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
@@ -2239,6 +2256,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       </Dialog>
     </div>
     </div>
+      )}
 
     {/* Sliding Bidding Console (Admin only) */}
     {viewMode === 'admin' && (

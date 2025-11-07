@@ -569,7 +569,9 @@ Return ONLY valid JSON, no other text.`
         })
         
         // Get current bid and base price for calculations (no mock data)
-        const currentBidForValidation = bidHistory.length > 0 ? bidHistory[0]?.amount || 0 : 0
+        // Round current bid to nearest 1000 to ensure it's in multiples of 1000
+        const rawCurrentBid = bidHistory.length > 0 ? bidHistory[0]?.amount || 0 : 0
+        const currentBidForValidation = roundToNearestThousand(rawCurrentBid)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const basePriceForValidation = (currentPlayer.data as any)?.['Base Price'] || (currentPlayer.data as any)?.['base price'] || 1000
         const minIncrementForValidation = currentBidForValidation >= 10000 ? 2000 : 1000
@@ -625,14 +627,22 @@ Return ONLY valid JSON, no other text.`
               probability = b.probability
             }
             
-            // Get maxBid from new format (maxPrice) or old format (maxBid)
+            // Round all price values from AI response FIRST (before any calculations)
+            // This ensures all values are in multiples of 1000
+            const roundedProbablePrice = b.probablePrice ? roundToNearestThousand(b.probablePrice) : undefined
+            const roundedMinPrice = b.minPrice ? roundToNearestThousand(b.minPrice) : undefined
+            const roundedMaxPrice = b.maxPrice ? roundToNearestThousand(b.maxPrice) : undefined
+            const roundedAveragePrice = b.averagePrice ? roundToNearestThousand(b.averagePrice) : undefined
+            const roundedMaxBidFromAI = b.maxBid ? roundToNearestThousand(b.maxBid) : 0
+            
+            // Get maxBid from new format (maxPrice) or old format (maxBid) - use ROUNDED values
             let finalMaxBid = 0
-            if (typeof b.maxPrice === 'number' && b.maxPrice > 0) {
-              finalMaxBid = b.maxPrice
-            } else if (typeof b.probablePrice === 'number' && b.probablePrice > 0) {
-              finalMaxBid = b.probablePrice
-            } else if (typeof b.maxBid === 'number' && b.maxBid > 0) {
-              finalMaxBid = b.maxBid
+            if (roundedMaxPrice && roundedMaxPrice > 0) {
+              finalMaxBid = roundedMaxPrice
+            } else if (roundedProbablePrice && roundedProbablePrice > 0) {
+              finalMaxBid = roundedProbablePrice
+            } else if (roundedMaxBidFromAI > 0) {
+              finalMaxBid = roundedMaxBidFromAI
             }
             
             // Calculate reasonable max bid from actual data
@@ -645,30 +655,30 @@ Return ONLY valid JSON, no other text.`
               actualBidder.remainingPurse - minIncrementForValidation // Leave room for at least one more bid
             ) : basePrice + minIncrementForValidation
             
+            // Round reasonableMaxBid to nearest 1000
+            const roundedReasonableMaxBid = roundToNearestThousand(reasonableMaxBid)
+            
             // If maxBid is 0 or invalid, use calculated value
             if (finalMaxBid === 0) {
               finalMaxBid = Math.max(
                 basePrice + minIncrementForValidation,
-                reasonableMaxBid
+                roundedReasonableMaxBid
               )
             } else {
-              // Validate AI's maxBid - cap it at reasonable limits
+              // Validate AI's maxBid - cap it at reasonable limits (using rounded values)
               finalMaxBid = Math.min(
                 finalMaxBid,
-                reasonableMaxBid,
-                actualBidder ? actualBidder.remainingPurse * 0.5 : 100000 // Never exceed 50% of purse or 100k
+                roundedReasonableMaxBid,
+                actualBidder ? roundToNearestThousand(actualBidder.remainingPurse * 0.5) : 100000 // Never exceed 50% of purse or 100k
               )
             }
             
-            // Final validation: ensure it's at least base price + increment
-            finalMaxBid = Math.max(finalMaxBid, basePrice + minIncrementForValidation)
+            // Final validation: ensure it's at least base price + increment (rounded)
+            const minBid = roundToNearestThousand(basePrice + minIncrementForValidation)
+            finalMaxBid = Math.max(finalMaxBid, minBid)
             
-            // Round all price values to nearest 1000 (bids must be in multiples of 1000)
+            // Final round to ensure it's in multiples of 1000 (should already be, but double-check)
             const roundedMaxBid = roundToNearestThousand(finalMaxBid)
-            const roundedProbablePrice = b.probablePrice ? roundToNearestThousand(b.probablePrice) : undefined
-            const roundedMinPrice = b.minPrice ? roundToNearestThousand(b.minPrice) : undefined
-            const roundedMaxPrice = b.maxPrice ? roundToNearestThousand(b.maxPrice) : undefined
-            const roundedAveragePrice = b.averagePrice ? roundToNearestThousand(b.averagePrice) : undefined
             
             // Adjust maxBid based on pool supply impact (if poolImpact is available)
             let poolAdjustedMaxBid = roundedMaxBid
@@ -870,14 +880,18 @@ function generateFallbackPredictions(
 ) {
   // Enhanced fallback logic considering all factors
   // Calculate metrics from bid history for THIS player only
-  const currentBid = bidHistory.length > 0 ? bidHistory[0]?.amount || 0 : 0
-  const highestBid = bidHistory.length > 0
+  // Round all bid values to nearest 1000 to ensure they're in multiples of 1000
+  const rawCurrentBid = bidHistory.length > 0 ? bidHistory[0]?.amount || 0 : 0
+  const currentBid = roundToNearestThousand(rawCurrentBid)
+  const rawHighestBid = bidHistory.length > 0
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ? Math.max(...bidHistory.map((b: any) => b.amount || 0))
     : 0
-  const averageBid = bidHistory.length > 0
+  const highestBid = roundToNearestThousand(rawHighestBid)
+  const rawAverageBid = bidHistory.length > 0
     ? bidHistory.reduce((sum, b) => sum + (b.amount || 0), 0) / bidHistory.length
     : 0
+  const averageBid = roundToNearestThousand(rawAverageBid)
   
   // Determine min increment based on dynamic rule
   const minIncrement = currentBid >= 10000 ? 2000 : 1000

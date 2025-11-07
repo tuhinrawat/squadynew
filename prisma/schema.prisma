@@ -80,6 +80,9 @@ model Auction {
   uniqueVisitors   Int           @default(0) // Unique visitors count
   peakViewers      Int           @default(0) // Peak concurrent viewers
 
+  // Scheduled start date/time for the auction
+  scheduledStartDate DateTime?   // When the auction is scheduled to start
+
   // Relations
   createdBy    User          @relation(fields: [createdById], references: [id])
   players      Player[]
