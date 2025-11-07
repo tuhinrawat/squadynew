@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Brain, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react'
+import { Loader2, Brain, TrendingUp, TrendingDown, AlertCircle, BarChart3, Star, Users } from 'lucide-react'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { usePusher } from '@/lib/pusher-client'
+import { calculatePlayerScoreFromData } from '@/lib/playerStats'
 
 interface BidAnalyticsProps {
   auction: Auction & {
@@ -45,6 +46,7 @@ interface AnalyticsData {
     recommendedAction: {
       action: 'bid' | 'pass' | 'wait'
       recommendedBid?: number
+      suggestedBuyPrice?: number
       reasoning: string
       confidence: number
     }
@@ -65,8 +67,35 @@ interface AnalyticsData {
         teamName: string
         needs: string[]
         urgency: number
+        reasoning?: string
+        purchasedCount?: number
+        remainingSlots?: number
+        remainingPurse?: number
+        mustSpendPerSlot?: number
+        composition?: {
+          batters: number
+          bowlers: number
+          allrounders: number
+        }
       }>
     }
+    upcomingHighValuePlayers?: Array<{
+      id: string
+      name: string
+      speciality: string
+      predictedSpeciality: string
+      predictedStats: string
+      batting: string
+      bowling: string
+      isIcon: boolean
+      basePrice: number
+      brillianceScore: number
+      overallRating: number
+      predictedPrice: number
+      minPrice: number
+      maxPrice: number
+      factors: string[]
+    }>
   }
   loading: boolean
   error: string | null
@@ -98,6 +127,16 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
   const [lastBidTime, setLastBidTime] = useState<number>(0)
   const [bidCountForCurrentPlayer, setBidCountForCurrentPlayer] = useState<number>(0)
   const [lastOpenAICallTime, setLastOpenAICallTime] = useState<number>(0)
+  
+  // Refs to store timeout IDs for cleanup
+  const timeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set())
+  // Ref to store cache for efficient access without causing re-renders
+  const cacheRef = useRef<Map<string, AnalyticsData['predictions']>>(new Map())
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    cacheRef.current = analyticsCache
+  }, [analyticsCache])
 
   // Update local state when props change
   useEffect(() => {
@@ -107,13 +146,34 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
   useEffect(() => {
     setLocalAuction(auction)
   }, [auction])
+  
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(timeout => clearTimeout(timeout))
+      timeoutRefs.current.clear()
+    }
+  }, [])
+  
+  // Limit cache size to prevent memory bloat (keep only last 10 players)
+  useEffect(() => {
+    if (analyticsCache.size > 10) {
+      setAnalyticsCache(prev => {
+        const newCache = new Map(prev)
+        // Remove oldest entries (keep last 10)
+        const entries = Array.from(newCache.entries())
+        const toKeep = entries.slice(-10)
+        return new Map(toKeep)
+      })
+    }
+  }, [analyticsCache.size])
 
   const fetchAnalytics = useCallback(async (forceRefresh = false, useAI = true) => {
     if (!localCurrentPlayer) return
 
-    // Check cache first (unless force refresh)
+    // Check cache first (unless force refresh) - use ref for efficient access
     const cacheKey = `${localCurrentPlayer.id}-${localAuction.id}`
-    const cached = analyticsCache.get(cacheKey)
+    const cached = cacheRef.current.get(cacheKey)
     
     if (!forceRefresh && cached) {
       console.log('[Analytics] Using cached analytics for player:', localCurrentPlayer.id)
@@ -176,11 +236,17 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         throw new Error('Invalid response structure from server')
       }
 
-      // Cache the results
+      // Cache the results (with size limit)
       const cacheKey = `${localCurrentPlayer.id}-${localAuction.id}`
       setAnalyticsCache(prev => {
         const newCache = new Map(prev)
         newCache.set(cacheKey, data.predictions)
+        // Limit cache to 10 entries to prevent memory bloat
+        if (newCache.size > 10) {
+          const entries = Array.from(newCache.entries())
+          const toKeep = entries.slice(-10)
+          return new Map(toKeep)
+        }
         return newCache
       })
 
@@ -201,13 +267,13 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         error: error instanceof Error ? error.message : 'Unknown error'
       }))
     }
-  }, [localCurrentPlayer?.id, selectedBidder.id, localAuction.id, (localAuction as any).analyticsVisibleColumns, analyticsCache, lastOpenAICallTime, bidCountForCurrentPlayer])
+  }, [localCurrentPlayer?.id, selectedBidder.id, localAuction.id, (localAuction as any).analyticsVisibleColumns, lastOpenAICallTime, bidCountForCurrentPlayer])
 
   // Fetch analytics on mount and when current player changes (only if not cached)
   useEffect(() => {
     if (localCurrentPlayer) {
       const cacheKey = `${localCurrentPlayer.id}-${localAuction.id}`
-      const cached = analyticsCache.get(cacheKey)
+      const cached = cacheRef.current.get(cacheKey)
       // Reset bid count for new player
       setBidCountForCurrentPlayer(0)
       setLastOpenAICallTime(0) // Reset timer for new player
@@ -244,9 +310,11 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         console.log(`[Analytics] New bid received (count: ${currentBidCount}). Using ${shouldUseAI ? 'OpenAI' : 'fallback'}...`)
         
         // Debounce: wait 1-2 seconds before refreshing to batch multiple rapid bids
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
+          timeoutRefs.current.delete(timeout)
           fetchAnalytics(true, shouldUseAI) // Use AI only if significant change
         }, shouldUseAI ? 1000 : 1500) // Longer debounce for fallback
+        timeoutRefs.current.add(timeout)
       }
     },
     onPlayerSold: (data) => {
@@ -272,9 +340,11 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
           newCache.delete(newCacheKey) // Clear cache for new player
           return newCache
         })
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
+          timeoutRefs.current.delete(timeout)
           fetchAnalytics(true, true) // Force refresh with OpenAI for new player
         }, 500)
+        timeoutRefs.current.add(timeout)
       }
     },
     onPlayersUpdated: (data) => {
@@ -293,9 +363,11 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         onAuctionUpdate?.(localAuction)
       }
       // Refresh analytics with fallback (no OpenAI) - just update purse data
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
+        timeoutRefs.current.delete(timeout)
         fetchAnalytics(true, false) // Use fallback for purse updates
       }, 500)
+      timeoutRefs.current.add(timeout)
     },
     onBidUndo: (data) => {
       // Bid undone - decrement bid count and use fallback
@@ -303,9 +375,11 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
       console.log('[Analytics] Bid undone, using fallback predictions...')
       setLastBidTime(Date.now())
       if (localCurrentPlayer) {
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
+          timeoutRefs.current.delete(timeout)
           fetchAnalytics(true, false) // Use fallback for undo
         }, 500)
+        timeoutRefs.current.add(timeout)
       }
     },
     onSaleUndo: (data) => {
@@ -326,9 +400,11 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
           return newCache
         })
       }
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
+        timeoutRefs.current.delete(timeout)
         fetchAnalytics(true, true) // Use OpenAI for sale undo (significant change)
       }, 1000)
+      timeoutRefs.current.add(timeout)
     }
   })
 
@@ -342,8 +418,149 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
     )
   }
 
+  // Calculate player stats
+  const playerStats = useMemo(() => {
+    if (!localCurrentPlayer) return null
+    try {
+      return calculatePlayerScoreFromData(localCurrentPlayer)
+    } catch (error) {
+      console.error('Error calculating player stats:', error)
+      return null
+    }
+  }, [localCurrentPlayer])
+
+  // Extract raw stats from player data
+  const playerData = localCurrentPlayer?.data as any
+  const rawStats = useMemo(() => {
+    if (!playerData) return null
+    return {
+      matches: playerData?.Matches || playerData?.matches || 'N/A',
+      runs: playerData?.Runs || playerData?.runs || 'N/A',
+      avg: playerData?.Average || playerData?.Avg || playerData?.average || 'N/A',
+      eco: playerData?.Economy || playerData?.Eco || playerData?.eco || 'N/A',
+      wickets: playerData?.Wickets || playerData?.wickets || 'N/A',
+      catches: playerData?.Catches || playerData?.catches || 'N/A',
+      strength: playerData?.Strength || playerData?.strength || 'N/A'
+    }
+  }, [playerData])
+
   return (
     <div className="space-y-6">
+      {/* Player Stats Card */}
+      {(playerStats || rawStats) && (
+        <Card className="border-2 border-purple-200 dark:border-purple-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" />
+              Player Statistics & Performance Analysis
+            </CardTitle>
+            <CardDescription>
+              Performance metrics and stats-based scoring for {((localCurrentPlayer.data as any)?.Name || 'Current Player')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Raw Stats */}
+              {rawStats && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">Performance Statistics</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Matches</span>
+                      <span className="text-sm font-semibold">{rawStats.matches}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Runs</span>
+                      <span className="text-sm font-semibold">{rawStats.runs}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Batting Average</span>
+                      <span className="text-sm font-semibold">{rawStats.avg}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Economy Rate</span>
+                      <span className="text-sm font-semibold">{rawStats.eco}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Wickets</span>
+                      <span className="text-sm font-semibold">{rawStats.wickets}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Catches</span>
+                      <span className="text-sm font-semibold">{rawStats.catches}</span>
+                    </div>
+                    {rawStats.strength !== 'N/A' && (
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Strength</span>
+                        <span className="text-sm font-semibold">{rawStats.strength}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Calculated Scores */}
+              {playerStats && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-3 text-gray-700 dark:text-gray-300">Stats-Based Scoring</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Overall Rating</span>
+                      <Badge variant="outline" className="text-sm font-semibold">
+                        {playerStats.overallRating}/100
+                      </Badge>
+                    </div>
+                    {playerStats.breakdown && (
+                      <>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Batting Score</span>
+                          <span className="text-sm font-semibold">{playerStats.breakdown.battingScore}/100</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Bowling Score</span>
+                          <span className="text-sm font-semibold">{playerStats.breakdown.bowlingScore}/100</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Experience Score</span>
+                          <span className="text-sm font-semibold">{playerStats.breakdown.experienceScore}/100</span>
+                        </div>
+                        <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Form Score</span>
+                          <span className="text-sm font-semibold">{playerStats.breakdown.formScore}/100</span>
+                        </div>
+                        {playerStats.breakdown.allrounderBonus > 0 && (
+                          <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Allrounder Bonus</span>
+                            <Badge className="bg-green-600 text-white">+{playerStats.breakdown.allrounderBonus}</Badge>
+                          </div>
+                        )}
+                        {playerStats.breakdown.keeperBonus > 0 && (
+                          <div className="flex justify-between items-center py-2">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Keeper Bonus</span>
+                            <Badge className="bg-blue-600 text-white">+{playerStats.breakdown.keeperBonus}</Badge>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div className="mt-4 pt-4 border-t-2 border-purple-300 dark:border-purple-700">
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Stats-Based Predicted Price</span>
+                        <span className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                          ₹{playerStats.predictedPrice.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Range: ₹{playerStats.minPrice.toLocaleString('en-IN')} - ₹{playerStats.maxPrice.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Action Card */}
       <Card className="border-2 border-blue-200 dark:border-blue-800">
         <CardHeader>
@@ -374,10 +591,19 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                   <p className="text-2xl font-bold mt-1">
                     {analytics.predictions.recommendedAction.action.toUpperCase()}
                   </p>
-                  {analytics.predictions.recommendedAction.recommendedBid && (
-                    <p className="text-lg text-gray-700 dark:text-gray-300 mt-1">
-                      Suggested Bid: ₹{analytics.predictions.recommendedAction.recommendedBid.toLocaleString('en-IN')}
-                    </p>
+                  {(analytics.predictions.recommendedAction.suggestedBuyPrice || analytics.predictions.recommendedAction.recommendedBid) && (
+                    <div className="mt-2 space-y-1">
+                      {analytics.predictions.recommendedAction.suggestedBuyPrice && (
+                        <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                          Suggested Buy Price: ₹{analytics.predictions.recommendedAction.suggestedBuyPrice.toLocaleString('en-IN')}
+                        </p>
+                      )}
+                      {analytics.predictions.recommendedAction.recommendedBid && analytics.predictions.recommendedAction.action === 'bid' && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Next Bid: ₹{analytics.predictions.recommendedAction.recommendedBid.toLocaleString('en-IN')}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
                 <Badge variant="outline" className="text-lg px-4 py-2">
@@ -539,8 +765,8 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                               )
                             })()}
                           </td>
-                          <td className="px-4 py-3">
-                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{bidder.reasoning}</p>
+                          <td className="px-4 py-3 max-w-md">
+                            <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-normal break-words">{bidder.reasoning || 'No analysis available'}</p>
                           </td>
                         </tr>
                       )
@@ -704,9 +930,35 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                                   <span className="font-semibold text-sm">{displayTeamName}</span>
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="text-sm text-gray-600 dark:text-gray-400">
-                                    {team.needs && team.needs.length > 0 ? team.needs.join(', ') : 'Balanced team'}
-                                  </span>
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex flex-wrap gap-1">
+                                      {team.needs && team.needs.length > 0 ? (
+                                        team.needs.map((need: string, idx: number) => (
+                                          <Badge key={idx} variant="outline" className="text-xs">
+                                            {need}
+                                          </Badge>
+                                        ))
+                                      ) : (
+                                        <Badge variant="secondary" className="text-xs">Balanced Team</Badge>
+                                      )}
+                                    </div>
+                                    {team.reasoning && (
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 whitespace-normal">
+                                        {team.reasoning}
+                                      </p>
+                                    )}
+                                    {(team as any).composition && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span>Composition: {(team as any).composition.batters} batters, {(team as any).composition.bowlers} bowlers, {(team as any).composition.allrounders} allrounders</span>
+                                        {(team as any).remainingSlots !== undefined && (
+                                          <span> • {(team as any).remainingSlots} slots remaining</span>
+                                        )}
+                                        {(team as any).mustSpendPerSlot !== undefined && (
+                                          <span> • Must spend ₹{(team as any).mustSpendPerSlot.toLocaleString('en-IN')}/slot</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                   <div className="flex flex-col items-center">
@@ -747,6 +999,123 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
           )}
         </CardContent>
       </Card>
+
+      {/* Upcoming High-Value Players */}
+      {analytics.predictions.upcomingHighValuePlayers && analytics.predictions.upcomingHighValuePlayers.length > 0 && (
+        <Card className="border-2 border-yellow-200 dark:border-yellow-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Upcoming High-Value Players
+            </CardTitle>
+            <CardDescription>
+              Players with strong stats/ratings that haven't come up yet - consider saving budget for these
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Player</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Rating</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Predicted Price</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Predicted Speciality</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Predicted Stats</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Score</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Key Factors</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analytics.predictions.upcomingHighValuePlayers
+                    .sort((a, b) => b.brillianceScore - a.brillianceScore)
+                    .map((player, index) => (
+                      <tr
+                        key={player.id}
+                        className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">#{index + 1}</span>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm">{player.name}</span>
+                                {player.isIcon && (
+                                  <Badge variant="outline" className="text-xs bg-yellow-100 dark:bg-yellow-900 border-yellow-400">
+                                    <Star className="w-3 h-3 mr-1" />
+                                    Icon
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                {player.batting !== 'N/A' && player.batting} {player.batting !== 'N/A' && player.bowling !== 'N/A' && '•'} {player.bowling !== 'N/A' && player.bowling}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant="outline" className="text-sm font-semibold">
+                            {player.overallRating}/100
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-sm">₹{player.predictedPrice.toLocaleString('en-IN')}</span>
+                            {player.minPrice > 0 && player.maxPrice > 0 && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                ₹{player.minPrice.toLocaleString('en-IN')} - ₹{player.maxPrice.toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <Badge variant="secondary" className="text-xs">
+                            {player.predictedSpeciality || player.speciality}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 max-w-xs">
+                            {player.predictedStats || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">{player.brillianceScore}</span>
+                            <div className="w-12 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full mt-1">
+                              <div 
+                                className="h-full rounded-full bg-yellow-500"
+                                style={{ width: `${Math.min(100, (player.brillianceScore / 100) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {player.factors.slice(0, 3).map((factor, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {factor}
+                              </Badge>
+                            ))}
+                            {player.factors.length > 3 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{player.factors.length - 3} more
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                <strong>Strategic Note:</strong> These players have high stats-based ratings and predicted prices. If you have significant remaining budget, consider saving for these players rather than overspending on the current player. The brilliance score indicates overall value (higher = more valuable).
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

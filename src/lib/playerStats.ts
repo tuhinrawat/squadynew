@@ -191,3 +191,71 @@ export function calculatePlayerScoreFromData(playerData: any): ScoreResult {
   return calculatePlayerScore(player)
 }
 
+/**
+ * Derive speciality from player stats (batting score, bowling score)
+ * Returns: 'Batter', 'Bowler', 'Allrounder', or 'Unknown'
+ */
+export function deriveSpecialityFromStats(scoreResult: ScoreResult): string {
+  const battingScore = scoreResult.breakdown?.battingScore || 0
+  const bowlingScore = scoreResult.breakdown?.bowlingScore || 0
+  
+  // If both batting and bowling scores are significant, it's an allrounder
+  if (battingScore >= 40 && bowlingScore >= 40) {
+    return 'Allrounder'
+  }
+  
+  // If batting score is significantly higher, it's a batter
+  if (battingScore > bowlingScore + 20) {
+    return 'Batter'
+  }
+  
+  // If bowling score is significantly higher, it's a bowler
+  if (bowlingScore > battingScore + 20) {
+    return 'Bowler'
+  }
+  
+  // If both are moderate (20-40), consider allrounder
+  if (battingScore >= 20 && bowlingScore >= 20) {
+    return 'Allrounder'
+  }
+  
+  // If only one is significant, use that
+  if (battingScore >= 30) {
+    return 'Batter'
+  }
+  
+  if (bowlingScore >= 30) {
+    return 'Bowler'
+  }
+  
+  // Default to unknown if scores are too low
+  return 'Unknown'
+}
+
+/**
+ * Get predicted stats summary string
+ */
+export function getPredictedStatsSummary(scoreResult: ScoreResult): string {
+  const battingScore = scoreResult.breakdown?.battingScore || 0
+  const bowlingScore = scoreResult.breakdown?.bowlingScore || 0
+  const experienceScore = scoreResult.breakdown?.experienceScore || 0
+  const formScore = scoreResult.breakdown?.formScore || 0
+  
+  const parts: string[] = []
+  
+  if (battingScore > 0) {
+    parts.push(`Bat: ${Math.round(battingScore)}`)
+  }
+  if (bowlingScore > 0) {
+    parts.push(`Bowl: ${Math.round(bowlingScore)}`)
+  }
+  if (experienceScore > 0) {
+    parts.push(`Exp: ${Math.round(experienceScore)}`)
+  }
+  if (formScore > 0) {
+    parts.push(`Form: ${Math.round(formScore)}`)
+  }
+  
+  return parts.join(' • ') || 'N/A'
+}
+

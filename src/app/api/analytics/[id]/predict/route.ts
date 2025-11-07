@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { calculatePlayerScoreFromData, ScoreResult } from '@/lib/playerStats'
+import { calculatePlayerScoreFromData, ScoreResult, deriveSpecialityFromStats, getPredictedStatsSummary } from '@/lib/playerStats'
 import { calculateAuctionState, analyzeTeamNeeds, calculateRemainingPoolImpact, getRemainingPoolSummary, AuctionState } from '@/lib/auctionState'
 
 // Lazy load OpenAI to avoid build-time errors
@@ -115,13 +115,25 @@ export async function POST(
     const poolImpact = calculateRemainingPoolImpact(playerSpeciality, auctionState)
     
     // Extract custom columns data if provided
+    // Also automatically include stats columns even if not in customColumns
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const customColumnsData: Record<string, any> = {}
+    
+    // Always include stats columns (they're critical for analysis)
+    const statsColumns = ['Matches', 'Runs', 'Average', 'Avg', 'Economy', 'Eco', 'Wickets', 'Catches', 'Strength']
+    statsColumns.forEach(col => {
+      const value = playerData?.[col] || playerData?.[col.toLowerCase()] || playerData?.[col.toUpperCase()]
+      if (value !== undefined && value !== null && value !== '') {
+        customColumnsData[col] = value
+      }
+    })
+    
+    // Also include any other custom columns provided
     if (customColumns && Array.isArray(customColumns)) {
       customColumns.forEach((col: string) => {
         if (col && typeof col === 'string' && col !== 'name' && col !== 'status' && 
             col !== 'speciality' && col !== 'batting' && col !== 'bowling' && 
-            col !== 'soldPrice' && col !== 'soldTo') {
+            col !== 'soldPrice' && col !== 'soldTo' && !statsColumns.includes(col)) {
           customColumnsData[col] = playerData?.[col]
         }
       })
@@ -134,36 +146,79 @@ export async function POST(
     )
 
     // Analyze upcoming players to identify brilliant ones
-    // This considers: icon status, custom analytics columns (ratings, stats), base price
+    // This considers: icon status, stats-based scoring, custom analytics columns (ratings, stats), base price
     const upcomingPlayersAnalysis = upcomingPlayers.map(p => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = p.data as any
       const name = data?.Name || data?.name || 'Unknown'
       
+      // Calculate stats-based score for upcoming player (CRITICAL for identifying high-value players)
+      const upcomingPlayerScore = calculatePlayerScoreFromData(p)
+      
       // Calculate a "brilliance score" based on multiple factors
       let brillianceScore = 0
       const factors: string[] = []
       
-      // Factor 1: Icon status (high weight)
+      // Factor 1: Stats-based Overall Rating (HIGHEST WEIGHT - most important)
+      if (upcomingPlayerScore.overallRating >= 70) {
+        brillianceScore += 40
+        factors.push(`Excellent Stats (Rating: ${upcomingPlayerScore.overallRating}/100)`)
+      } else if (upcomingPlayerScore.overallRating >= 60) {
+        brillianceScore += 30
+        factors.push(`Strong Stats (Rating: ${upcomingPlayerScore.overallRating}/100)`)
+      } else if (upcomingPlayerScore.overallRating >= 50) {
+        brillianceScore += 20
+        factors.push(`Good Stats (Rating: ${upcomingPlayerScore.overallRating}/100)`)
+      }
+      
+      // Factor 2: Stats-based Predicted Price (high predicted price = valuable player)
+      if (upcomingPlayerScore.predictedPrice >= 20000) {
+        brillianceScore += 35
+        factors.push(`High Predicted Price (₹${(upcomingPlayerScore.predictedPrice / 1000).toFixed(0)}k)`)
+      } else if (upcomingPlayerScore.predictedPrice >= 15000) {
+        brillianceScore += 25
+        factors.push(`Moderate-High Predicted Price (₹${(upcomingPlayerScore.predictedPrice / 1000).toFixed(0)}k)`)
+      } else if (upcomingPlayerScore.predictedPrice >= 10000) {
+        brillianceScore += 15
+        factors.push(`Moderate Predicted Price (₹${(upcomingPlayerScore.predictedPrice / 1000).toFixed(0)}k)`)
+      }
+      
+      // Factor 3: Icon status (high weight)
       if (p.isIcon) {
-        brillianceScore += 50
+        brillianceScore += 30
         factors.push('Icon Player')
       }
       
-      // Factor 2: Base price (higher base price = more valuable)
+      // Factor 4: Base price (higher base price = more valuable)
       const basePrice = data?.['Base Price'] || data?.['base price'] || 1000
       if (basePrice > 50000) {
-        brillianceScore += 30
+        brillianceScore += 25
         factors.push('Very High Base Price')
       } else if (basePrice > 25000) {
-        brillianceScore += 20
+        brillianceScore += 15
         factors.push('High Base Price')
       } else if (basePrice > 10000) {
         brillianceScore += 10
         factors.push('Moderate Base Price')
       }
       
-      // Factor 3: Custom analytics columns (ratings, performance metrics)
+      // Factor 5: Strong batting/bowling scores from stats
+      if (upcomingPlayerScore.breakdown) {
+        if (upcomingPlayerScore.breakdown.battingScore >= 60) {
+          brillianceScore += 15
+          factors.push(`Strong Batting (${upcomingPlayerScore.breakdown.battingScore}/100)`)
+        }
+        if (upcomingPlayerScore.breakdown.bowlingScore >= 60) {
+          brillianceScore += 15
+          factors.push(`Strong Bowling (${upcomingPlayerScore.breakdown.bowlingScore}/100)`)
+        }
+        if (upcomingPlayerScore.breakdown.experienceScore >= 70) {
+          brillianceScore += 10
+          factors.push(`Experienced (${upcomingPlayerScore.breakdown.experienceScore}/100)`)
+        }
+      }
+      
+      // Factor 6: Custom analytics columns (ratings, performance metrics)
       // Look for numeric fields that might indicate quality
       if (customColumns && Array.isArray(customColumns)) {
         customColumns.forEach((col: string) => {
@@ -171,10 +226,10 @@ export async function POST(
           if (typeof value === 'number') {
             // If it's a rating (0-100 scale), add to score
             if (value >= 80) {
-              brillianceScore += 25
+              brillianceScore += 20
               factors.push(`High ${col} (${value})`)
             } else if (value >= 60) {
-              brillianceScore += 15
+              brillianceScore += 10
               factors.push(`Good ${col} (${value})`)
             }
           } else if (typeof value === 'string') {
@@ -182,18 +237,18 @@ export async function POST(
             const lowerValue = value.toLowerCase()
             if (lowerValue.includes('excellent') || lowerValue.includes('outstanding') || 
                 lowerValue.includes('elite') || lowerValue.includes('top')) {
-              brillianceScore += 20
+              brillianceScore += 15
               factors.push(`Excellent ${col}`)
             }
           }
         })
       }
       
-      // Factor 4: Speciality (allrounders often more valuable)
-      const speciality = data?.Speciality || data?.speciality || ''
-      if (speciality.toLowerCase().includes('allrounder')) {
+      // Factor 7: Derived Speciality from stats (allrounders often more valuable)
+      const derivedSpeciality = deriveSpecialityFromStats(upcomingPlayerScore)
+      if (derivedSpeciality === 'Allrounder') {
         brillianceScore += 10
-        factors.push('Allrounder')
+        factors.push('Allrounder (Stats-Based)')
       }
       
       return {
@@ -204,9 +259,14 @@ export async function POST(
         basePrice,
         brillianceScore,
         factors,
-        speciality: data?.Speciality || data?.speciality || 'N/A',
+        speciality: derivedSpeciality, // Use derived speciality from stats
+        predictedSpeciality: derivedSpeciality, // Add predicted speciality column
+        predictedStats: getPredictedStatsSummary(upcomingPlayerScore), // Add predicted stats column
         batting: data?.['Batting Type'] || 'N/A',
-        bowling: data?.['Bowling Type'] || 'N/A'
+        bowling: data?.['Bowling Type'] || 'N/A',
+        statsScore: upcomingPlayerScore, // Include full stats-based score
+        overallRating: upcomingPlayerScore.overallRating,
+        predictedPrice: upcomingPlayerScore.predictedPrice
       }
     }).sort((a, b) => b.brillianceScore - a.brillianceScore) // Sort by brilliance score
 
@@ -301,7 +361,11 @@ export async function POST(
 
 AUCTION RULES FROM RULEBOOK (STRICTLY ADHERE):
 
-- Budget: Each bidder starts with ${totalPurse.toLocaleString('en-IN')} points (${(totalPurse / 1000).toFixed(0)}k points).
+- **CRITICAL BUDGET RULE**: Each bidder starts with ${totalPurse.toLocaleString('en-IN')} points (${(totalPurse / 1000).toFixed(0)}k points) and **MUST SPEND THE ENTIRE BUDGET**. Bidders cannot end with unspent points - they must acquire enough players to consume all ${totalPurse.toLocaleString('en-IN')} points. This means:
+  * Early in auction: Bidders may be more conservative to save for high-value players
+  * Mid auction: Bidders balance spending based on remaining budget and upcoming players
+  * Late auction: Bidders MUST be aggressive to spend remaining budget (they have limited players left to buy)
+  * **Budget pressure increases as auction progresses** - bidders with high remaining purse will bid more aggressively later
 
 - Base Price: ${(playerData?.['Base Price'] || playerData?.['base price'] || 1000)} points (${((playerData?.['Base Price'] || playerData?.['base price'] || 1000) / 1000).toFixed(0)}k) per player.
 
@@ -359,13 +423,47 @@ CURRENT PLAYER:
 
 - Base Price: ${(playerData?.['Base Price'] || playerData?.['base price'] || 1000)} points
 
+- **PLAYER STATISTICS** (Critical for performance evaluation):
+  * Matches: ${playerData?.Matches || playerData?.matches || 'N/A'}
+  * Runs: ${playerData?.Runs || playerData?.runs || 'N/A'}
+  * Batting Average: ${playerData?.Average || playerData?.Avg || playerData?.average || 'N/A'}
+  * Economy Rate: ${playerData?.Economy || playerData?.Eco || playerData?.eco || 'N/A'}
+  * Wickets: ${playerData?.Wickets || playerData?.wickets || 'N/A'}
+  * Catches: ${playerData?.Catches || playerData?.catches || 'N/A'}
+  * Strength: ${playerData?.Strength || playerData?.strength || 'N/A'}
+
 ${Object.keys(customColumnsData).length > 0 ? `- Custom Analytics Columns:\n${Object.entries(customColumnsData).map(([key, value]) => `  * ${key}: ${value || 'N/A'}`).join('\n')}` : ''}
+
+- **STATS-BASED SCORING ANALYSIS** (Critical for price predictions):
+  * Overall Rating: ${playerScore.overallRating}/100
+  * Batting Score: ${playerScore.breakdown?.battingScore || 0}/100
+  * Bowling Score: ${playerScore.breakdown?.bowlingScore || 0}/100
+  * Experience Score: ${playerScore.breakdown?.experienceScore || 0}/100
+  * Form Score: ${playerScore.breakdown?.formScore || 0}/100
+  * Allrounder Bonus: +${playerScore.breakdown?.allrounderBonus || 0}
+  * Keeper Bonus: +${playerScore.breakdown?.keeperBonus || 0}
+  * **Stats-Based Predicted Price: ₹${playerScore.predictedPrice.toLocaleString('en-IN')}** (Range: ₹${playerScore.minPrice.toLocaleString('en-IN')} - ₹${playerScore.maxPrice.toLocaleString('en-IN')})
+  * Reasoning: ${playerScore.reasoning}
 
 - Full Player Data: ${JSON.stringify(playerData, null, 2)}
 
 - Availability: ${playerData?.Availability || 'Full'} (both weekends or one)
 
-${brilliantUpcomingPlayers && brilliantUpcomingPlayers.length > 0 ? `\nUPCOMING PLAYERS ANALYSIS:\n${brilliantUpcomingPlayers.slice(0, 10).map(p => `- ${p.name} (${p.speciality}) - Brilliance Score: ${p.brillianceScore} - Factors: ${p.factors.join(', ')}`).join('\n')}\n` : ''}
+${brilliantUpcomingPlayers && brilliantUpcomingPlayers.length > 0 ? `\n**UPCOMING HIGH-VALUE PLAYERS** (CRITICAL FOR BIDDING STRATEGY):
+These players have NOT YET come up in the auction but have high stats/ratings. Bidders with high remaining purse may save budget for these players, making them LESS aggressive on current player.
+
+${brilliantUpcomingPlayers.slice(0, 10).map(p => {
+  const statsInfo = p.statsScore ? `Stats Rating: ${p.overallRating}/100, Predicted Price: ₹${p.predictedPrice.toLocaleString('en-IN')}` : 'No stats available'
+  return `- ${p.name} (${p.speciality}) - Brilliance Score: ${p.brillianceScore} - ${statsInfo} - Factors: ${p.factors.join(', ')}`
+}).join('\n')}
+
+**STRATEGIC IMPACT**: If bidders have high remaining purse (${(() => {
+  const highPurseBidders = biddersContext.filter(b => {
+    const remainingPercent = b.initialPurse > 0 ? (b.remainingPurse / b.initialPurse) * 100 : 0
+    return remainingPercent > 60
+  })
+  return highPurseBidders.length
+})()} bidders with >60% purse remaining) and ${brilliantUpcomingPlayers.length} high-value players coming up, they may be LESS aggressive on current player to save budget. Factor this into probability calculations.\n` : ''}
 
 BIDDERS (Detailed Analysis):
 
@@ -378,14 +476,33 @@ ${biddersWithPriorities.map(b => {
   const battingTypes = players.map(p => p.batting).filter(Boolean)
   const bowlingTypes = players.map(p => p.bowling).filter(Boolean)
   
+  // Calculate budget pressure (how much they MUST spend per remaining player)
+  const targetTeamSize = 12 // Including bidder
+  const remainingSlots = Math.max(0, targetTeamSize - (b.playersPurchased + 1)) // +1 for bidder
+  const mustSpendPerRemainingPlayer = remainingSlots > 0 ? b.remainingPurse / remainingSlots : b.remainingPurse
+  const budgetPressure = b.remainingPurse > 0 && remainingSlots > 0 
+    ? (mustSpendPerRemainingPlayer > (totalPurse / targetTeamSize) * 1.5 ? 'HIGH' : 
+       mustSpendPerRemainingPlayer > (totalPurse / targetTeamSize) ? 'MEDIUM' : 'LOW')
+    : 'N/A'
+  
+  // Calculate aggressiveness factor based on team composition and budget
+  const teamNeeds = teamNeedsAnalysis.find(t => t.bidderId === b.id)
+  const hasUrgentNeeds = teamNeeds && teamNeeds.urgency >= 7
+  const hasHighBudgetPressure = budgetPressure === 'HIGH'
+  const aggressivenessFactor = hasUrgentNeeds && hasHighBudgetPressure ? 'VERY HIGH' :
+                               hasUrgentNeeds || hasHighBudgetPressure ? 'HIGH' :
+                               teamNeeds && teamNeeds.urgency >= 5 ? 'MEDIUM' : 'LOW'
+  
   return `
 - Bidder ID: ${b.id}
   Team Name: ${b.teamName || b.name || 'Unknown'}
   Bidder Name: ${b.name || b.teamName || 'Unknown'}
   * Remaining Points: ${b.remainingPurse} (${(100 - b.purseUtilization).toFixed(1)}% remaining)
   * Total Spent: ${b.spent} (${b.purseUtilization.toFixed(1)}% utilized)
-  * Players Purchased: ${b.playersPurchased}
+  * Players Purchased: ${b.playersPurchased} / ${targetTeamSize - 1} needed (${remainingSlots} slots remaining)
   * Average Spent per Player: ${b.avgSpentPerPlayer}
+  * **BUDGET PRESSURE**: ${budgetPressure} - Must spend ₹${Math.round(mustSpendPerRemainingPlayer).toLocaleString('en-IN')} per remaining player slot (${remainingSlots} slots left)
+  * **AGGRESSIVENESS FACTOR**: ${aggressivenessFactor} (based on team needs + budget pressure)
   * Can Afford Next Bid: ${b.canAfford ? 'Yes' : 'No'}
   * Team Composition:
     - Specialities: ${[...new Set(specialities)].join(', ') || 'None'}
@@ -455,19 +572,35 @@ CRITICAL RULES - DO NOT VIOLATE:
 
 4. Base analysis ONLY on provided data: player details/custom columns, bidder points/utilization, compositions, bid history, rules.
 
-5. For predictions, use mind map factors to compute match scores (0-100): 40% Player-Related, 30% Bidder-Related, 30% Auction-Related.
+5. **CRITICAL: Use the STATS-BASED SCORING ANALYSIS and PLAYER STATISTICS above to inform your recommendations. The stats-based predicted price is calculated from actual performance data (Runs, Wickets, Matches, Average, Economy, etc.) and should heavily influence your price predictions and recommendations. If a player has strong stats (high Runs, Wickets, good Average/Economy), they should be valued higher.**
 
-6. Intent Probability: Sigmoid of match score (1 / (1 + exp(-0.1 * (score - 50))) * 100).
+6. **CRITICAL: FULL BUDGET CONSUMPTION RULE**: Every bidder MUST spend their entire ${totalPurse.toLocaleString('en-IN')} budget. This creates strategic pressure:
+   - Bidders with HIGH remaining purse (>60%) and many players left to buy: May be LESS aggressive now to save for upcoming high-value players
+   - Bidders with HIGH remaining purse (>60%) but FEW players left to buy: Will be VERY AGGRESSIVE (must spend remaining budget)
+   - Bidders with LOW remaining purse (<40%): Will be MORE selective and aggressive only on players that fill critical team gaps
+   - **Budget pressure increases as auction progresses** - factor this into aggressiveness and maxBid calculations
 
-7. Aggressiveness: Low (<40 match), Medium (40-70), High (>70); adjust for purse and needs.
+7. **CRITICAL: UPCOMING HIGH-VALUE PLAYERS IMPACT**: The UPCOMING PLAYERS ANALYSIS above shows players with high stats/ratings that haven't come up yet. Bidders with high remaining purse will consider saving budget for these players, making them LESS aggressive on current player. Factor this into probability and maxBid calculations.
 
-8. Price Predictions: Probable = base + (match / 100) * (performance premium from custom columns + intangibles); Min = probable - 20% variability; Max = probable + 30%; Avg = mean. Cap by remaining points; adhere to increments.
+8. **CRITICAL: TEAM COMPOSITION & AGGRESSIVENESS**: Use the Team Composition and Aggressiveness Factor for each bidder to determine bidding behavior:
+   - HIGH aggressiveness + urgent team needs = Very likely to bid, higher maxBid
+   - HIGH aggressiveness + balanced team = Likely to bid, moderate maxBid
+   - LOW aggressiveness + urgent needs = May bid, lower maxBid
+   - LOW aggressiveness + balanced team = Less likely to bid
 
-9. Account for interactions: High intent across bidders inflates max prices.
+9. For predictions, use mind map factors to compute match scores (0-100): 40% Player-Related (use stats heavily here), 30% Bidder-Related (consider team composition, budget pressure, aggressiveness factor), 30% Auction-Related (upcoming players, competition).
 
-10. If upcoming strong players (from context), high-purse bidders less aggressive now.
+7. Intent Probability: Sigmoid of match score (1 / (1 + exp(-0.1 * (score - 50))) * 100).
 
-11. Custom columns critical for refining (e.g., ratings impact premiums).
+8. Aggressiveness: Low (<40 match), Medium (40-70), High (>70); adjust for purse and needs.
+
+9. Price Predictions: Use stats-based predicted price as baseline. Probable = statsPredictedPrice + (match / 100) * (performance premium from custom columns + intangibles); Min = probable - 20% variability; Max = probable + 30%; Avg = mean. Cap by remaining points; adhere to increments.
+
+10. Account for interactions: High intent across bidders inflates max prices.
+
+11. If upcoming strong players (from context), high-purse bidders less aggressive now.
+
+12. Custom columns critical for refining (e.g., ratings impact premiums).
 
 Provide a JSON response with:
 
@@ -489,9 +622,25 @@ Provide a JSON response with:
 
    - averagePrice: Number
 
-   - reasoning: Brief, data-based explanation
+   - reasoning: **DETAILED, SPECIFIC analysis** (minimum 2-3 sentences) explaining:
+     * Why this bidder is likely/unlikely to bid (reference their team composition, budget pressure, aggressiveness factor, remaining slots)
+     * How their current team needs align with this player (specific gaps: batters, bowlers, allrounders, keepers)
+     * Budget considerations (remaining purse %, must spend per slot, upcoming high-value players impact)
+     * Competition factors (how many other bidders, their aggressiveness)
+     * Example: "Falcon has 100% purse remaining (₹100,000) with 11 slots to fill, requiring ₹9,091 per slot. Team currently has 0 players, urgently needs allrounders and bowlers. With 3 high-value upcoming players (Sandeepan, etc.), Falcon may save budget for them. However, this player's strong stats (Rating 57/100, Predicted ₹21k) and allrounder bonus (+25) make them valuable. Competition is medium (2-3 likely bidders). Aggressiveness: MEDIUM - may bid up to ₹14k if price stays reasonable."
 
-2. recommendedAction: { action: 'bid/pass/wait', recommendedAmount: Number (if bid), reasoning: String, confidence: 0-1 }
+2. recommendedAction: { action: 'bid/pass/wait', suggestedBuyPrice: Number, recommendedBid: Number (optional, only if action is 'bid'), reasoning: String, confidence: 0-1 }
+   - **CRITICAL**: suggestedBuyPrice is the TARGET PRICE at which to buy the player (not the next bid increment). It MUST align with stats-based predicted price when available. If stats-based price is ₹21,000, suggestedBuyPrice should be ₹15,000-₹18,000 (70-85% of stats price, representing good value), NOT ₹1,000.
+   - suggestedBuyPrice: The price at which this player represents good value. Calculate as 70-85% of stats-based predicted price (if available), or 75-80% of estimated final price. This is the strategic target price for purchasing.
+   - recommendedBid: (Optional, only if action is 'bid') The next bid increment amount (current bid + min increment). This is for immediate action, while suggestedBuyPrice is the strategic target.
+   - reasoning: **DETAILED, SPECIFIC analysis** (minimum 3-4 sentences) explaining:
+     * Why this action (bid/pass/wait) is recommended for the current bidder (Tushar/Falcon)
+     * How stats-based predicted price (₹X) compares to suggestedBuyPrice and estimated final price
+     * Team composition analysis (what gaps this player fills, urgency)
+     * Budget strategy (remaining purse %, must spend per slot, upcoming players consideration)
+     * Competition assessment (number of likely bidders, their aggressiveness)
+     * Specific suggestedBuyPrice and reasoning (must reference stats-based price if available)
+     * Example: "RECOMMENDATION: WAIT with suggested buy price of ₹15,000. This player (Gaurav) has strong stats (Overall Rating 57/100, Stats-Based Predicted Price ₹21,000) with allrounder bonus. However, you have 100% purse remaining (₹100,000) with 11 slots to fill, requiring ₹9,091 per slot. With 3 high-value upcoming players coming, consider saving budget. Current competition is medium (2-3 likely bidders). Suggested buy price ₹15,000 (71% of stats price) represents good value - consider buying if price stays below this."
 
 3. marketAnalysis: 
 
@@ -711,13 +860,16 @@ Return ONLY valid JSON, no other text.`
           }),
           recommendedAction: {
             action: parsed.recommendedAction?.action || 'wait',
-            // Handle both new format (recommendedAmount) and old format (recommendedBid)
-            // Round to nearest 1000 (bids must be in multiples of 1000)
-            recommendedBid: typeof parsed.recommendedAction?.recommendedAmount === 'number'
-              ? roundToNearestThousand(parsed.recommendedAction.recommendedAmount)
-              : (typeof parsed.recommendedAction?.recommendedBid === 'number' 
-                ? roundToNearestThousand(parsed.recommendedAction.recommendedBid)
+            // Extract suggestedBuyPrice (target purchase price)
+            suggestedBuyPrice: typeof parsed.recommendedAction?.suggestedBuyPrice === 'number'
+              ? roundToNearestThousand(parsed.recommendedAction.suggestedBuyPrice)
+              : (typeof parsed.recommendedAction?.recommendedAmount === 'number'
+                ? roundToNearestThousand(parsed.recommendedAction.recommendedAmount) // Fallback to recommendedAmount
                 : undefined),
+            // Extract recommendedBid (next bid increment, optional)
+            recommendedBid: typeof parsed.recommendedAction?.recommendedBid === 'number'
+              ? roundToNearestThousand(parsed.recommendedAction.recommendedBid)
+              : undefined,
             reasoning: parsed.recommendedAction?.reasoning || 'No recommendation available',
             confidence: typeof parsed.recommendedAction?.confidence === 'number' 
               ? parsed.recommendedAction.confidence 
@@ -801,7 +953,29 @@ Return ONLY valid JSON, no other text.`
                   }
                 })
             })()
-          }
+          },
+          upcomingHighValuePlayers: brilliantUpcomingPlayers?.slice(0, 15).map((p: any) => {
+            const statsScore = p.statsScore || (p.overallRating ? { overallRating: p.overallRating, breakdown: {} } : null)
+            const predictedSpeciality = statsScore ? deriveSpecialityFromStats(statsScore) : (p.speciality || 'Unknown')
+            const predictedStats = statsScore ? getPredictedStatsSummary(statsScore) : 'N/A'
+            return {
+              id: p.id,
+              name: p.name,
+              speciality: predictedSpeciality, // Use derived speciality
+              predictedSpeciality: predictedSpeciality, // Add predicted speciality column
+              predictedStats: predictedStats, // Add predicted stats column
+              batting: p.batting,
+              bowling: p.bowling,
+              isIcon: p.isIcon,
+              basePrice: p.basePrice,
+              brillianceScore: p.brillianceScore,
+              overallRating: p.overallRating || p.statsScore?.overallRating || 0,
+              predictedPrice: p.predictedPrice || p.statsScore?.predictedPrice || 0,
+              minPrice: p.statsScore?.minPrice || 0,
+              maxPrice: p.statsScore?.maxPrice || 0,
+              factors: p.factors || []
+            }
+          }) || []
         }
       } catch (error) {
         console.error('OpenAI error:', error)
@@ -817,7 +991,8 @@ Return ONLY valid JSON, no other text.`
           brilliantUpcomingPlayers,
           playerScore,
           auctionState,
-          teamNeedsAnalysis
+          teamNeedsAnalysis,
+          totalPurse
         )
       }
     } else {
@@ -834,7 +1009,8 @@ Return ONLY valid JSON, no other text.`
         brilliantUpcomingPlayers,
         playerScore,
         auctionState,
-        teamNeedsAnalysis
+        teamNeedsAnalysis,
+        totalPurse
       )
     }
 
@@ -876,7 +1052,8 @@ function generateFallbackPredictions(
   playerScore?: ScoreResult,
   auctionState?: AuctionState,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teamNeedsAnalysis?: any[]
+  teamNeedsAnalysis?: any[],
+  totalPurse: number = 100000
 ) {
   // Enhanced fallback logic considering all factors
   // Calculate metrics from bid history for THIS player only
@@ -900,10 +1077,11 @@ function generateFallbackPredictions(
   const hasBrilliantUpcoming = brilliantUpcomingPlayers && brilliantUpcomingPlayers.length > 0
   const brilliantCount = brilliantUpcomingPlayers?.length || 0
   
-  // Get player speciality and calculate pool impact
+  // Get player speciality - derive from stats instead of using column
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playerData = player?.data as any
-  const playerSpeciality = playerData?.Speciality || playerData?.speciality || ''
+  // Derive speciality from stats-based scoring
+  const playerSpeciality = playerScore ? deriveSpecialityFromStats(playerScore) : (playerData?.Speciality || playerData?.speciality || '')
   const poolImpact = auctionState ? calculateRemainingPoolImpact(playerSpeciality, auctionState) : 'medium'
   const availableSimilarPlayers = auctionState?.playersBySpeciality[playerSpeciality]?.available || 0
 
@@ -922,8 +1100,8 @@ function generateFallbackPredictions(
       const needsBatter = b.teamNeeds?.includes('batter') || b.teamNeeds?.includes('Batter')
       const needsBowler = b.teamNeeds?.includes('bowler') || b.teamNeeds?.includes('Bowler')
       const needsAllrounder = b.teamNeeds?.includes('allrounder') || b.teamNeeds?.includes('Allrounder')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const playerSpeciality = (player?.data as any)?.Speciality || ''
+      // Derive speciality from stats instead of using column
+      const playerSpeciality = playerScore ? deriveSpecialityFromStats(playerScore) : ((player?.data as any)?.Speciality || '')
       
       // If team has specific needs and player matches, higher probability
       const matchesNeed = (needsBatter && playerSpeciality.includes('Batter')) ||
@@ -1163,6 +1341,12 @@ function generateFallbackPredictions(
   // If no bids exist and no average bid, we cannot estimate - return 0 or undefined
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const basePrice = (player?.data as any)?.['Base Price'] || (player?.data as any)?.['base price'] || 1000
+  
+  // Use stats-based predicted price as a baseline for recommendations
+  const statsPredictedPrice = playerScore?.predictedPrice || basePrice * 5
+  const statsMinPrice = playerScore?.minPrice || basePrice
+  const statsMaxPrice = playerScore?.maxPrice || basePrice * 10
+  
   let estimatedFinalPrice: number | null = null
   
   if (currentBid > 0) {
@@ -1172,13 +1356,21 @@ function generateFallbackPredictions(
     // If we have average bid data, use it
     estimatedFinalPrice = averageBid * 1.2
   } else {
-    // No bids exist - cannot estimate. Use base price only as minimum reference, not as estimate
-    // We'll handle this in the reasoning logic
-    estimatedFinalPrice = null
+    // No bids exist - use stats-based predicted price as estimate
+    estimatedFinalPrice = statsPredictedPrice
   }
+  
+  // Factor in stats quality when making recommendations
+  const hasStrongStats = playerScore && (
+    playerScore.overallRating >= 60 || // Good overall rating
+    (playerScore.breakdown?.battingScore || 0) >= 50 || // Good batting
+    (playerScore.breakdown?.bowlingScore || 0) >= 50 || // Good bowling
+    (playerScore.breakdown?.experienceScore || 0) >= 70 // Experienced
+  )
   
   let action: 'bid' | 'pass' | 'wait' = 'wait'
   let recommendedBid: number | undefined = undefined
+  let suggestedBuyPrice: number | undefined = undefined // Target price at which to buy
   let reasoning = ''
   let confidence = 0.5
   
@@ -1194,24 +1386,55 @@ function generateFallbackPredictions(
     action = 'wait'
     reasoning = `You've already spent ${tusharUtilization.toFixed(0)}% of your purse. This player may go for ₹${estimatedFinalPrice.toLocaleString('en-IN')}, which is ${((estimatedFinalPrice / tusharAvg - 1) * 100).toFixed(0)}% above your average spend. Monitor closely.`
     confidence = 0.65
-  } else if (shouldConsiderSaving && !(player?.isIcon)) {
+  } else if (shouldConsiderSaving && !(player?.isIcon) && !hasStrongStats) {
     // If brilliant players are coming and Tushar has good purse, consider waiting
+    // BUT if this player has strong stats, still consider bidding
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const brilliantNames = brilliantUpcomingPlayers?.slice(0, 3).map((p: any) => p.name).join(', ') || ''
     action = 'wait'
     reasoning = `STRATEGIC CONSIDERATION: ${brilliantCount} brilliant player(s) coming up (${brilliantNames}${brilliantCount > 3 ? '...' : ''}). You have ${tusharPurseRemainingPercent.toFixed(0)}% purse remaining (₹${tusharBidder.remainingPurse.toLocaleString('en-IN')}). Consider saving for brilliant players unless this player fills a critical team gap. Competition is ${competitionLevel}.`
     confidence = 0.75
+  } else if (hasStrongStats && estimatedFinalPrice !== null && estimatedFinalPrice <= statsMaxPrice && canAfford) {
+    // Player has strong stats and price is within reasonable range - recommend bidding
+    action = 'bid'
+    // Calculate suggested buy price: 70-85% of stats-based predicted price (good value range)
+    suggestedBuyPrice = roundToNearestThousand(statsPredictedPrice * 0.75) // 75% of stats price as target
+    // Ensure suggested buy price is within reasonable bounds
+    suggestedBuyPrice = Math.max(statsMinPrice, Math.min(suggestedBuyPrice, statsMaxPrice * 0.9))
+    // Recommended bid is the next increment from current bid (for immediate action)
+    const rawRecommendedBid = currentBid > 0 
+      ? currentBid + minIncrement
+      : Math.max(basePrice, suggestedBuyPrice * 0.6) // Start at 60% of buy price if no bids
+    recommendedBid = roundToNearestThousand(rawRecommendedBid)
+    reasoning = `STRONG STATS PLAYER: This player has strong performance stats (Overall Rating: ${playerScore?.overallRating || 'N/A'}/100, Stats-Based Predicted Price: ₹${statsPredictedPrice.toLocaleString('en-IN')}). Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')} (within stats range: ₹${statsMinPrice.toLocaleString('en-IN')} - ₹${statsMaxPrice.toLocaleString('en-IN')}). Estimated final price: ₹${estimatedFinalPrice.toLocaleString('en-IN')}. Competition is ${competitionLevel}. Consider buying if price stays below ₹${suggestedBuyPrice.toLocaleString('en-IN')}.`
+    confidence = 0.75
   } else if (canAfford && competitionLevel !== 'high') {
     action = 'bid'
-    // Recommended bid is always based on actual current bid or base price, never mock data
-    // Round to nearest 1000 (bids must be in multiples of 1000)
-    const rawRecommendedBid = currentBid > 0 ? currentBid + minIncrement : basePrice
+    // Calculate suggested buy price based on stats if available
+    if (playerScore && statsPredictedPrice > basePrice) {
+      // Use 70-80% of stats-based price as target buy price
+      suggestedBuyPrice = roundToNearestThousand(statsPredictedPrice * 0.75)
+      suggestedBuyPrice = Math.max(statsMinPrice, Math.min(suggestedBuyPrice, statsMaxPrice * 0.85))
+    } else {
+      // No stats available, use estimated final price or base price * 5
+      suggestedBuyPrice = estimatedFinalPrice 
+        ? roundToNearestThousand(estimatedFinalPrice * 0.8)
+        : roundToNearestThousand(basePrice * 5)
+    }
+    // Recommended bid is the next increment from current bid
+    const rawRecommendedBid = currentBid > 0 
+      ? currentBid + minIncrement
+      : Math.max(basePrice, suggestedBuyPrice * 0.5) // Start at 50% of buy price if no bids
     recommendedBid = roundToNearestThousand(rawRecommendedBid)
     let strategicNote = ''
     if (hasBrilliantUpcoming && brilliantCount > 0) {
       strategicNote = ` Note: ${brilliantCount} brilliant player(s) coming up - balance your spending.`
     }
-    reasoning = `Good opportunity. Competition is ${competitionLevel}. Recommended bid: ₹${recommendedBid.toLocaleString('en-IN')}. You have ${(100 - tusharUtilization).toFixed(0)}% of purse remaining.${strategicNote}`
+    let statsNote = ''
+    if (playerScore) {
+      statsNote = ` Stats-Based Price: ₹${statsPredictedPrice.toLocaleString('en-IN')} (Overall Rating: ${playerScore.overallRating}/100).`
+    }
+    reasoning = `Good opportunity. Competition is ${competitionLevel}.${statsNote} Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')}. You have ${(100 - tusharUtilization).toFixed(0)}% of purse remaining. Consider buying if price stays below ₹${suggestedBuyPrice.toLocaleString('en-IN')}.${strategicNote}`
     confidence = 0.7
   } else {
     action = 'wait'
@@ -1219,17 +1442,30 @@ function generateFallbackPredictions(
     if (hasBrilliantUpcoming && brilliantCount > 0) {
       strategicNote = ` ${brilliantCount} brilliant player(s) coming up - consider your strategy.`
     }
-    if (estimatedFinalPrice === null) {
-      reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. No bids placed yet - wait to see initial bids before deciding. Base price is ₹${basePrice.toLocaleString('en-IN')}.${strategicNote}`
+    let statsNote = ''
+    if (playerScore) {
+      statsNote = ` Stats analysis: Overall Rating ${playerScore.overallRating}/100, Stats-Based Price: ₹${statsPredictedPrice.toLocaleString('en-IN')} (range: ₹${statsMinPrice.toLocaleString('en-IN')} - ₹${statsMaxPrice.toLocaleString('en-IN')}).`
+      // Calculate suggested buy price even for wait action (so user knows target)
+      suggestedBuyPrice = roundToNearestThousand(statsPredictedPrice * 0.7) // 70% of stats price as conservative target
+      suggestedBuyPrice = Math.max(statsMinPrice, Math.min(suggestedBuyPrice, statsMaxPrice * 0.8))
     } else {
-      reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. Wait to see initial bids before deciding.${strategicNote}`
+      // No stats, use estimated final price or base price * 4
+      suggestedBuyPrice = estimatedFinalPrice 
+        ? roundToNearestThousand(estimatedFinalPrice * 0.75)
+        : roundToNearestThousand(basePrice * 4)
+    }
+    if (estimatedFinalPrice === null) {
+      reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. No bids placed yet - wait to see initial bids before deciding. Base price is ₹${basePrice.toLocaleString('en-IN')}.${statsNote}${strategicNote} Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')} - consider buying if price stays below this.`
+    } else {
+      reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. Wait to see initial bids before deciding.${statsNote}${strategicNote} Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')} - consider buying if price stays below this.`
     }
     confidence = 0.6
   }
   
   const recommendedAction = {
     action,
-    recommendedBid,
+    recommendedBid, // Next bid increment (for immediate action)
+    suggestedBuyPrice, // Target price at which to buy (for strategic planning)
     reasoning,
     confidence
   }
@@ -1237,6 +1473,28 @@ function generateFallbackPredictions(
   return {
     likelyBidders,
     recommendedAction,
+    upcomingHighValuePlayers: brilliantUpcomingPlayers?.slice(0, 15).map((p: any) => {
+      const statsScore = p.statsScore || (p.overallRating ? { overallRating: p.overallRating, breakdown: {} } : null)
+      const predictedSpeciality = statsScore ? deriveSpecialityFromStats(statsScore) : (p.speciality || 'Unknown')
+      const predictedStats = statsScore ? getPredictedStatsSummary(statsScore) : 'N/A'
+      return {
+        id: p.id,
+        name: p.name,
+        speciality: predictedSpeciality, // Use derived speciality
+        predictedSpeciality: predictedSpeciality, // Add predicted speciality column
+        predictedStats: predictedStats, // Add predicted stats column
+        batting: p.batting,
+        bowling: p.bowling,
+        isIcon: p.isIcon,
+        basePrice: p.basePrice,
+        brillianceScore: p.brillianceScore,
+        overallRating: p.overallRating || p.statsScore?.overallRating || 0,
+        predictedPrice: p.predictedPrice || p.statsScore?.predictedPrice || 0,
+        minPrice: p.statsScore?.minPrice || 0,
+        maxPrice: p.statsScore?.maxPrice || 0,
+        factors: p.factors || []
+      }
+    }) || [],
     marketAnalysis: {
       // Round to nearest 1000 (bids must be in multiples of 1000)
       averageBid: roundToNearestThousand(averageBid), // Average of all bids for this current player
@@ -1251,8 +1509,18 @@ function generateFallbackPredictions(
           // Skip if we've already processed this bidder
           if (teamNeedsMap.has(b.id)) return
           
+          // Find actual bidder to get remaining purse and purchased count
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const actualBidder = auctionBidders.find((ab: any) => ab.id === b.id)
+          // Get team composition (which already has the players)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const composition = teamCompositions.find((t: any) => t.bidderId === b.id)
+          const purchasedCount = composition?.players?.length || 0
+          const targetTeamSize = 12 // Including bidder
+          const remainingSlots = Math.max(0, targetTeamSize - (purchasedCount + 1))
+          const remainingPurse = actualBidder?.remainingPurse || 0
+          const mustSpendPerSlot = remainingSlots > 0 ? remainingPurse / remainingSlots : remainingPurse
+          
           const players = composition?.players || []
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const specialities = players.map((p: any) => p.speciality)
@@ -1261,25 +1529,71 @@ function generateFallbackPredictions(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const bowlingTypes = players.map((p: any) => p.bowling).filter(Boolean)
           
+          // Count specific roles using derived specialities (from predicted stats)
+          // Calculate stats-based speciality for each purchased player from teamCompositions
+          const derivedSpecialities: string[] = []
+          players.forEach((p: any) => {
+            try {
+              // Use the player data from teamCompositions (which has name, speciality, batting, bowling, price)
+              // We need to reconstruct the player object for score calculation
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const playerForScoring = { data: p.data || { Name: p.name, Speciality: p.speciality || p.predictedSpeciality } }
+              const purchasedPlayerScore = calculatePlayerScoreFromData(playerForScoring)
+              const derived = deriveSpecialityFromStats(purchasedPlayerScore)
+              derivedSpecialities.push(derived)
+            } catch (error) {
+              // Fallback to predicted speciality or original speciality if calculation fails
+              derivedSpecialities.push(p.predictedSpeciality || p.speciality || 'Unknown')
+            }
+          })
+          
+          const batterCount = derivedSpecialities.filter((s: string) => 
+            s.toLowerCase().includes('batter') || s.toLowerCase().includes('batsman')
+          ).length
+          const bowlerCount = derivedSpecialities.filter((s: string) => 
+            s.toLowerCase().includes('bowler')
+          ).length
+          const allrounderCount = derivedSpecialities.filter((s: string) => 
+            s.toLowerCase().includes('allrounder')
+          ).length
+          
           const needs: string[] = []
           let urgency = 5
+          let reasoning = ''
           
-          if (battingTypes.length < 3) {
-            needs.push('More Batters')
+          if (batterCount < 3) {
+            needs.push(`Batters (${batterCount}/3)`)
             urgency += 2
+            reasoning += `Needs ${3 - batterCount} more batter(s). `
           }
-          if (bowlingTypes.length < 3) {
-            needs.push('More Bowlers')
+          if (bowlerCount < 3) {
+            needs.push(`Bowlers (${bowlerCount}/3)`)
             urgency += 2
+            reasoning += `Needs ${3 - bowlerCount} more bowler(s). `
           }
-          if (!specialities.includes('Allrounder')) {
-            needs.push('Allrounder')
+          if (allrounderCount < 1) {
+            needs.push(`Allrounder (${allrounderCount}/1)`)
             urgency += 1
+            reasoning += `Needs at least 1 allrounder. `
           }
-          if (b.remainingPurse < 20000) {
+          
+          // Budget pressure analysis
+          if (remainingPurse < 20000) {
             needs.push('Budget Constraint')
             urgency -= 1
+            reasoning += `Low budget (₹${remainingPurse.toLocaleString('en-IN')} remaining). `
+          } else if (mustSpendPerSlot > (totalPurse / targetTeamSize) * 1.5) {
+            needs.push('High Budget Pressure')
+            urgency += 1
+            reasoning += `Must spend ₹${Math.round(mustSpendPerSlot).toLocaleString('en-IN')} per remaining slot (${remainingSlots} slots left). `
           }
+          
+          // Add team composition summary
+          if (reasoning === '') {
+            reasoning = 'Team is relatively balanced. '
+          }
+          reasoning += `Current: ${purchasedCount} players, ${remainingSlots} slots remaining. `
+          reasoning += `Composition: ${batterCount} batters, ${bowlerCount} bowlers, ${allrounderCount} allrounders.`
           
           // Get team name from actual auction bidders first, then fallback to biddersContext
           const actualAuctionBidder = auctionBidders.find(ab => ab.id === b.id)
@@ -1294,7 +1608,17 @@ function generateFallbackPredictions(
             bidderId: b.id,
             teamName: teamName,
             needs: needs.length > 0 ? needs : ['Balanced Team'],
-            urgency: Math.max(1, Math.min(10, urgency))
+            urgency: Math.max(1, Math.min(10, urgency)),
+            reasoning: reasoning,
+            purchasedCount: purchasedCount,
+            remainingSlots: remainingSlots,
+            remainingPurse: remainingPurse,
+            mustSpendPerSlot: Math.round(mustSpendPerSlot),
+            composition: {
+              batters: batterCount,
+              bowlers: bowlerCount,
+              allrounders: allrounderCount
+            }
           })
         })
         
