@@ -318,6 +318,12 @@ Provide a JSON response with:
    - Each entry MUST include the exact "bidderId" from the BIDDERS list above
    - Use ONLY the exact teamName and bidderName from the BIDDERS list
    - Include probability (0-1), maxBid estimate, and reasoning
+   - maxBid MUST be realistic and reasonable:
+     * Should NOT exceed 40% of bidder's remaining purse
+     * Should NOT exceed 3x the current bid (if bids exist)
+     * Should NOT exceed 10x the base price (if no bids)
+     * Typical range: ₹1,000 to ₹50,000 (rarely above ₹50k)
+     * Example: If remaining purse is ₹80,000, maxBid should be around ₹20,000-₹32,000, NOT ₹3,000,000
    - NO DUPLICATES - each bidderId should appear only once
 2. recommendedAction: Action for Tushar (bid/pass/wait), recommended bid amount if bidding, reasoning, and confidence (0-1)
 3. marketAnalysis: 
@@ -458,23 +464,37 @@ Return ONLY valid JSON, no markdown formatting.`
             // Use the actual bidder ID if we found a match
             const finalBidderId = actualBidder?.id || b.bidderId || ''
             
-            // Validate maxBid - ensure it's not mock data
+            // Validate maxBid - ensure it's realistic and not mock data
             // If AI returns 0 or invalid, calculate from actual bidder data
             let finalMaxBid = typeof b.maxBid === 'number' && b.maxBid > 0 ? b.maxBid : 0
             
-            // If maxBid is 0 or invalid, calculate from actual bidder data (not mock)
-            if (finalMaxBid === 0 && actualBidder) {
-              // Calculate conservative estimate from ACTUAL data only:
-              // - Base price (from player data)
-              // - Remaining purse (from bidder data)
-              // - Current bid (from bid history)
-              // NO MOCK VALUES
+            // Calculate reasonable max bid from actual data
+            const basePrice = basePriceForValidation
+            const reasonableMaxBid = actualBidder ? Math.min(
+              actualBidder.remainingPurse * 0.4, // Max 40% of remaining purse
+              currentBidForValidation > 0 
+                ? currentBidForValidation * 3 // Max 3x current bid
+                : basePrice * 10, // Max 10x base price if no bids
+              actualBidder.remainingPurse - minIncrementForValidation // Leave room for at least one more bid
+            ) : basePrice + minIncrementForValidation
+            
+            // If maxBid is 0 or invalid, use calculated value
+            if (finalMaxBid === 0) {
               finalMaxBid = Math.max(
-                basePriceForValidation + minIncrementForValidation,
-                actualBidder.remainingPurse * 0.3,
-                currentBidForValidation > 0 ? currentBidForValidation + minIncrementForValidation : basePriceForValidation
+                basePrice + minIncrementForValidation,
+                reasonableMaxBid
+              )
+            } else {
+              // Validate AI's maxBid - cap it at reasonable limits
+              finalMaxBid = Math.min(
+                finalMaxBid,
+                reasonableMaxBid,
+                actualBidder ? actualBidder.remainingPurse * 0.5 : 100000 // Never exceed 50% of purse or 100k
               )
             }
+            
+            // Final validation: ensure it's at least base price + increment
+            finalMaxBid = Math.max(finalMaxBid, basePrice + minIncrementForValidation)
             
             return {
               bidderId: finalBidderId,
@@ -724,12 +744,20 @@ function generateFallbackPredictions(
       const rawProbability = purseFactor + utilizationFactor + needFactor + avgSpentFactor + earlyAuctionFactor + brilliantPlayerFactor
       const probability = Math.max(0, Math.min(0.95, rawProbability))
       
-      // Estimate max bid (conservative: 30% of remaining or 2x current bid, whichever is lower)
+      // Estimate max bid (conservative and realistic)
+      // Cap at reasonable limits to avoid unrealistic values
+      const basePrice = (player?.data as any)?.['Base Price'] || (player?.data as any)?.['base price'] || 1000
       const maxBid = Math.min(
-        b.remainingPurse * 0.3,
-        currentBid > 0 ? currentBid * 2.5 : b.remainingPurse * 0.2,
-        b.remainingPurse - minIncrement // Leave room for at least one more bid
+        b.remainingPurse * 0.4, // Max 40% of remaining purse (was 30%)
+        currentBid > 0 
+          ? currentBid * 3 // Max 3x current bid (was 2.5x)
+          : basePrice * 10, // Max 10x base price if no bids (instead of 20% of purse)
+        b.remainingPurse - minIncrement, // Leave room for at least one more bid
+        100000 // Hard cap at 100k to prevent unrealistic values
       )
+      
+      // Ensure maxBid is at least base price + increment
+      const minReasonableBid = Math.max(basePrice + minIncrement, minIncrement)
       
       // Build detailed reasoning based on factors
       const factors = []
@@ -764,16 +792,20 @@ function generateFallbackPredictions(
       // Ensure maxBid is calculated from actual data only (no mock values)
       // maxBid should be at least the minimum increment, but calculated from real data
       const finalMaxBid = Math.max(
-        minIncrement, // Minimum increment from rules
-        maxBid // Calculated from actual bidder data
+        minReasonableBid, // At least base price + increment
+        maxBid // Calculated from actual bidder data (already capped)
       )
+      
+      // Final safety check: never exceed 50% of remaining purse
+      const absoluteMax = b.remainingPurse * 0.5
+      const finalMaxBidCapped = Math.min(finalMaxBid, absoluteMax)
       
       return {
         bidderId: b.id,
         bidderName: actualBidderName,
         teamName: actualTeamName,
         probability: probability,
-        maxBid: finalMaxBid,
+        maxBid: finalMaxBidCapped, // Use capped value
         reasoning: reasoning
       }
     })
