@@ -118,7 +118,8 @@ export async function POST(
 
     // Validate bid amount and roster constraints
     const rules = auction.rules as any
-    const minIncrement = rules?.minBidIncrement || 1000
+    // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+    const minIncrement = currentBid >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
     const mandatoryTeamSize = Number(rules?.mandatoryTeamSize) || null
     const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
     const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || Number(minIncrement) || 0
