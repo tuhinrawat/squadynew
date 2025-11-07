@@ -22,9 +22,10 @@ export async function POST(
       return NextResponse.json({ error: 'Player ID required' }, { status: 400 })
     }
 
-    // Fetch auction
+    // Fetch auction with players
     const auction = await prisma.auction.findUnique({
-      where: { id: params.id }
+      where: { id: params.id },
+      include: { players: true }
     })
 
     if (!auction) {
@@ -54,16 +55,35 @@ export async function POST(
       }
     })
 
-    // Get next available player
-    const nextPlayer = await prisma.player.findFirst({
-      where: {
-        auctionId: params.id,
-        status: 'AVAILABLE'
-      },
-      orderBy: {
-        createdAt: 'asc'
+    // Pick next random available player
+    // Prioritize icon players if they haven't all been auctioned yet
+    const availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
+    
+    let nextPlayer = null
+    
+    if (availablePlayers.length > 0) {
+      // Get auction rules
+      const rules = auction.rules as any
+      const iconPlayerCount = rules?.iconPlayerCount ?? 10
+      
+      // Check how many icon players have been auctioned (status is not AVAILABLE)
+      const iconPlayersAuctioned = auction.players.filter(p => p.isIcon && p.status !== 'AVAILABLE').length
+      
+      // If icon players haven't all been auctioned yet, prioritize them
+      if (iconPlayersAuctioned < iconPlayerCount) {
+        const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
+        if (iconPlayersAvailable.length > 0) {
+          // Randomly select from available icon players
+          nextPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
+        } else {
+          // No icon players available, pick from regular players
+          nextPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)]
+        }
+      } else {
+        // All icon players have been auctioned, pick from remaining players
+        nextPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)]
       }
-    })
+    }
 
     // Add unsold event to bid history
     const unsoldEvent = {

@@ -40,13 +40,13 @@ export async function POST(
     const iconPlayerCount = rules?.iconPlayerCount ?? 10
 
     // Check how many icon players have been auctioned (status is not AVAILABLE)
-    const iconPlayersAuctioned = auction.players.filter(p => (p as any).isIcon && p.status !== 'AVAILABLE').length
+    const iconPlayersAuctioned = auction.players.filter(p => p.isIcon && p.status !== 'AVAILABLE').length
 
     let randomPlayer
 
     // If icon players haven't all been auctioned yet, prioritize them
     if (iconPlayersAuctioned < iconPlayerCount) {
-      const iconPlayersAvailable = availablePlayers.filter(p => (p as any).isIcon)
+      const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
       if (iconPlayersAvailable.length > 0) {
         // Randomly select from available icon players
         randomPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]

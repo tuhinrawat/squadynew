@@ -265,7 +265,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       const latestBid = displayBidHistory.length > 0 ? displayBidHistory[0] : null
       
       // Update current bid to the latest bid (only if it's a bid event)
-      if (latestBid && latestBid.amount && latestBid.bidderId) {
+      if (latestBid && latestBid.amount && latestBid.bidderId && latestBid.bidderName) {
         setCurrentBid({
           bidderId: latestBid.bidderId,
           amount: latestBid.amount,
@@ -2042,9 +2042,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           )}
                       </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                            ₹{bid.amount.toLocaleString('en-IN')}
-                          </span>
+                          {bid.amount && (
+                            <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                              ₹{bid.amount.toLocaleString('en-IN')}
+                            </span>
+                          )}
                           <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
                     </div>
                       </motion.div>
