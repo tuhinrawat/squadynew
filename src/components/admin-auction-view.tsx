@@ -1671,7 +1671,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     }}
                     disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id)}
                   >
-                    {isPlacingBid ? 'Placing Bid...' : `Raise Bid (+₹1,000)`}
+                    {isPlacingBid ? 'Placing Bid...' : (() => {
+                      const currentBidAmount = currentBid?.amount || 0
+                      const rules = auction.rules as AuctionRules | undefined
+                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      return `Raise Bid (+₹${(minIncrement / 1000).toFixed(0)}K)`
+                    })()}
                     </Button>
 
                   {/* Custom Bid */}
@@ -1822,9 +1827,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             {/* Quick Raise Bid Button */}
                     <Button
               onClick={() => {
+                // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+                const currentBidAmount = currentBid?.amount || 0
                 const rules = auction.rules as AuctionRules | undefined
-                const minIncrement = rules?.minBidIncrement || 1000
-                const totalBid = (currentBid?.amount || 0) + minIncrement
+                const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                const totalBid = currentBidAmount + minIncrement
                 
                 if (totalBid > userBidder.remainingPurse) {
                   alert('Insufficient remaining purse')
@@ -1861,7 +1868,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id)}
             >
               <TrendingUp className="h-5 w-5" />
-              <span className="font-semibold text-sm">+₹1K</span>
+              <span className="font-semibold text-sm">{(() => {
+                const currentBidAmount = currentBid?.amount || 0
+                const rules = auction.rules as AuctionRules | undefined
+                const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                return `+₹${(minIncrement / 1000).toFixed(0)}K`
+              })()}</span>
                     </Button>
             
             {/* Custom Bid Button */}
