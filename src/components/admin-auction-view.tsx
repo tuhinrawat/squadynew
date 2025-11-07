@@ -1318,7 +1318,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   
                   return undefined
                 })()}
-                basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price']}
+                basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                 tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
                 profileLink={(() => {
                   // Get the Cricheroes Profile link field

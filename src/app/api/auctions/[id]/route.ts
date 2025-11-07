@@ -69,7 +69,7 @@ export async function PUT(
       )
     }
 
-    const { name, description, rules, status, isPublished, registrationOpen, customFields, columnOrder, visibleColumns } = await request.json()
+    const { name, description, rules, status, isPublished, registrationOpen, customFields, columnOrder, visibleColumns, analyticsVisibleColumns } = await request.json()
 
     // Check if auction exists and belongs to user
     const existingAuction = await prisma.auction.findFirst({
@@ -100,7 +100,8 @@ export async function PUT(
         ...(registrationOpen !== undefined && { registrationOpen }),
         ...(customFields !== undefined && { customFields: customFields as any }),
         ...(columnOrder !== undefined && { columnOrder: columnOrder as any }),
-        ...(visibleColumns !== undefined && { visibleColumns: visibleColumns as any })
+        ...(visibleColumns !== undefined && { visibleColumns: visibleColumns as any }),
+        ...(analyticsVisibleColumns !== undefined && { analyticsVisibleColumns: analyticsVisibleColumns as any })
       },
       include: {
         _count: {

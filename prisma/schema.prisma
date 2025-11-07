@@ -65,10 +65,11 @@ model Auction {
   rules            Json
   status           AuctionStatus @default(DRAFT)
   isPublished      Boolean       @default(false)
-  customFields     Json? // Store custom field definitions for public registration
-  columnOrder      Json? // Store Excel column order as array
-  visibleColumns   Json? // Store visible columns for player table
-  registrationOpen Boolean       @default(true)
+  customFields           Json? // Store custom field definitions for public registration
+  columnOrder            Json? // Store Excel column order as array
+  visibleColumns         Json? // Store visible columns for player table
+  analyticsVisibleColumns Json? // Store visible columns for analytics player table (separate from main table)
+  registrationOpen       Boolean       @default(true)
   createdById      String
   currentPlayerId  String?
   bidHistory       Json?
