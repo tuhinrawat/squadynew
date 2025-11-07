@@ -124,14 +124,15 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   const handleSaveEdit = async () => {
     if (!selectedAuction) return
 
+    // Ensure all required fields are included, even if they're 0 or empty
     const rules = {
-      minBidIncrement: editFormData.minBidIncrement,
-      countdownSeconds: editFormData.countdownSeconds,
+      minBidIncrement: editFormData.minBidIncrement || 1000,
+      countdownSeconds: editFormData.countdownSeconds || 15,
       maxTeamSize: editFormData.maxTeamSize ? Number(editFormData.maxTeamSize) : null,
-      enforcePurse: editFormData.enforcePurse,
-      iconPlayerCount: editFormData.iconPlayerCount,
-      mandatoryTeamSize: editFormData.mandatoryTeamSize,
-      bidderCount: editFormData.bidderCount
+      enforcePurse: editFormData.enforcePurse !== undefined ? editFormData.enforcePurse : true,
+      iconPlayerCount: editFormData.iconPlayerCount !== undefined ? Number(editFormData.iconPlayerCount) : 10,
+      mandatoryTeamSize: editFormData.mandatoryTeamSize || 12,
+      bidderCount: editFormData.bidderCount !== undefined ? Number(editFormData.bidderCount) : 10
     }
 
     try {
@@ -589,8 +590,11 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   <Input 
                     id="edit-iconPlayerCount"
                     type="number"
-                    value={editFormData.iconPlayerCount}
-                    onChange={(e) => setEditFormData({ ...editFormData, iconPlayerCount: Number(e.target.value) })}
+                    value={editFormData.iconPlayerCount ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Number(e.target.value)
+                      setEditFormData({ ...editFormData, iconPlayerCount: value })
+                    }}
                     min="0"
                   />
                   <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order). Set to 0 to skip icon players.</p>
@@ -611,8 +615,11 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   <Input 
                     id="edit-bidderCount"
                     type="number"
-                    value={editFormData.bidderCount}
-                    onChange={(e) => setEditFormData({ ...editFormData, bidderCount: Number(e.target.value) })}
+                    value={editFormData.bidderCount ?? ''}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? 0 : Number(e.target.value)
+                      setEditFormData({ ...editFormData, bidderCount: value })
+                    }}
                     min="1"
                   />
                   <p className="text-xs text-gray-500">Minimum number of bidders required to publish the auction</p>

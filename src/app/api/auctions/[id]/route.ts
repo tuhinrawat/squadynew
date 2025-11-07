@@ -91,7 +91,11 @@ export async function PUT(
     
     if (name) updateData.name = name
     if (description !== undefined) updateData.description = description
-    if (rules) updateData.rules = rules as any
+    if (rules) {
+      // Merge rules with existing rules to preserve any fields not being updated
+      const existingRules = (existingAuction.rules as any) || {}
+      updateData.rules = { ...existingRules, ...rules } as any
+    }
     if (status) updateData.status = status
     if (isPublished !== undefined) updateData.isPublished = isPublished
     if (registrationOpen !== undefined) updateData.registrationOpen = registrationOpen
