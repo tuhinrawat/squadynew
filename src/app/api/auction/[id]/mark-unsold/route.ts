@@ -57,31 +57,73 @@ export async function POST(
 
     // Pick next random available player
     // Prioritize icon players if they haven't all been auctioned yet
-    const availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
+    let availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
+    let currentAuctionData = auction
+    
+    // If no available players, automatically recycle UNSOLD players back to AVAILABLE
+    // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
+    if (availablePlayers.length === 0) {
+      // Explicitly filter for UNSOLD players only - SOLD players should NEVER be recycled
+      const unsoldPlayers = auction.players.filter(p => p.status === 'UNSOLD')
+      
+      // Additional safety check: ensure no SOLD players are accidentally included
+      const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
+      if (soldPlayers.length > 0 && unsoldPlayers.some(p => soldPlayers.find(sp => sp.id === p.id))) {
+        console.error('CRITICAL: Attempted to recycle SOLD players - this should never happen!')
+        return NextResponse.json({ error: 'Internal error: Cannot recycle sold players' }, { status: 500 })
+      }
+      
+      if (unsoldPlayers.length > 0) {
+        // Convert only UNSOLD players back to AVAILABLE (never SOLD players)
+        await prisma.player.updateMany({
+          where: {
+            id: { in: unsoldPlayers.map(p => p.id) },
+            auctionId: params.id,
+            status: 'UNSOLD' // Explicit status check ensures SOLD players are never updated
+          },
+          data: {
+            status: 'AVAILABLE',
+            soldTo: null,
+            soldPrice: null
+          }
+        })
+        
+        // Refresh auction data after conversion
+        const updatedAuction = await prisma.auction.findUnique({
+          where: { id: params.id },
+          include: { players: true }
+        })
+        
+        if (updatedAuction) {
+          currentAuctionData = updatedAuction
+          availablePlayers = updatedAuction.players.filter(p => p.status === 'AVAILABLE')
+          
+          // Broadcast that unsold players have been recycled
+          await triggerAuctionEvent(params.id, 'unsold-players-recycled', {
+            count: unsoldPlayers.length
+          } as any).catch(err => console.error('Pusher error (non-critical):', err))
+        }
+      }
+    }
     
     let nextPlayer = null
     
     if (availablePlayers.length > 0) {
-      // Get auction rules
-      const rules = auction.rules as any
-      const iconPlayerCount = rules?.iconPlayerCount ?? 10
+      // ICON PLAYERS MUST BE AUCTIONED FIRST
+      // Only show regular players after ALL icon players have been auctioned (SOLD or UNSOLD)
+      const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
       
-      // Check how many icon players have been auctioned (status is not AVAILABLE)
-      const iconPlayersAuctioned = auction.players.filter(p => p.isIcon && p.status !== 'AVAILABLE').length
-      
-      // If icon players haven't all been auctioned yet, prioritize them
-      if (iconPlayersAuctioned < iconPlayerCount) {
-        const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
-        if (iconPlayersAvailable.length > 0) {
-          // Randomly select from available icon players
-          nextPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
-        } else {
-          // No icon players available, pick from regular players
-          nextPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)]
-        }
+      if (iconPlayersAvailable.length > 0) {
+        // There are still icon players available - MUST select from icon players only
+        // Regular players cannot be shown until all icon players are processed
+        nextPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
       } else {
-        // All icon players have been auctioned, pick from remaining players
-        nextPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)]
+        // All icon players have been processed (either SOLD or UNSOLD and not yet recycled)
+        // Now we can show regular players
+        const regularPlayersAvailable = availablePlayers.filter(p => !p.isIcon)
+        if (regularPlayersAvailable.length > 0) {
+          nextPlayer = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)]
+        }
       }
     }
 

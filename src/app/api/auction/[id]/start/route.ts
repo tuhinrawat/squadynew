@@ -29,34 +29,34 @@ export async function POST(
     }
 
     // Pick random available player
-    // Prioritize icon players if they haven't all been auctioned yet
+    // ICON PLAYERS MUST BE AUCTIONED FIRST
+    // Only show regular players after ALL icon players have been auctioned (SOLD or UNSOLD)
     const availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
     if (availablePlayers.length === 0) {
       return NextResponse.json({ error: 'No available players' }, { status: 400 })
     }
 
-    // Get auction rules
-    const rules = auction.rules as any
-    const iconPlayerCount = rules?.iconPlayerCount ?? 10
-
-    // Check how many icon players have been auctioned (status is not AVAILABLE)
-    const iconPlayersAuctioned = auction.players.filter(p => p.isIcon && p.status !== 'AVAILABLE').length
-
+    // ICON PLAYERS MUST BE AUCTIONED FIRST
+    // Only show regular players after ALL icon players have been auctioned (SOLD or UNSOLD)
+    const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
+    
     let randomPlayer
 
-    // If icon players haven't all been auctioned yet, prioritize them
-    if (iconPlayersAuctioned < iconPlayerCount) {
-      const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
-      if (iconPlayersAvailable.length > 0) {
-        // Randomly select from available icon players
-        randomPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
-      } else {
-        // No icon players available, pick from regular players
-        randomPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)]
-      }
+    if (iconPlayersAvailable.length > 0) {
+      // There are still icon players available - MUST select from icon players only
+      // Regular players cannot be shown until all icon players are processed
+      randomPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
     } else {
-      // All icon players have been auctioned, pick from remaining players
-      randomPlayer = availablePlayers[Math.floor(Math.random() * availablePlayers.length)]
+      // All icon players have been processed (either SOLD or UNSOLD and not yet recycled)
+      // Now we can show regular players
+      const regularPlayersAvailable = availablePlayers.filter(p => !p.isIcon)
+      if (regularPlayersAvailable.length > 0) {
+        randomPlayer = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)]
+      }
+    }
+    
+    if (!randomPlayer) {
+      return NextResponse.json({ error: 'No available players' }, { status: 400 })
     }
 
     // Update auction status and current player
