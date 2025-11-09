@@ -137,6 +137,43 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     return data?.name || data?.Name || data?.player_name || 'Unknown Player'
   }
 
+  function getProfilePhotoUrl(playerData: any): string | undefined {
+    const possibleKeys = [
+      'Profile Photo',
+      'profile photo',
+      'Profile photo',
+      'PROFILE PHOTO',
+      'profile_photo',
+      'ProfilePhoto'
+    ]
+
+    const rawValue = possibleKeys
+      .map(key => playerData?.[key])
+      .find(value => value !== undefined && value !== null && String(value).trim() !== '')
+
+    if (!rawValue) {
+      return undefined
+    }
+
+    const photoStr = String(rawValue).trim()
+
+    let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+    if (match && match[1]) {
+      return `/api/proxy-image?id=${match[1]}`
+    }
+
+    match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (match && match[1]) {
+      return `/api/proxy-image?id=${match[1]}`
+    }
+
+    if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+      return photoStr
+    }
+
+    return undefined
+  }
+
   const sortedPlayers = useMemo(() => {
     return [...auction.players].sort((a, b) => getPlayerName(a).localeCompare(getPlayerName(b)))
   }, [auction.players])
@@ -179,43 +216,6 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       }
     })
   }, [sortedPlayers, auction.bidders])
-
-  const getProfilePhotoUrl = (playerData: any): string | undefined => {
-    const possibleKeys = [
-      'Profile Photo',
-      'profile photo',
-      'Profile photo',
-      'PROFILE PHOTO',
-      'profile_photo',
-      'ProfilePhoto'
-    ]
-
-    const rawValue = possibleKeys
-      .map(key => playerData?.[key])
-      .find(value => value !== undefined && value !== null && String(value).trim() !== '')
-
-    if (!rawValue) {
-      return undefined
-    }
-
-    const photoStr = String(rawValue).trim()
-
-    let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-    if (match && match[1]) {
-      return `/api/proxy-image?id=${match[1]}`
-    }
-
-    match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-    if (match && match[1]) {
-      return `/api/proxy-image?id=${match[1]}`
-    }
-
-    if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-      return photoStr
-    }
-
-    return undefined
-  }
 
   const selectedTeamData = selectedTeam 
     ? teamsData.find(t => t.id === selectedTeam)
