@@ -131,6 +131,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       name: true,
       slug: true,
       description: true,
+      image: true,
       status: true,
       isPublished: true,
       _count: {
@@ -162,6 +163,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
                      auction.status === 'PAUSED' ? '⏸️ PAUSED' : 
                      auction.status === 'COMPLETED' ? '✅ COMPLETED' : '📋 DRAFT'
 
+  const imageUrl = auction.image || '/squady-logo.svg'
+
   return {
     title,
     description,
@@ -174,7 +177,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       locale: 'en_US',
       images: [
         {
-          url: '/squady-logo.svg',
+          url: imageUrl,
           width: 1200,
           height: 630,
           alt: auction.name,
@@ -185,7 +188,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
       card: 'summary_large_image',
       title: `${statusBadge} ${auction.name}`,
       description,
-      images: ['/squady-logo.svg'],
+      images: [imageUrl],
     },
     alternates: {
       canonical: url

@@ -364,6 +364,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     <table className="w-full min-w-[500px]">
                       <thead>
                         <tr className="border-b border-white/20">
+                          <th className="text-left py-2 sm:py-3 px-2 text-white font-semibold text-xs sm:text-sm w-12 sm:w-16">Photo</th>
                           <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-white font-semibold text-xs sm:text-sm">Player Name</th>
                           <th className="text-left py-2 sm:py-3 px-2 sm:px-4 text-white font-semibold text-xs sm:text-sm">Team</th>
                           {activeTab === 'sold' && (
@@ -374,8 +375,53 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                       <tbody>
                         {getFilteredPlayers().map((player) => {
                           const bidder = auction.bidders.find(b => b.id === player.soldTo)
+                          const playerData = player.data as any
+                          // Use same logic as PlayerCard component
+                          const profilePhotoLink = playerData?.['Profile Photo'] || 
+                                                  playerData?.['profile photo'] || 
+                                                  playerData?.['Profile photo'] || 
+                                                  playerData?.['PROFILE PHOTO'] || 
+                                                  playerData?.['profile_photo'] ||
+                                                  playerData?.['ProfilePhoto']
+                          
+                          let imageUrl: string | undefined = undefined
+                          if (profilePhotoLink && String(profilePhotoLink).trim()) {
+                            const photoStr = String(profilePhotoLink).trim()
+                            // Format 1: https://drive.google.com/file/d/[ID]/view
+                            let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                            if (match && match[1]) {
+                              imageUrl = `/api/proxy-image?id=${match[1]}`
+                            } else {
+                              // Format 2: https://drive.google.com/open?id=[ID]
+                              match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+                              if (match && match[1]) {
+                                imageUrl = `/api/proxy-image?id=${match[1]}`
+                              } else if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+                                // If it's already a valid URL, use it directly
+                                imageUrl = photoStr
+                              }
+                            }
+                          }
+                          
                           return (
                             <tr key={player.id} className="border-b border-white/10 hover:bg-white/5">
+                              <td className="py-2 sm:py-3 px-2">
+                                {imageUrl ? (
+                                  <img 
+                                    src={imageUrl}
+                                    alt={getPlayerName(player)}
+                                    className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement
+                                      target.style.display = 'none'
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center">
+                                    <UserIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white/50" />
+                                  </div>
+                                )}
+                              </td>
                               <td className="py-2 sm:py-3 px-2 sm:px-4 text-white text-xs sm:text-sm">{getPlayerName(player)}</td>
                               <td className="py-2 sm:py-3 px-2 sm:px-4 text-white/70 text-xs sm:text-sm">
                                 {bidder ? bidder.teamName || bidder.username : '-'}
@@ -456,14 +502,39 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     <tbody>
                       {selectedTeamData?.players.map((player) => {
                         const playerData = player.data as any
-                        const profilePhoto = playerData?.profilePhoto || playerData?.profile_photo
+                        // Use same logic as PlayerCard component
+                        const profilePhotoLink = playerData?.['Profile Photo'] || 
+                                                playerData?.['profile photo'] || 
+                                                playerData?.['Profile photo'] || 
+                                                playerData?.['PROFILE PHOTO'] || 
+                                                playerData?.['profile_photo'] ||
+                                                playerData?.['ProfilePhoto']
+                        
+                        let imageUrl: string | undefined = undefined
+                        if (profilePhotoLink && String(profilePhotoLink).trim()) {
+                          const photoStr = String(profilePhotoLink).trim()
+                          // Format 1: https://drive.google.com/file/d/[ID]/view
+                          let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                          if (match && match[1]) {
+                            imageUrl = `/api/proxy-image?id=${match[1]}`
+                          } else {
+                            // Format 2: https://drive.google.com/open?id=[ID]
+                            match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+                            if (match && match[1]) {
+                              imageUrl = `/api/proxy-image?id=${match[1]}`
+                            } else if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+                              // If it's already a valid URL, use it directly
+                              imageUrl = photoStr
+                            }
+                          }
+                        }
                         
                         return (
                           <tr key={player.id} className="border-b border-white/10 hover:bg-white/5">
                             <td className="py-2 sm:py-3 px-2">
-                              {profilePhoto ? (
+                              {imageUrl ? (
                                 <img 
-                                  src={`/api/proxy-image?url=${encodeURIComponent(profilePhoto)}`}
+                                  src={imageUrl}
                                   alt={getPlayerName(player)}
                                   className="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover"
                                   onError={(e) => {

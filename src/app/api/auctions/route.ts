@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, description, rules, isPublished, registrationOpen, scheduledStartDate } = await request.json()
+    const { name, description, image, rules, isPublished, registrationOpen, scheduledStartDate } = await request.json()
 
     // Validate input
     if (!name || !rules) {
@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
       name,
       slug: uniqueSlug,
       description: description || null,
+      image: image || null,
       rules: rules as any, // Store as JSON
       isPublished: isPublished || false,
       registrationOpen: registrationOpen !== false, // Default to true

@@ -15,6 +15,7 @@ export default function NewAuction() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+    image: '',
     scheduledStartDate: '',
     scheduledStartTime: '',
     minBidIncrement: 1000,
@@ -95,6 +96,7 @@ export default function NewAuction() {
         body: JSON.stringify({
           name: formData.name,
           description: formData.description || null,
+          image: formData.image || null,
           scheduledStartDate: formData.scheduledStartDate && formData.scheduledStartTime 
             ? new Date(`${formData.scheduledStartDate}T${formData.scheduledStartTime}`).toISOString()
             : null,
@@ -199,6 +201,21 @@ export default function NewAuction() {
                 placeholder="Enter auction description (optional)"
                 rows={3}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="image">Cover Image URL</Label>
+              <Input
+                id="image"
+                name="image"
+                value={formData.image}
+                onChange={handleChange}
+                placeholder="https://example.com/image.jpg (optional)"
+                type="url"
+              />
+              <p className="text-xs text-muted-foreground">
+                Add a cover image for your auction. This will appear in URL previews when shared on social media.
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

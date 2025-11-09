@@ -541,7 +541,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
                 <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
                   <Trophy className="h-3 w-3 mr-1" />
-                  <span className="hidden sm:inline">Teams</span>
+                  <span className="hidden sm:inline">Team Stats</span>
                 </Button>
               </Link>
             </div>

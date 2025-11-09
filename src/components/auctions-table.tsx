@@ -66,6 +66,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   const [editFormData, setEditFormData] = useState({
     name: '',
     description: '',
+    image: '',
     scheduledStartDate: '',
     scheduledStartTime: '',
     minBidIncrement: 1000,
@@ -105,9 +106,11 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
       scheduledStartTime = date.toTimeString().slice(0, 5) // HH:MM format
     }
     
+    const auctionData = auction as any
     setEditFormData({
       name: auction.name,
       description: auction.description || '',
+      image: auctionData.image || '',
       scheduledStartDate,
       scheduledStartTime,
       minBidIncrement: rules?.minBidIncrement || 1000,
@@ -140,6 +143,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
       const requestBody: any = {
         name: editFormData.name,
         description: editFormData.description,
+        image: editFormData.image || null,
         rules: rules
       }
 
@@ -515,6 +519,20 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   rows={3}
                   placeholder="Enter auction description (optional)"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-image">Cover Image URL</Label>
+                <Input 
+                  id="edit-image" 
+                  value={editFormData.image}
+                  onChange={(e) => setEditFormData({ ...editFormData, image: e.target.value })}
+                  placeholder="https://example.com/image.jpg (optional)"
+                  type="url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Add a cover image for your auction. This will appear in URL previews when shared on social media.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

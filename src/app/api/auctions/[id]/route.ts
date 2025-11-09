@@ -70,7 +70,7 @@ export async function PUT(
       )
     }
 
-    const { name, description, rules, status, isPublished, registrationOpen, customFields, columnOrder, visibleColumns, analyticsVisibleColumns, scheduledStartDate } = await request.json()
+    const { name, description, image, rules, status, isPublished, registrationOpen, customFields, columnOrder, visibleColumns, analyticsVisibleColumns, scheduledStartDate } = await request.json()
 
     // Check if auction exists and belongs to user
     const existingAuction = await prisma.auction.findFirst({
@@ -113,6 +113,7 @@ export async function PUT(
       }
     }
     if (description !== undefined) updateData.description = description
+    if (image !== undefined) updateData.image = image
     if (rules) {
       // Merge rules with existing rules to preserve any fields not being updated
       const existingRules = (existingAuction.rules as any) || {}

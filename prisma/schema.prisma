@@ -63,6 +63,7 @@ model Auction {
   name             String
   slug             String?       @unique // URL-friendly slug for the auction
   description      String?
+  image            String?       // Auction cover image URL
   rules            Json
   status           AuctionStatus @default(DRAFT)
   isPublished      Boolean       @default(false)
