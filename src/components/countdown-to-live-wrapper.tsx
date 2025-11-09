@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { FullScreenCountdown } from './full-screen-countdown'
 import { PublicAuctionView } from './public-auction-view'
 import { ProfessioPromoButton } from './professio-promo-button'
@@ -8,6 +8,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Eye } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
 interface CountdownToLiveWrapperProps {
   auction: {
@@ -43,12 +45,60 @@ export function CountdownToLiveWrapper({
   const [stats, setStats] = useState(initialStats)
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
+
+  const knowYourPlayersCards = useMemo(() => {
+    return auction.players.map(player => {
+      const playerData = player.data as any
+      const imageUrl = (() => {
+        const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
+        const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+        if (!value) return undefined
+        const photoStr = String(value).trim()
+        let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+        if (match && match[1]) {
+          return `/api/proxy-image?id=${match[1]}`
+        }
+        match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+        if (match && match[1]) {
+          return `/api/proxy-image?id=${match[1]}`
+        }
+        if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+          return photoStr
+        }
+        return undefined
+      })()
+      const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
+      const statsSummary = [
+        playerData?.Role || playerData?.role,
+        playerData?.Batting || playerData?.batting,
+        playerData?.Bowling || playerData?.bowling
+      ].filter(Boolean).join(' • ')
+      const basePriceRaw = playerData?.['Base Price'] || playerData?.['base price']
+      const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
+      const status = player.status
+
+      const statusLabel = status === 'SOLD'
+        ? 'Sold'
+        : status === 'UNSOLD'
+          ? 'Unsold'
+          : 'Available'
+
+      return {
+        id: player.id,
+        name: playerData?.name || playerData?.Name || playerData?.player_name || 'Unknown Player',
+        imageUrl,
+        specialty,
+        statsSummary,
+        basePrice,
+        statusLabel,
+        purchasedPrice: status === 'SOLD' ? (player.soldPrice || 0) : null
+      }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }, [auction.players])
 
   const scrollToKnowPlayers = useCallback(() => {
-    const target = document.getElementById('know-your-players')
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
+    knowPlayersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
   // Poll for auction status when countdown reaches zero
@@ -189,6 +239,68 @@ export function CountdownToLiveWrapper({
           </div>
         </div>
 
+        <div ref={knowPlayersSectionRef} id="know-your-players" className="px-4 sm:px-6 lg:px-8 pb-8">
+          <Card className="bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 shadow-lg">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Know Your Players</CardTitle>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">Explore the roster before the auction begins.</p>
+                </div>
+                <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-[10px] sm:text-xs">Player Pool</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {knowYourPlayersCards.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
+                  Player list not available yet. Check back soon!
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+                  {knowYourPlayersCards.map(card => (
+                    <div key={card.id} className="group relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl overflow-hidden border border-white/10 shadow-lg">
+                      <div className="absolute top-3 right-3 z-20">
+                        <Badge variant="secondary" className="bg-white/10 text-white backdrop-blur px-2 py-1 text-[10px] sm:text-xs">{card.statusLabel}</Badge>
+                      </div>
+                      <div className="absolute inset-0">
+                        {card.imageUrl && (
+                          <img src={card.imageUrl} alt={card.name} className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black/90" />
+                      </div>
+                      <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
+                          {card.imageUrl ? (
+                            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" onError={(e) => { const target = e.currentTarget as HTMLImageElement; target.style.display = 'none' }} />
+                          ) : (
+                            <span className="text-2xl sm:text-3xl font-bold">{card.name.charAt(0).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-base sm:text-lg font-bold line-clamp-2">{card.name}</h4>
+                          <p className="text-xs sm:text-sm text-white/70">{card.statusLabel === 'Sold' ? 'Sold already' : 'Available in pool'}</p>
+                        </div>
+                        <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
+                          {card.specialty && (
+                            <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">{card.specialty}</p>
+                          )}
+                          {card.statsSummary && <p>{card.statsSummary}</p>}
+                          {card.purchasedPrice !== null ? (
+                            <p>Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span></p>
+                          ) : (
+                            <p className="text-white/80">Available</p>
+                          )}
+                          <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Professio AI Promo Button at Bottom */}
         <ProfessioPromoButton />
       </div>
@@ -222,14 +334,15 @@ export function CountdownToLiveWrapper({
                   Know Players
                 </Button>
                 <a 
-                href="https://professio.ai/" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-[9px] sm:text-xs md:text-sm font-semibold hover:bg-white/20 transition-colors shadow-sm"
-              >
-                <span className="text-[9px] sm:text-xs md:text-sm">Powered by</span>
-                <span className="text-[9px] sm:text-xs md:text-sm font-bold">Professio AI</span>
-              </a>
+                  href="https://professio.ai/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-[9px] sm:text-xs md:text-sm font-semibold hover:bg-white/20 transition-colors shadow-sm"
+                >
+                  <span className="text-[9px] sm:text-xs md:text-sm">Powered by</span>
+                  <span className="text-[9px] sm:text-xs md:text-sm font-bold">Professio AI</span>
+                </a>
+              </div>
             </div>
           </div>
         </header>
