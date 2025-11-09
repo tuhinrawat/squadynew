@@ -141,6 +141,45 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     return [...auction.players].sort((a, b) => getPlayerName(a).localeCompare(getPlayerName(b)))
   }, [auction.players])
 
+  const playerCards = useMemo(() => {
+    return sortedPlayers.map(player => {
+      const playerData = player.data as any
+      const imageUrl = getProfilePhotoUrl(playerData)
+      const bidder = auction.bidders.find(b => b.id === player.soldTo)
+      const basePriceRaw = playerData?.['Base Price'] || playerData?.['base price']
+      const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
+      const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
+      const statsSummary = [
+        playerData?.Role || playerData?.role,
+        playerData?.Batting || playerData?.batting,
+        playerData?.Bowling || playerData?.bowling
+      ].filter(Boolean).join(' • ')
+      const statusLabel = (() => {
+        if (player.status === 'SOLD') {
+          return `Sold to ${bidder ? (bidder.teamName || bidder.username) : 'Unknown team'}`
+        }
+        if (player.status === 'UNSOLD') {
+          return 'Unsold'
+        }
+        return 'Available'
+      })()
+
+      return {
+        id: player.id,
+        name: getPlayerName(player),
+        imageUrl,
+        statusLabel,
+        teamDisplay: player.status === 'SOLD'
+          ? bidder ? (bidder.teamName || bidder.username) : 'Sold'
+          : 'Available in pool',
+        specialty,
+        statsSummary,
+        purchasedPrice: player.status === 'SOLD' ? (player.soldPrice || 0) : null,
+        basePrice: basePrice,
+      }
+    })
+  }, [sortedPlayers, auction.bidders])
+
   const getProfilePhotoUrl = (playerData: any): string | undefined => {
     const possibleKeys = [
       'Profile Photo',
@@ -497,42 +536,21 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         No players found in this auction roster.
                       </div>
                     ) : (
-                      sortedPlayers.map(player => {
-                          const playerData = player.data as any
-                          const imageUrl = getProfilePhotoUrl(playerData)
-                          const bidder = auction.bidders.find(b => b.id === player.soldTo)
-                          const basePrice = playerData?.['Base Price'] || playerData?.['base price'] || 0
-                          const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
-                          const statsSummary = [
-                            playerData?.Role || playerData?.role,
-                            playerData?.Batting || playerData?.batting,
-                            playerData?.Bowling || playerData?.bowling
-                          ].filter(Boolean).join(' • ')
-                          const statusLabel = (() => {
-                            if (player.status === 'SOLD') {
-                              return `Sold to ${bidder ? (bidder.teamName || bidder.username) : 'Unknown team'}`
-                            }
-                            if (player.status === 'UNSOLD') {
-                              return 'Unsold'
-                            }
-                            return 'Available'
-                          })()
-
-                          return (
+                      playerCards.map(card => (
                             <div
-                              key={player.id}
+                              key={card.id}
                               className="group relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl overflow-hidden border border-white/10 shadow-lg"
                             >
                               <div className="absolute top-3 right-3 z-20">
                                 <Badge variant="secondary" className="bg-white/10 text-white backdrop-blur px-2 py-1 text-[10px] sm:text-xs">
-                                  {statusLabel}
+                                  {card.statusLabel}
                                 </Badge>
                               </div>
                               <div className="absolute inset-0">
-                                {imageUrl && (
+                                {card.imageUrl && (
                                   <img
-                                    src={imageUrl}
-                                    alt={getPlayerName(player)}
+                                    src={card.imageUrl}
+                                    alt={card.name}
                                     className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity"
                                   />
                                 )}
@@ -540,10 +558,10 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                               </div>
                               <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
                                 <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
-                                  {imageUrl ? (
+                                  {card.imageUrl ? (
                                     <img
-                                      src={imageUrl}
-                                      alt={getPlayerName(player)}
+                                      src={card.imageUrl}
+                                      alt={card.name}
                                       className="w-full h-full object-cover"
                                       onError={(e) => {
                                         const target = e.currentTarget as HTMLImageElement
@@ -552,41 +570,39 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                     />
                                   ) : (
                                     <span className="text-2xl sm:text-3xl font-bold">
-                                      {getPlayerName(player).charAt(0).toUpperCase()}
+                                      {card.name.charAt(0).toUpperCase()}
                                     </span>
                                   )}
                                 </div>
                                 <div className="space-y-1">
                                   <h4 className="text-base sm:text-lg font-bold line-clamp-2">
-                                    {getPlayerName(player)}
+                                    {card.name}
                                   </h4>
                                   <p className="text-xs sm:text-sm text-white/70">
-                                    {player.status === 'SOLD'
-                                      ? bidder ? (bidder.teamName || bidder.username) : 'Sold'
-                                      : 'Available in pool'}
+                                    {card.teamDisplay}
                                   </p>
                                 </div>
                                 <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
-                                  {specialty && (
+                                  {card.specialty && (
                                     <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">
-                                      {specialty}
+                                      {card.specialty}
                                     </p>
                                   )}
-                                  {statsSummary && (
-                                    <p>{statsSummary}</p>
+                                  {card.statsSummary && (
+                                    <p>{card.statsSummary}</p>
                                   )}
-                                  {player.status === 'SOLD' ? (
+                                  {card.purchasedPrice !== null ? (
                                     <p>
-                                      Purchased for <span className="text-white font-semibold">₹{(player.soldPrice || 0).toLocaleString('en-IN')}</span>
+                                      Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span>
                                     </p>
                                   ) : (
-                                    <p>Base price ₹{Number(basePrice).toLocaleString('en-IN')}</p>
+                                    <p className="text-white/80">Available</p>
                                   )}
+                                  <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
                                 </div>
                               </div>
                             </div>
-                          )
-                        })
+                          ))
                     )}
                   </div>
                 </CardContent>
