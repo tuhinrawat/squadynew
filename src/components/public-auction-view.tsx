@@ -536,6 +536,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         if (player.status === 'UNSOLD') {
           return 'Unsold'
         }
+        if (player.status === 'RETIRED') {
+          return 'Bidder'
+        }
         return 'Available'
       })()
 
@@ -546,7 +549,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         statusLabel,
         teamDisplay: player.status === 'SOLD'
           ? bidder ? (bidder.teamName || bidder.username) : 'Sold'
-          : 'Available in pool',
+          : player.status === 'RETIRED'
+            ? 'Registered bidder'
+            : 'Available in pool',
         specialty,
         statsSummary,
         purchasedPrice: player.status === 'SOLD' ? (player.soldPrice || 0) : null,
@@ -1116,7 +1121,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           </p>
                         )}
                         {card.statsSummary && <p>{card.statsSummary}</p>}
-                        {card.purchasedPrice !== null ? (
+                        {card.statusLabel === 'Bidder' ? (
+                          <p className="text-white/80">Participating as bidder</p>
+                        ) : card.purchasedPrice !== null ? (
                           <p>
                             Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span>
                           </p>

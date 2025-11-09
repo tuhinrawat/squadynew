@@ -82,7 +82,9 @@ export function CountdownToLiveWrapper({
         ? 'Sold'
         : status === 'UNSOLD'
           ? 'Unsold'
-          : 'Available'
+          : status === 'RETIRED'
+            ? 'Bidder'
+            : 'Available'
 
       return {
         id: player.id,
@@ -278,14 +280,22 @@ export function CountdownToLiveWrapper({
                         </div>
                         <div className="space-y-1">
                           <h4 className="text-base sm:text-lg font-bold line-clamp-2">{card.name}</h4>
-                          <p className="text-xs sm:text-sm text-white/70">{card.statusLabel === 'Sold' ? 'Sold already' : 'Available in pool'}</p>
+                          <p className="text-xs sm:text-sm text-white/70">
+                            {card.statusLabel === 'Sold'
+                              ? 'Sold already'
+                              : card.statusLabel === 'Bidder'
+                                ? 'Registered bidder'
+                                : 'Available in pool'}
+                          </p>
                         </div>
                         <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
                           {card.specialty && (
                             <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">{card.specialty}</p>
                           )}
                           {card.statsSummary && <p>{card.statsSummary}</p>}
-                          {card.purchasedPrice !== null ? (
+                          {card.statusLabel === 'Bidder' ? (
+                            <p className="text-white/80">Participating as bidder</p>
+                          ) : card.purchasedPrice !== null ? (
                             <p>Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span></p>
                           ) : (
                             <p className="text-white/80">Available</p>
