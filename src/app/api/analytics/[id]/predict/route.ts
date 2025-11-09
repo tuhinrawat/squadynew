@@ -30,6 +30,82 @@ function roundToNearestThousand(amount: number): number {
   return Math.max(1000, Math.round(amount / 1000) * 1000)
 }
 
+type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH'
+
+interface SuggestedPriceOptions {
+  statsPredictedPrice?: number | null
+  statsMinPrice?: number | null
+  statsMaxPrice?: number | null
+  estimatedFinalPrice?: number | null
+  mustSpendPerSlot?: number | null
+  basePrice: number
+  urgency: UrgencyLevel
+}
+
+function calculateSuggestedBuyPrice({
+  statsPredictedPrice,
+  statsMinPrice,
+  statsMaxPrice,
+  estimatedFinalPrice,
+  mustSpendPerSlot,
+  basePrice,
+  urgency
+}: SuggestedPriceOptions): number | undefined {
+  const normalizedStatsPrice = statsPredictedPrice && statsPredictedPrice > 0
+    ? statsPredictedPrice
+    : undefined
+
+  const fallbackMarketPrice = estimatedFinalPrice && estimatedFinalPrice > 0
+    ? estimatedFinalPrice
+    : normalizedStatsPrice
+
+  if (!normalizedStatsPrice && !fallbackMarketPrice && !mustSpendPerSlot) {
+    // Not enough data to calculate a meaningful suggested price
+    return undefined
+  }
+
+  // Base price derived from available data (stats > estimated market > must spend > base * 4)
+  const baseMarketPrice =
+    normalizedStatsPrice ??
+    fallbackMarketPrice ??
+    (mustSpendPerSlot && mustSpendPerSlot > 0 ? mustSpendPerSlot : basePrice * 4)
+
+  // Suggested buy price aims for value (default 75% of base market price)
+  let suggested = baseMarketPrice * 0.75
+
+  // If we only have estimated market price (no stats), take slightly more conservative target
+  if (!normalizedStatsPrice && fallbackMarketPrice) {
+    suggested = fallbackMarketPrice * 0.7
+  }
+
+  // Factor in must-spend requirements (never go lower than 90% of must spend per slot)
+  if (mustSpendPerSlot && mustSpendPerSlot > 0) {
+    suggested = Math.max(suggested, mustSpendPerSlot * 0.9)
+  }
+
+  // Urgency adjustments
+  const urgencyMultiplier =
+    urgency === 'HIGH' ? 1.2 :
+    urgency === 'MEDIUM' ? 1.05 :
+    1
+
+  suggested *= urgencyMultiplier
+
+  // Clamp within stats range if available
+  if (statsMinPrice && statsMinPrice > 0) {
+    suggested = Math.max(suggested, statsMinPrice)
+  }
+  if (statsMaxPrice && statsMaxPrice > 0) {
+    suggested = Math.min(suggested, statsMaxPrice * 0.9)
+  }
+
+  // Ensure suggested price is at least base price + one increment (value buyers shouldn't go below base)
+  const minimumReasonable = Math.max(basePrice + 1000, basePrice * 1.5)
+  suggested = Math.max(suggested, minimumReasonable)
+
+  return roundToNearestThousand(suggested)
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -357,6 +433,11 @@ export async function POST(
     })
 
     // Prepare prompt for OpenAI using the comprehensive APL 2026 format
+    const currentBidAmount = bidHistory.length > 0
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? Math.max(...bidHistory.map((b: any) => b.amount || 0))
+      : 0
+
     const prompt = `You are an expert auction analyst for the Assetz Premier League (APL) 2026 cricket auction. Analyze the provided data strictly based on the auction rules from the rulebook, without inventing, modifying, or using mock data. All predictions must derive solely from the input data: player details, bidders' information, team compositions, bid history, and auction context. Use the mind map of factors to evaluate matches between the player and each bidder for intent, aggressiveness, and price predictions.
 
 AUCTION RULES FROM RULEBOOK (STRICTLY ADHERE):
@@ -448,6 +529,24 @@ ${Object.keys(customColumnsData).length > 0 ? `- Custom Analytics Columns:\n${Ob
 - Full Player Data: ${JSON.stringify(playerData, null, 2)}
 
 - Availability: ${playerData?.Availability || 'Full'} (both weekends or one)
+
+CURRENT AUCTION STATE:
+
+- Current Bid: ₹${currentBidAmount.toLocaleString('en-IN')}
+- Minimum Increment: ₹${minBidIncrement.toLocaleString('en-IN')}
+- Tushar Remaining Purse: ₹${tusharBidder.remainingPurse.toLocaleString('en-IN')}
+- Tushar Remaining Slots: ${(() => {
+  const targetTeamSize = 12
+  const purchased = teamCompositions.find(t => t.bidderId === tusharBidder.id)?.players.length || 0
+  return Math.max(0, targetTeamSize - (purchased + 1))
+})()}
+- Must Spend Per Slot (if slots remaining): ₹${(() => {
+  const targetTeamSize = 12
+  const purchased = teamCompositions.find(t => t.bidderId === tusharBidder.id)?.players.length || 0
+  const remainingSlots = Math.max(0, targetTeamSize - (purchased + 1))
+  if (remainingSlots === 0) return 0
+  return Math.round(tusharBidder.remainingPurse / remainingSlots).toLocaleString('en-IN')
+})()}
 
 ${brilliantUpcomingPlayers && brilliantUpcomingPlayers.length > 0 ? `\n**UPCOMING HIGH-VALUE PLAYERS** (CRITICAL FOR BIDDING STRATEGY):
 These players have NOT YET come up in the auction but have high stats/ratings. Bidders with high remaining purse may save budget for these players, making them LESS aggressive on current player.
@@ -631,16 +730,24 @@ Provide a JSON response with:
 
 2. recommendedAction: { action: 'bid/pass/wait', suggestedBuyPrice: Number, recommendedBid: Number (optional, only if action is 'bid'), reasoning: String, confidence: 0-1 }
    - **CRITICAL**: suggestedBuyPrice is the TARGET PRICE at which to buy the player (not the next bid increment). It MUST align with stats-based predicted price when available. If stats-based price is ₹21,000, suggestedBuyPrice should be ₹15,000-₹18,000 (70-85% of stats price, representing good value), NOT ₹1,000.
+   - **CRITICAL PRICE CHECK**: If the current bid exceeds the suggestedBuyPrice by more than 10%, you MUST set action to 'pass' and explain that the price has exceeded the target. The suggestedBuyPrice should remain the same (it's the target), but the action must change to 'pass' when price goes too high. Check the bidHistory to get the current highest bid amount.
    - suggestedBuyPrice: The price at which this player represents good value. Calculate as 70-85% of stats-based predicted price (if available), or 75-80% of estimated final price. This is the strategic target price for purchasing.
    - recommendedBid: (Optional, only if action is 'bid') The next bid increment amount (current bid + min increment). This is for immediate action, while suggestedBuyPrice is the strategic target.
    - reasoning: **DETAILED, SPECIFIC analysis** (minimum 3-4 sentences) explaining:
      * Why this action (bid/pass/wait) is recommended for the current bidder (Tushar/Falcon)
+     * **If current bid exceeds suggestedBuyPrice**: Clearly state "PRICE EXCEEDED: Current bid (₹X) has exceeded your suggested buy price (₹Y) by ₹Z. Consider passing and saving budget."
      * How stats-based predicted price (₹X) compares to suggestedBuyPrice and estimated final price
      * Team composition analysis (what gaps this player fills, urgency)
      * Budget strategy (remaining purse %, must spend per slot, upcoming players consideration)
      * Competition assessment (number of likely bidders, their aggressiveness)
      * Specific suggestedBuyPrice and reasoning (must reference stats-based price if available)
      * Example: "RECOMMENDATION: WAIT with suggested buy price of ₹15,000. This player (Gaurav) has strong stats (Overall Rating 57/100, Stats-Based Predicted Price ₹21,000) with allrounder bonus. However, you have 100% purse remaining (₹100,000) with 11 slots to fill, requiring ₹9,091 per slot. With 3 high-value upcoming players coming, consider saving budget. Current competition is medium (2-3 likely bidders). Suggested buy price ₹15,000 (71% of stats price) represents good value - consider buying if price stays below this."
+     * Example when price exceeded: "RECOMMENDATION: PASS. PRICE EXCEEDED: Current bid (₹41,000) has exceeded your suggested buy price (₹22,000) by ₹19,000 (86% above target). While this player has strong stats (Overall Rating 100/100, Stats-Based Predicted Price ₹35,000), the current price no longer represents good value. Consider passing and saving your budget for better opportunities."
+   - **VALIDATION CHECKLIST** (execute before finalizing JSON):
+     1. Determine 'currentBid' from 'bidHistory' (0 if none) and ensure all price outputs are multiples of 1,000.
+     2. If currentBid > suggestedBuyPrice * 1.1, set action to 'pass' and explicitly mention the overage in reasoning.
+     3. Ensure recommendedBid, when provided, is greater than currentBid and equals currentBid + minIncrement.
+     4. If Tushar (the focus bidder) has zero remaining purse or zero roster slots, force action to 'pass' and explain why.
 
 3. marketAnalysis: 
 
@@ -858,23 +965,55 @@ Return ONLY valid JSON, no other text.`
               poolImpact: poolImpact
             }
           }),
-          recommendedAction: {
-            action: parsed.recommendedAction?.action || 'wait',
-            // Extract suggestedBuyPrice (target purchase price)
-            suggestedBuyPrice: typeof parsed.recommendedAction?.suggestedBuyPrice === 'number'
+          recommendedAction: (() => {
+            // Extract and validate AI response
+            let action = parsed.recommendedAction?.action || 'wait'
+            let suggestedBuyPrice = typeof parsed.recommendedAction?.suggestedBuyPrice === 'number'
               ? roundToNearestThousand(parsed.recommendedAction.suggestedBuyPrice)
               : (typeof parsed.recommendedAction?.recommendedAmount === 'number'
                 ? roundToNearestThousand(parsed.recommendedAction.recommendedAmount) // Fallback to recommendedAmount
-                : undefined),
-            // Extract recommendedBid (next bid increment, optional)
-            recommendedBid: typeof parsed.recommendedAction?.recommendedBid === 'number'
+                : undefined)
+            let recommendedBid = typeof parsed.recommendedAction?.recommendedBid === 'number'
               ? roundToNearestThousand(parsed.recommendedAction.recommendedBid)
-              : undefined,
-            reasoning: parsed.recommendedAction?.reasoning || 'No recommendation available',
-            confidence: typeof parsed.recommendedAction?.confidence === 'number' 
+              : undefined
+            let reasoning = parsed.recommendedAction?.reasoning || 'No recommendation available'
+            let confidence = typeof parsed.recommendedAction?.confidence === 'number' 
               ? parsed.recommendedAction.confidence 
               : 0.5
-          },
+            
+            // CRITICAL VALIDATION: If current bid exceeds suggested buy price, override action
+            if (suggestedBuyPrice && currentBidForValidation > 0 && currentBidForValidation > suggestedBuyPrice) {
+              const excessPercent = ((currentBidForValidation - suggestedBuyPrice) / suggestedBuyPrice * 100).toFixed(0)
+              const excessAmount = currentBidForValidation - suggestedBuyPrice
+              
+              // If significantly above (more than 10%), change to PASS
+              if (excessAmount > suggestedBuyPrice * 0.1) {
+                action = 'pass'
+                reasoning = `PRICE EXCEEDED: Current bid (₹${currentBidForValidation.toLocaleString('en-IN')}) has exceeded your suggested buy price (₹${suggestedBuyPrice.toLocaleString('en-IN')}) by ₹${excessAmount.toLocaleString('en-IN')} (${excessPercent}% above target). ${reasoning} Consider passing and saving your budget for better opportunities.`
+                confidence = 0.85
+                recommendedBid = undefined
+              } else {
+                // If slightly above, change to WAIT
+                action = 'wait'
+                reasoning = `⚠️ WARNING: Current bid (₹${currentBidForValidation.toLocaleString('en-IN')}) exceeds your suggested buy price (₹${suggestedBuyPrice.toLocaleString('en-IN')}). ${reasoning} Consider carefully before bidding further.`
+                confidence = Math.max(0.5, confidence - 0.1)
+                recommendedBid = undefined
+              }
+            }
+            
+            // Validate recommendedBid is higher than current bid
+            if (recommendedBid && currentBidForValidation > 0 && recommendedBid <= currentBidForValidation) {
+              recommendedBid = currentBidForValidation + minIncrementForValidation
+            }
+            
+            return {
+              action,
+              suggestedBuyPrice,
+              recommendedBid,
+              reasoning,
+              confidence
+            }
+          })(),
           marketAnalysis: {
             // Only use AI's averageBid if bidHistory exists, otherwise use calculated value
             // Round to nearest 1000 (bids must be in multiples of 1000)
@@ -1327,9 +1466,38 @@ function generateFallbackPredictions(
     ? (tusharBidder.remainingPurse / tusharBidder.purseAmount) * 100 
     : 0
   
+  // Calculate Tushar's remaining slots and must spend per slot (CRITICAL for team formation)
+  const targetTeamSize = 12 // Including bidder
+  const tusharRemainingSlots = Math.max(0, targetTeamSize - (tusharPurchased + 1)) // +1 for bidder
+  const tusharMustSpendPerSlot = tusharRemainingSlots > 0 ? tusharBidder.remainingPurse / tusharRemainingSlots : tusharBidder.remainingPurse
+  const tusharBudgetPressure = tusharRemainingSlots > 0 && tusharBidder.remainingPurse > 0
+    ? (tusharMustSpendPerSlot > (totalPurse / targetTeamSize) * 1.5 ? 'HIGH' : 
+       tusharMustSpendPerSlot > (totalPurse / targetTeamSize) ? 'MEDIUM' : 'LOW')
+    : 'N/A'
+  
+  // Check if Tushar has urgent team needs (needs to fill many slots)
+  // Urgent if: (1) 8+ slots remaining, OR (2) must spend per slot > 1.5x average, OR (3) late auction (>70% progress)
+  const auctionProgress = auctionState?.progressPercent || 0
+  const averageSpendPerSlot = totalPurse / targetTeamSize
+  const tusharHasUrgentNeeds = tusharRemainingSlots >= 8 || // Many slots remaining
+                               (tusharMustSpendPerSlot > averageSpendPerSlot * 1.5) || // High budget pressure
+                               (auctionProgress > 70 && tusharRemainingSlots >= 5) // Late auction with slots remaining
+  const tusharNeedsToSpend = tusharRemainingSlots > 0 && tusharBidder.remainingPurse > 0 // Must spend remaining budget
+  const urgencyLevel: UrgencyLevel = tusharHasUrgentNeeds
+    ? 'HIGH'
+    : tusharBudgetPressure === 'MEDIUM'
+      ? 'MEDIUM'
+      : 'LOW'
+  
   // Determine recommended action
   const canAfford = tusharBidder.remainingPurse >= currentBid + minIncrement
-  const competitionLevel = likelyBidders.length > 2 ? 'high' : likelyBidders.length > 0 ? 'medium' : 'low'
+  
+  // Calculate competition level based on probabilities and aggressiveness, not just count
+  const totalCompetition = likelyBidders.reduce((sum, b) => {
+    const bidderCompetition = b.probability * (b.maxBid / Math.max(currentBid || basePrice, 1))
+    return sum + bidderCompetition
+  }, 0)
+  const competitionLevel = totalCompetition > 2 ? 'high' : totalCompetition > 1 ? 'medium' : 'low'
   
   // Factor in upcoming brilliant players for Tushar's decision
   const shouldConsiderSaving = hasBrilliantUpcoming && 
@@ -1350,14 +1518,30 @@ function generateFallbackPredictions(
   let estimatedFinalPrice: number | null = null
   
   if (currentBid > 0) {
-    // If there's a current bid, estimate based on likely bidders and increments
-    estimatedFinalPrice = currentBid + (likelyBidders.length * minIncrement * 2)
+    // If there's a current bid, estimate based on likely bidders' probabilities and max bids
+    const activeBidders = likelyBidders.filter(b => b.probability > 0.5)
+    if (activeBidders.length > 0) {
+      // Calculate average potential bid increase from active bidders
+      const avgPotentialIncrease = activeBidders.reduce((sum, b) => {
+        const potentialBid = Math.min(b.maxBid, currentBid * 3) // Cap at 3x current bid
+        return sum + Math.max(0, potentialBid - currentBid)
+      }, 0) / activeBidders.length
+      estimatedFinalPrice = currentBid + Math.min(avgPotentialIncrease, minIncrement * 5) // Cap increase
+    } else {
+      // Fallback: use simple increment calculation
+      estimatedFinalPrice = currentBid + (likelyBidders.length * minIncrement * 2)
+    }
   } else if (averageBid > 0) {
     // If we have average bid data, use it
     estimatedFinalPrice = averageBid * 1.2
   } else {
     // No bids exist - use stats-based predicted price as estimate
     estimatedFinalPrice = statsPredictedPrice
+  }
+  
+  // Ensure estimated price is reasonable (not exceed stats max by too much)
+  if (estimatedFinalPrice && statsMaxPrice > 0) {
+    estimatedFinalPrice = Math.min(estimatedFinalPrice, statsMaxPrice * 1.2)
   }
   
   // Factor in stats quality when making recommendations
@@ -1386,80 +1570,202 @@ function generateFallbackPredictions(
     action = 'wait'
     reasoning = `You've already spent ${tusharUtilization.toFixed(0)}% of your purse. This player may go for ₹${estimatedFinalPrice.toLocaleString('en-IN')}, which is ${((estimatedFinalPrice / tusharAvg - 1) * 100).toFixed(0)}% above your average spend. Monitor closely.`
     confidence = 0.65
-  } else if (shouldConsiderSaving && !(player?.isIcon) && !hasStrongStats) {
+  } else if (shouldConsiderSaving && !(player?.isIcon) && !hasStrongStats && !tusharHasUrgentNeeds) {
     // If brilliant players are coming and Tushar has good purse, consider waiting
-    // BUT if this player has strong stats, still consider bidding
+    // BUT if this player has strong stats OR Tushar has urgent needs (many slots to fill), still consider bidding
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const brilliantNames = brilliantUpcomingPlayers?.slice(0, 3).map((p: any) => p.name).join(', ') || ''
     action = 'wait'
+    suggestedBuyPrice = calculateSuggestedBuyPrice({
+      statsPredictedPrice,
+      statsMinPrice,
+      statsMaxPrice,
+      estimatedFinalPrice,
+      mustSpendPerSlot: tusharMustSpendPerSlot,
+      basePrice,
+      urgency: 'LOW'
+    })
     reasoning = `STRATEGIC CONSIDERATION: ${brilliantCount} brilliant player(s) coming up (${brilliantNames}${brilliantCount > 3 ? '...' : ''}). You have ${tusharPurseRemainingPercent.toFixed(0)}% purse remaining (₹${tusharBidder.remainingPurse.toLocaleString('en-IN')}). Consider saving for brilliant players unless this player fills a critical team gap. Competition is ${competitionLevel}.`
     confidence = 0.75
   } else if (hasStrongStats && estimatedFinalPrice !== null && estimatedFinalPrice <= statsMaxPrice && canAfford) {
     // Player has strong stats and price is within reasonable range - recommend bidding
     action = 'bid'
-    // Calculate suggested buy price: 70-85% of stats-based predicted price (good value range)
-    suggestedBuyPrice = roundToNearestThousand(statsPredictedPrice * 0.75) // 75% of stats price as target
-    // Ensure suggested buy price is within reasonable bounds
-    suggestedBuyPrice = Math.max(statsMinPrice, Math.min(suggestedBuyPrice, statsMaxPrice * 0.9))
+    suggestedBuyPrice = calculateSuggestedBuyPrice({
+      statsPredictedPrice,
+      statsMinPrice,
+      statsMaxPrice,
+      estimatedFinalPrice,
+      mustSpendPerSlot: tusharMustSpendPerSlot,
+      basePrice,
+      urgency: urgencyLevel
+    })
     // Recommended bid is the next increment from current bid (for immediate action)
+    const targetBuyPrice = suggestedBuyPrice ?? roundToNearestThousand(Math.max(basePrice * 2, minIncrement))
+    suggestedBuyPrice = targetBuyPrice
     const rawRecommendedBid = currentBid > 0 
       ? currentBid + minIncrement
-      : Math.max(basePrice, suggestedBuyPrice * 0.6) // Start at 60% of buy price if no bids
+      : Math.max(basePrice, targetBuyPrice * 0.6) // Start at 60% of buy price if no bids
     recommendedBid = roundToNearestThousand(rawRecommendedBid)
-    reasoning = `STRONG STATS PLAYER: This player has strong performance stats (Overall Rating: ${playerScore?.overallRating || 'N/A'}/100, Stats-Based Predicted Price: ₹${statsPredictedPrice.toLocaleString('en-IN')}). Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')} (within stats range: ₹${statsMinPrice.toLocaleString('en-IN')} - ₹${statsMaxPrice.toLocaleString('en-IN')}). Estimated final price: ₹${estimatedFinalPrice.toLocaleString('en-IN')}. Competition is ${competitionLevel}. Consider buying if price stays below ₹${suggestedBuyPrice.toLocaleString('en-IN')}.`
-    confidence = 0.75
-  } else if (canAfford && competitionLevel !== 'high') {
-    action = 'bid'
-    // Calculate suggested buy price based on stats if available
-    if (playerScore && statsPredictedPrice > basePrice) {
-      // Use 70-80% of stats-based price as target buy price
-      suggestedBuyPrice = roundToNearestThousand(statsPredictedPrice * 0.75)
-      suggestedBuyPrice = Math.max(statsMinPrice, Math.min(suggestedBuyPrice, statsMaxPrice * 0.85))
-    } else {
-      // No stats available, use estimated final price or base price * 5
-      suggestedBuyPrice = estimatedFinalPrice 
-        ? roundToNearestThousand(estimatedFinalPrice * 0.8)
-        : roundToNearestThousand(basePrice * 5)
+    let teamNeedsNote = ''
+    if (tusharHasUrgentNeeds) {
+      teamNeedsNote = ` URGENT TEAM NEED: You have ${tusharRemainingSlots} slots remaining and must spend ₹${Math.round(tusharMustSpendPerSlot).toLocaleString('en-IN')} per slot on average. This player fills a critical gap.`
     }
+    const suggestedPriceDisplay = suggestedBuyPrice ? suggestedBuyPrice.toLocaleString('en-IN') : 'N/A'
+    reasoning = `STRONG STATS PLAYER: This player has strong performance stats (Overall Rating: ${playerScore?.overallRating || 'N/A'}/100, Stats-Based Predicted Price: ₹${statsPredictedPrice.toLocaleString('en-IN')}).${teamNeedsNote} Suggested buy price: ₹${suggestedPriceDisplay} (within stats range: ₹${statsMinPrice.toLocaleString('en-IN')} - ₹${statsMaxPrice.toLocaleString('en-IN')}). Estimated final price: ₹${estimatedFinalPrice.toLocaleString('en-IN')}. Competition is ${competitionLevel}. Consider buying if price stays below ₹${suggestedPriceDisplay}.`
+    confidence = 0.75
+  } else if (canAfford && (competitionLevel !== 'high' || tusharHasUrgentNeeds)) {
+    // Recommend bidding if can afford and (low competition OR urgent team needs)
+    // If urgent needs, even high competition is acceptable (must form team)
+    action = 'bid'
+    const bidUrgency: UrgencyLevel = tusharHasUrgentNeeds ? 'HIGH' : urgencyLevel === 'LOW' ? 'MEDIUM' : urgencyLevel
+    suggestedBuyPrice = calculateSuggestedBuyPrice({
+      statsPredictedPrice,
+      statsMinPrice,
+      statsMaxPrice,
+      estimatedFinalPrice,
+      mustSpendPerSlot: tusharMustSpendPerSlot,
+      basePrice,
+      urgency: bidUrgency
+    })
     // Recommended bid is the next increment from current bid
+    const targetBuyPrice = suggestedBuyPrice ?? roundToNearestThousand(Math.max(basePrice * 2, minIncrement))
+    suggestedBuyPrice = targetBuyPrice
     const rawRecommendedBid = currentBid > 0 
       ? currentBid + minIncrement
-      : Math.max(basePrice, suggestedBuyPrice * 0.5) // Start at 50% of buy price if no bids
+      : Math.max(basePrice, targetBuyPrice * 0.5) // Start at 50% of buy price if no bids
     recommendedBid = roundToNearestThousand(rawRecommendedBid)
     let strategicNote = ''
-    if (hasBrilliantUpcoming && brilliantCount > 0) {
+    if (hasBrilliantUpcoming && brilliantCount > 0 && !tusharHasUrgentNeeds) {
       strategicNote = ` Note: ${brilliantCount} brilliant player(s) coming up - balance your spending.`
     }
     let statsNote = ''
     if (playerScore) {
       statsNote = ` Stats-Based Price: ₹${statsPredictedPrice.toLocaleString('en-IN')} (Overall Rating: ${playerScore.overallRating}/100).`
     }
-    reasoning = `Good opportunity. Competition is ${competitionLevel}.${statsNote} Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')}. You have ${(100 - tusharUtilization).toFixed(0)}% of purse remaining. Consider buying if price stays below ₹${suggestedBuyPrice.toLocaleString('en-IN')}.${strategicNote}`
-    confidence = 0.7
+    let teamNeedsNote = ''
+    if (tusharHasUrgentNeeds) {
+      teamNeedsNote = ` URGENT: You have ${tusharRemainingSlots} slots remaining and must spend ₹${Math.round(tusharMustSpendPerSlot).toLocaleString('en-IN')} per slot. This player helps form your balanced team.`
+    }
+    const suggestedPriceDisplay = suggestedBuyPrice ? suggestedBuyPrice.toLocaleString('en-IN') : 'N/A'
+    reasoning = `Good opportunity. Competition is ${competitionLevel}.${statsNote}${teamNeedsNote} Suggested buy price: ₹${suggestedPriceDisplay}. You have ${(100 - tusharUtilization).toFixed(0)}% of purse remaining (₹${tusharBidder.remainingPurse.toLocaleString('en-IN')}). Consider buying if price stays below ₹${suggestedPriceDisplay}.${strategicNote}`
+    confidence = tusharHasUrgentNeeds ? 0.8 : 0.7 // Higher confidence when urgent needs
   } else {
-    action = 'wait'
-    let strategicNote = ''
-    if (hasBrilliantUpcoming && brilliantCount > 0) {
-      strategicNote = ` ${brilliantCount} brilliant player(s) coming up - consider your strategy.`
-    }
-    let statsNote = ''
-    if (playerScore) {
-      statsNote = ` Stats analysis: Overall Rating ${playerScore.overallRating}/100, Stats-Based Price: ₹${statsPredictedPrice.toLocaleString('en-IN')} (range: ₹${statsMinPrice.toLocaleString('en-IN')} - ₹${statsMaxPrice.toLocaleString('en-IN')}).`
-      // Calculate suggested buy price even for wait action (so user knows target)
-      suggestedBuyPrice = roundToNearestThousand(statsPredictedPrice * 0.7) // 70% of stats price as conservative target
-      suggestedBuyPrice = Math.max(statsMinPrice, Math.min(suggestedBuyPrice, statsMaxPrice * 0.8))
+    // Default to wait, BUT if Tushar has urgent needs and price is reasonable, recommend bid
+    if (tusharHasUrgentNeeds && canAfford && estimatedFinalPrice !== null && estimatedFinalPrice <= tusharMustSpendPerSlot * 1.5) {
+      // Urgent needs + reasonable price = recommend buying even if not perfect
+      action = 'bid'
+      suggestedBuyPrice = calculateSuggestedBuyPrice({
+        statsPredictedPrice,
+        statsMinPrice,
+        statsMaxPrice,
+        estimatedFinalPrice,
+        mustSpendPerSlot: tusharMustSpendPerSlot,
+        basePrice,
+        urgency: 'HIGH'
+      })
+      const targetBuyPrice = suggestedBuyPrice ?? roundToNearestThousand(Math.max(basePrice * 2, minIncrement))
+      suggestedBuyPrice = targetBuyPrice
+      const rawRecommendedBid = currentBid > 0 
+        ? currentBid + minIncrement
+        : Math.max(basePrice, targetBuyPrice * 0.6)
+      recommendedBid = roundToNearestThousand(rawRecommendedBid)
+      const suggestedPriceDisplay = suggestedBuyPrice ? suggestedBuyPrice.toLocaleString('en-IN') : 'N/A'
+      reasoning = `URGENT TEAM FORMATION NEED: You have ${tusharRemainingSlots} slots remaining and must spend ₹${Math.round(tusharMustSpendPerSlot).toLocaleString('en-IN')} per slot on average to form a balanced team. Estimated final price (₹${estimatedFinalPrice.toLocaleString('en-IN')}) is reasonable compared to your must-spend requirement. Suggested buy price: ₹${suggestedPriceDisplay}. You need to actively buy players to form your team - consider bidding if price stays below ₹${suggestedPriceDisplay}.`
+      confidence = 0.75
     } else {
-      // No stats, use estimated final price or base price * 4
-      suggestedBuyPrice = estimatedFinalPrice 
-        ? roundToNearestThousand(estimatedFinalPrice * 0.75)
-        : roundToNearestThousand(basePrice * 4)
+      action = 'wait'
+      let strategicNote = ''
+      if (hasBrilliantUpcoming && brilliantCount > 0 && !tusharHasUrgentNeeds) {
+        strategicNote = ` ${brilliantCount} brilliant player(s) coming up - consider your strategy.`
+      }
+      let statsNote = ''
+      if (playerScore) {
+        statsNote = ` Stats analysis: Overall Rating ${playerScore.overallRating}/100, Stats-Based Price: ₹${statsPredictedPrice.toLocaleString('en-IN')} (range: ₹${statsMinPrice.toLocaleString('en-IN')} - ₹${statsMaxPrice.toLocaleString('en-IN')}).`
+      } else {
+        suggestedBuyPrice = calculateSuggestedBuyPrice({
+          statsPredictedPrice,
+          statsMinPrice,
+          statsMaxPrice,
+          estimatedFinalPrice,
+          mustSpendPerSlot: tusharMustSpendPerSlot,
+          basePrice,
+          urgency: tusharHasUrgentNeeds ? 'MEDIUM' : 'LOW'
+        })
+        suggestedBuyPrice = suggestedBuyPrice ?? roundToNearestThousand(Math.max(basePrice * 2, minIncrement))
+      }
+      let teamNeedsNote = ''
+      if (tusharHasUrgentNeeds) {
+        teamNeedsNote = ` URGENT: You have ${tusharRemainingSlots} slots remaining - you need to actively buy players to form your team.`
+      }
+      if (estimatedFinalPrice === null) {
+        const suggestedPriceDisplay = suggestedBuyPrice ? suggestedBuyPrice.toLocaleString('en-IN') : 'N/A'
+        reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. No bids placed yet - wait to see initial bids before deciding. Base price is ₹${basePrice.toLocaleString('en-IN')}.${statsNote}${teamNeedsNote}${strategicNote} Suggested buy price: ₹${suggestedPriceDisplay} - consider buying if price stays below this.`
+      } else {
+        const suggestedPriceDisplay = suggestedBuyPrice ? suggestedBuyPrice.toLocaleString('en-IN') : 'N/A'
+        reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. Wait to see initial bids before deciding.${statsNote}${teamNeedsNote}${strategicNote} Suggested buy price: ₹${suggestedPriceDisplay} - consider buying if price stays below this.`
+      }
+      confidence = 0.6
     }
-    if (estimatedFinalPrice === null) {
-      reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. No bids placed yet - wait to see initial bids before deciding. Base price is ₹${basePrice.toLocaleString('en-IN')}.${statsNote}${strategicNote} Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')} - consider buying if price stays below this.`
+  }
+  
+  if (!suggestedBuyPrice) {
+    suggestedBuyPrice = calculateSuggestedBuyPrice({
+      statsPredictedPrice,
+      statsMinPrice,
+      statsMaxPrice,
+      estimatedFinalPrice,
+      mustSpendPerSlot: tusharMustSpendPerSlot,
+      basePrice,
+      urgency: urgencyLevel
+    }) ?? roundToNearestThousand(Math.max(basePrice * 2, minIncrement))
+  }
+
+  // CRITICAL: If current bid has exceeded suggested buy price, change action to PASS
+  // This ensures recommendations stay relevant as bidding progresses
+  // EXCEPTION: If urgent needs AND price is still reasonable relative to must spend per slot, allow it
+  if (suggestedBuyPrice && currentBid > 0 && currentBid > suggestedBuyPrice) {
+    const excessPercent = ((currentBid - suggestedBuyPrice) / suggestedBuyPrice * 100).toFixed(0)
+    const excessAmount = currentBid - suggestedBuyPrice
+    
+    // Check if price is still reasonable for urgent needs (within 1.5x must spend per slot)
+    const isReasonableForUrgentNeeds = tusharHasUrgentNeeds && 
+                                       tusharMustSpendPerSlot > 0 && 
+                                       currentBid <= tusharMustSpendPerSlot * 1.5
+    
+    // If current bid is significantly above suggested price (more than 10%), recommend PASS
+    // UNLESS it's still reasonable for urgent team formation needs
+    if (excessAmount > suggestedBuyPrice * 0.1 && !isReasonableForUrgentNeeds) {
+      action = 'pass'
+      let passReasoning = `PRICE EXCEEDED: Current bid (₹${currentBid.toLocaleString('en-IN')}) has exceeded your suggested buy price (₹${suggestedBuyPrice.toLocaleString('en-IN')}) by ₹${excessAmount.toLocaleString('en-IN')} (${excessPercent}% above target). `
+      
+      if (playerScore) {
+        passReasoning += `While this player has strong stats (Overall Rating: ${playerScore.overallRating}/100, Stats-Based Predicted Price: ₹${statsPredictedPrice.toLocaleString('en-IN')}), the current price no longer represents good value. `
+      }
+      
+      if (tusharHasUrgentNeeds) {
+        passReasoning += `Even though you have ${tusharRemainingSlots} slots remaining, this price (₹${currentBid.toLocaleString('en-IN')}) exceeds your must-spend requirement (₹${Math.round(tusharMustSpendPerSlot).toLocaleString('en-IN')} per slot) by too much. `
+      }
+      
+      passReasoning += `Consider passing and saving your budget for better opportunities.`
+      
+      reasoning = passReasoning
+      confidence = 0.85 // High confidence when price exceeds target
+      recommendedBid = undefined // No recommended bid if passing
+    } else if (excessAmount > suggestedBuyPrice * 0.1 && isReasonableForUrgentNeeds) {
+      // Price exceeded suggested buy price BUT still reasonable for urgent needs
+      // Change to WAIT with strong warning, but don't completely pass
+      action = 'wait'
+      reasoning = `⚠️ PRICE WARNING: Current bid (₹${currentBid.toLocaleString('en-IN')}) exceeds your suggested buy price (₹${suggestedBuyPrice.toLocaleString('en-IN')}) by ₹${excessAmount.toLocaleString('en-IN')}. However, you have ${tusharRemainingSlots} slots remaining and must spend ₹${Math.round(tusharMustSpendPerSlot).toLocaleString('en-IN')} per slot. This price is still within your urgent team formation budget, but consider carefully before bidding further.`
+      confidence = 0.65
+      recommendedBid = undefined // Don't recommend bidding, just wait
     } else {
-      reasoning = `Monitor the bidding. ${likelyBidders.length} potential bidders identified. Wait to see initial bids before deciding.${statsNote}${strategicNote} Suggested buy price: ₹${suggestedBuyPrice.toLocaleString('en-IN')} - consider buying if price stays below this.`
+      // If only slightly above (within 10%), change to WAIT with warning
+      if (action !== 'pass') {
+        action = 'wait'
+        reasoning = `⚠️ WARNING: Current bid (₹${currentBid.toLocaleString('en-IN')}) is approaching your suggested buy price (₹${suggestedBuyPrice.toLocaleString('en-IN')}). ${reasoning} Consider carefully before bidding further.`
+        confidence = Math.max(0.5, confidence - 0.1)
+      }
     }
-    confidence = 0.6
   }
   
   const recommendedAction = {

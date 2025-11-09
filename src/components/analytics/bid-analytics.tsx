@@ -132,11 +132,17 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
   const timeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set())
   // Ref to store cache for efficient access without causing re-renders
   const cacheRef = useRef<Map<string, AnalyticsData['predictions']>>(new Map())
+  // Ref to store current analytics for access in callbacks
+  const analyticsRef = useRef<AnalyticsData>(analytics)
   
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     cacheRef.current = analyticsCache
   }, [analyticsCache])
+  
+  useEffect(() => {
+    analyticsRef.current = analytics
+  }, [analytics])
 
   // Update local state when props change
   useEffect(() => {
@@ -302,18 +308,30 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
       // Smart refresh strategy:
       // - First 2 bids: Use fallback (no OpenAI) - just update with new bid data
       // - 3rd+ bid or significant price change: Use OpenAI for deeper analysis
+      // - If bid amount is very high, always refresh to check if it exceeds suggested price
       // - Debounce to avoid rapid calls
       if (localCurrentPlayer) {
         const currentBidCount = bidCountForCurrentPlayer + 1
-        const shouldUseAI = currentBidCount >= 3 // Use AI after 3 bids
+        const newBidAmount = data?.amount || 0
         
-        console.log(`[Analytics] New bid received (count: ${currentBidCount}). Using ${shouldUseAI ? 'OpenAI' : 'fallback'}...`)
+        // Check if we have a suggested buy price in current analytics (use ref to avoid stale closure)
+        const currentSuggestedPrice = analyticsRef.current.predictions.recommendedAction.suggestedBuyPrice
         
-        // Debounce: wait 1-2 seconds before refreshing to batch multiple rapid bids
+        // If new bid significantly exceeds suggested price, always refresh (even if early bids)
+        const priceExceeded = currentSuggestedPrice && newBidAmount > currentSuggestedPrice * 1.1
+        
+        const shouldUseAI = Boolean(currentBidCount >= 3 || priceExceeded) // Use AI after 3 bids OR if price exceeded
+        
+        console.log(`[Analytics] New bid received (count: ${currentBidCount}, amount: ₹${newBidAmount.toLocaleString('en-IN')}). Using ${shouldUseAI ? 'OpenAI' : 'fallback'}...`)
+        
+        // Shorter debounce if price exceeded (need faster update)
+        const debounceTime = priceExceeded ? 500 : (shouldUseAI ? 1000 : 1500)
+        
+        // Debounce: wait before refreshing to batch multiple rapid bids
         const timeout = setTimeout(() => {
           timeoutRefs.current.delete(timeout)
-          fetchAnalytics(true, shouldUseAI) // Use AI only if significant change
-        }, shouldUseAI ? 1000 : 1500) // Longer debounce for fallback
+          fetchAnalytics(true, shouldUseAI) // Use AI if significant change or price exceeded
+        }, debounceTime)
         timeoutRefs.current.add(timeout)
       }
     },
@@ -594,9 +612,25 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                   {(analytics.predictions.recommendedAction.suggestedBuyPrice || analytics.predictions.recommendedAction.recommendedBid) && (
                     <div className="mt-2 space-y-1">
                       {analytics.predictions.recommendedAction.suggestedBuyPrice && (
-                        <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">
-                          Suggested Buy Price: ₹{analytics.predictions.recommendedAction.suggestedBuyPrice.toLocaleString('en-IN')}
-                        </p>
+                        <>
+                          <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">
+                            Suggested Buy Price: ₹{analytics.predictions.recommendedAction.suggestedBuyPrice.toLocaleString('en-IN')}
+                          </p>
+                          {/* Show warning if current bid exceeds suggested price */}
+                          {analytics.predictions.marketAnalysis.highestBid > 0 && 
+                           analytics.predictions.recommendedAction.suggestedBuyPrice && 
+                           analytics.predictions.marketAnalysis.highestBid > analytics.predictions.recommendedAction.suggestedBuyPrice && (
+                            <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg">
+                              <p className="text-sm font-semibold text-red-700 dark:text-red-300 flex items-center gap-1">
+                                <AlertCircle className="w-4 h-4" />
+                                ⚠️ Current Bid Exceeds Target
+                              </p>
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                Current bid (₹{analytics.predictions.marketAnalysis.highestBid.toLocaleString('en-IN')}) is ₹{(analytics.predictions.marketAnalysis.highestBid - analytics.predictions.recommendedAction.suggestedBuyPrice).toLocaleString('en-IN')} above your suggested buy price
+                              </p>
+                            </div>
+                          )}
+                        </>
                       )}
                       {analytics.predictions.recommendedAction.recommendedBid && analytics.predictions.recommendedAction.action === 'bid' && (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
