@@ -96,6 +96,11 @@ export interface AuctionEventData {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
   }
+  'bid-error': {
+    message: string
+    bidderId?: string
+    bidderName?: string
+  }
 }
 
 export type AuctionEventName = keyof AuctionEventData
@@ -111,6 +116,7 @@ export interface UsePusherOptions {
   onAuctionResumed?: (data: AuctionEventData['auction-resumed']) => void
   onAuctionEnded?: (data: AuctionEventData['auction-ended']) => void
   onPlayersUpdated?: (data: AuctionEventData['players-updated']) => void
+  onBidError?: (data: AuctionEventData['bid-error']) => void
 }
 
 export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
@@ -251,6 +257,11 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             channel.bind('players-updated', (data: any) => {
               console.log('📨 Pusher received players-updated:', data)
               callbacksRef.current.onPlayersUpdated?.(data)
+            })
+            
+            channel.bind('bid-error', (data: any) => {
+              console.log('📨 Pusher received bid-error:', data)
+              callbacksRef.current.onBidError?.(data)
             })
             
             console.log('✅ All event handlers bound successfully')

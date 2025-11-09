@@ -61,6 +61,7 @@ model User {
 model Auction {
   id               String        @id @default(cuid())
   name             String
+  slug             String?       @unique // URL-friendly slug for the auction
   description      String?
   rules            Json
   status           AuctionStatus @default(DRAFT)
@@ -95,6 +96,7 @@ model Auction {
   @@index([status])
   @@index([isPublished])
   @@index([createdById, status])
+  @@index([slug])
   @@map("auctions")
 }
 

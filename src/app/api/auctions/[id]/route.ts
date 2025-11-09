@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import { generateSlug, ensureUniqueSlug } from '@/lib/slug'
 
 // GET /api/auctions/[id] - Get auction details
 export async function GET(
@@ -89,7 +90,28 @@ export async function PUT(
     // Prepare update data
     const updateData: any = {}
     
-    if (name) updateData.name = name
+    if (name) {
+      updateData.name = name
+      // Regenerate slug if name changes
+      if (name !== existingAuction.name) {
+        const baseSlug = generateSlug(name)
+        const existingAuctions = await prisma.auction.findMany({
+          where: {
+            slug: {
+              startsWith: baseSlug
+            },
+            id: {
+              not: params.id // Exclude current auction
+            }
+          },
+          select: {
+            slug: true
+          }
+        })
+        const existingSlugs = existingAuctions.map(a => a.slug).filter((s): s is string => s !== null)
+        updateData.slug = ensureUniqueSlug(baseSlug, existingSlugs)
+      }
+    }
     if (description !== undefined) updateData.description = description
     if (rules) {
       // Merge rules with existing rules to preserve any fields not being updated

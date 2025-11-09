@@ -66,6 +66,11 @@ export interface AuctionEventData {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
   }
+  'bid-error': {
+    message: string
+    bidderId?: string
+    bidderName?: string
+  }
 }
 
 export type AuctionEventName = keyof AuctionEventData

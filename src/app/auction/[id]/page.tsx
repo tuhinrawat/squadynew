@@ -3,25 +3,209 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { AdminAuctionView } from '@/components/admin-auction-view'
-import { BidderAuctionView } from '@/components/bidder-auction-view'
 import { PublicAuctionView } from '@/components/public-auction-view'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ResultsView } from '@/components/results-view'
 import { ChevronRight, Home } from 'lucide-react'
-import FloatingPromoChip from '@/components/floating-promo-chip'
 import { PreAuctionBanner } from '@/components/pre-auction-banner'
-import { FullScreenCountdown } from '@/components/full-screen-countdown'
-import { ProfessioPromoButton } from '@/components/professio-promo-button'
 import { CountdownToLiveWrapper } from '@/components/countdown-to-live-wrapper'
+import { isCuid } from '@/lib/slug'
+import type { Metadata } from 'next'
+
+type AuctionStats = {
+  total: number
+  sold: number
+  unsold: number
+  remaining: number
+}
+
+type AuctionBidHistoryRecord = {
+  bidderId: string
+  amount: number
+  timestamp: Date
+  bidderName: string
+  teamName?: string
+  type?: 'bid' | 'sold' | 'unsold'
+  playerId?: string
+  playerName?: string
+}
+
+function calculateAuctionStats(players: Array<{ status?: string | null }>): AuctionStats {
+  const activePlayers = players.filter(player => player.status !== 'RETIRED')
+
+  return activePlayers.reduce<AuctionStats>(
+    (stats, player) => {
+      const status = player.status ?? 'AVAILABLE'
+
+      if (status === 'SOLD') {
+        stats.sold += 1
+      } else if (status === 'UNSOLD') {
+        stats.unsold += 1
+      } else if (status === 'AVAILABLE') {
+        stats.remaining += 1
+      }
+
+      stats.total += 1
+      return stats
+    },
+    { total: 0, sold: 0, unsold: 0, remaining: 0 }
+  )
+}
+
+function normalizeTimestamp(value: unknown): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value
+  }
+
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed
+    }
+  }
+
+  return new Date(0)
+}
+
+function parseBidHistory(rawHistory: unknown): AuctionBidHistoryRecord[] {
+  if (!Array.isArray(rawHistory)) {
+    return []
+  }
+
+  return rawHistory.reduce<AuctionBidHistoryRecord[]>((entries, item) => {
+    if (typeof item !== 'object' || item === null) {
+      return entries
+    }
+
+    const record = item as Record<string, unknown>
+    const playerId = typeof record.playerId === 'string' ? record.playerId : undefined
+    const amount = typeof record.amount === 'number' ? record.amount : undefined
+    const bidderId = typeof record.bidderId === 'string' ? record.bidderId : undefined
+    const bidderName = typeof record.bidderName === 'string' ? record.bidderName : undefined
+    const teamName = typeof record.teamName === 'string' ? record.teamName : undefined
+    const playerName = typeof record.playerName === 'string' ? record.playerName : undefined
+    const type = typeof record.type === 'string' ? record.type : undefined
+
+    if (typeof amount !== 'number' || Number.isNaN(amount)) {
+      return entries
+    }
+
+    entries.push({
+      amount,
+      bidderId: bidderId ?? 'unknown',
+      bidderName: bidderName ?? 'Unknown Bidder',
+      teamName,
+      timestamp: normalizeTimestamp(record.timestamp),
+      playerId,
+      playerName,
+      type: type === 'bid' || type === 'sold' || type === 'unsold' ? type : undefined
+    })
+
+    return entries
+  }, [])
+}
+
+function isScheduledDateInFuture(date: Date | string | null | undefined): boolean {
+  if (!date) {
+    return false
+  }
+
+  const scheduledTime = new Date(date).getTime()
+  if (Number.isNaN(scheduledTime)) {
+    return false
+  }
+
+  return scheduledTime > Date.now()
+}
+
+// Generate dynamic metadata for better social sharing
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const isId = isCuid(params.id)
+  
+  const auction = await prisma.auction.findUnique({
+    where: isId ? { id: params.id } : { slug: params.id },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+      status: true,
+      isPublished: true,
+      _count: {
+        select: {
+          players: true,
+          bidders: true
+        }
+      }
+    }
+  })
+
+  if (!auction) {
+    return {
+      title: 'Auction Not Found',
+      description: 'The requested auction could not be found.'
+    }
+  }
+
+  const title = `${auction.name} - Live Auction on Squady`
+  const description = auction.description 
+    ? auction.description.substring(0, 160) // Limit to 160 chars for SEO
+    : `Join the live auction with ${auction._count.players} players and ${auction._count.bidders} teams. Real-time bidding, instant updates, and comprehensive team management.`
+  
+  const url = auction.slug 
+    ? `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auction.slug}`
+    : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auction.id}`
+
+  const statusBadge = auction.status === 'LIVE' ? '🔴 LIVE' : 
+                     auction.status === 'PAUSED' ? '⏸️ PAUSED' : 
+                     auction.status === 'COMPLETED' ? '✅ COMPLETED' : '📋 DRAFT'
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: `${statusBadge} ${auction.name}`,
+      description,
+      url,
+      siteName: 'Squady',
+      type: 'website',
+      locale: 'en_US',
+      images: [
+        {
+          url: '/squady-logo.svg',
+          width: 1200,
+          height: 630,
+          alt: auction.name,
+        }
+      ]
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${statusBadge} ${auction.name}`,
+      description,
+      images: ['/squady-logo.svg'],
+    },
+    alternates: {
+      canonical: url
+    },
+    robots: {
+      index: auction.isPublished,
+      follow: auction.isPublished,
+    }
+  }
+}
 
 export default async function LiveAuctionPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
 
+  // Determine if the param is a slug or an ID
+  const isId = isCuid(params.id)
+  
+  // Fetch auction by slug or ID
   const auction = await prisma.auction.findUnique({
-    where: { id: params.id },
+    where: isId ? { id: params.id } : { slug: params.id },
     include: {
       players: true,
       bidders: {
@@ -44,6 +228,20 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     }
     redirect('/dashboard')
   }
+  
+  // If accessed by ID but slug exists, redirect to slug URL for SEO
+  if (isId && auction.slug) {
+    redirect(`/auction/${auction.slug}`)
+  }
+
+  const currentPlayer = auction.currentPlayerId
+    ? await prisma.player.findUnique({
+        where: { id: auction.currentPlayerId }
+      })
+    : null
+
+  const auctionStats = calculateAuctionStats(auction.players)
+  const fullBidHistory = parseBidHistory(auction.bidHistory)
 
   // If user is logged in, check access
   let isAdmin = false
@@ -71,47 +269,15 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       // If published but DRAFT status - show ONLY full-page countdown (nothing else)
       if (auction.status === 'DRAFT') {
         // Check if scheduledStartDate exists and is valid
-        const hasScheduledDate = auction.scheduledStartDate && new Date(auction.scheduledStartDate).getTime() > Date.now()
+        const hasScheduledDate = isScheduledDateInFuture(auction.scheduledStartDate)
         
         if (hasScheduledDate) {
-          // Calculate stats for wrapper
-          const activePlayers = auction.players.filter(p => p.status !== 'RETIRED')
-          const totalPlayers = activePlayers.length
-          const soldPlayers = activePlayers.filter(p => p.status === 'SOLD').length
-          const unsoldPlayers = activePlayers.filter(p => p.status === 'UNSOLD').length
-          const availablePlayers = activePlayers.filter(p => p.status === 'AVAILABLE').length
-
-          const stats = {
-            total: totalPlayers,
-            sold: soldPlayers,
-            unsold: unsoldPlayers,
-            remaining: availablePlayers
-          }
-
-          // Parse bid history
-          let bidHistory: any[] = []
-          if (auction.bidHistory && typeof auction.bidHistory === 'object') {
-            const bidHistoryData = auction.bidHistory as any
-            if (Array.isArray(bidHistoryData)) {
-              bidHistory = bidHistoryData
-            }
-          }
-
-          // Get current player if exists
-          let currentPlayer = null
-          if (auction.currentPlayerId) {
-            currentPlayer = await prisma.player.findUnique({
-              where: { id: auction.currentPlayerId }
-            })
-          }
-
-          // Use wrapper component that handles countdown to live transition
           return (
             <CountdownToLiveWrapper
               auction={auction}
               initialCurrentPlayer={currentPlayer}
-              initialStats={stats}
-              initialBidHistory={bidHistory}
+              initialStats={auctionStats}
+              initialBidHistory={fullBidHistory}
               bidders={auction.bidders}
             />
           )
@@ -137,37 +303,6 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       }
 
       // For LIVE and PAUSED status, show full auction view
-      // Get current player if exists
-      let currentPlayer = null
-      if (auction.currentPlayerId) {
-        currentPlayer = await prisma.player.findUnique({
-          where: { id: auction.currentPlayerId }
-        })
-      }
-
-      // Calculate stats (excluding RETIRED players)
-      const activePlayers = auction.players.filter(p => p.status !== 'RETIRED')
-      const totalPlayers = activePlayers.length
-      const soldPlayers = activePlayers.filter(p => p.status === 'SOLD').length
-      const unsoldPlayers = activePlayers.filter(p => p.status === 'UNSOLD').length
-      const availablePlayers = activePlayers.filter(p => p.status === 'AVAILABLE').length
-
-      const stats = {
-        total: totalPlayers,
-        sold: soldPlayers,
-        unsold: unsoldPlayers,
-        remaining: availablePlayers
-      }
-
-      // Parse bid history
-      let bidHistory: any[] = []
-      if (auction.bidHistory && typeof auction.bidHistory === 'object') {
-        const bidHistoryData = auction.bidHistory as any
-        if (Array.isArray(bidHistoryData)) {
-          bidHistory = bidHistoryData
-        }
-      }
-
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
           {/* Banner for LIVE/PAUSED published auctions */}
@@ -249,8 +384,8 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
           <PublicAuctionView 
             auction={auction}
             currentPlayer={currentPlayer}
-            stats={stats}
-            bidHistory={bidHistory}
+            stats={auctionStats}
+            bidHistory={fullBidHistory}
             bidders={auction.bidders}
           />
         </div>
@@ -277,7 +412,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             Auction Not Started
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
-            This auction hasn't started yet. Please wait for the administrator to begin the auction.
+            This auction hasn&apos;t started yet. Please wait for the administrator to begin the auction.
           </p>
           <Button asChild>
             <Link href="/bidder/auctions">Back to My Auctions</Link>
@@ -285,37 +420,6 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
         </div>
       </div>
     )
-  }
-
-  // Get current player if exists
-  let currentPlayer = null
-  if (auction.currentPlayerId) {
-    currentPlayer = await prisma.player.findUnique({
-      where: { id: auction.currentPlayerId }
-    })
-  }
-
-  // Calculate stats (excluding RETIRED players)
-  const activePlayers = auction.players.filter(p => p.status !== 'RETIRED')
-  const totalPlayers = activePlayers.length
-  const soldPlayers = activePlayers.filter(p => p.status === 'SOLD').length
-  const unsoldPlayers = activePlayers.filter(p => p.status === 'UNSOLD').length
-  const availablePlayers = activePlayers.filter(p => p.status === 'AVAILABLE').length
-
-  const stats = {
-    total: totalPlayers,
-    sold: soldPlayers,
-    unsold: unsoldPlayers,
-    remaining: availablePlayers
-  }
-
-  // Parse bid history
-  let bidHistory: any[] = []
-  if (auction.bidHistory && typeof auction.bidHistory === 'object') {
-    const bidHistoryData = auction.bidHistory as any
-    if (Array.isArray(bidHistoryData)) {
-      bidHistory = bidHistoryData
-    }
   }
 
   if (auction.status === 'COMPLETED') {
@@ -409,8 +513,8 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       <AdminAuctionView 
         auction={auction}
         currentPlayer={currentPlayer}
-        stats={stats}
-        bidHistory={bidHistory}
+        stats={auctionStats}
+        bidHistory={fullBidHistory}
         viewMode={viewMode}
       />
       

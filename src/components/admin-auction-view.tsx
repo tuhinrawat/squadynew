@@ -158,7 +158,160 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const showPlayerRevealRef = useRef(false)
   const pendingPlayerRef = useRef<Player | null>(null)
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [isDesktop, setIsDesktop] = useState(false)
+  const showPinnedConsole = viewMode === 'admin' && isDesktop
+  const errorIdRef = useRef(0)
+  const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const [bidErrors, setBidErrors] = useState<Array<{ id: number; message: string }>>([])
+  const pushBidError = useCallback((message: string) => {
+    toast.error(message)
+    const id = ++errorIdRef.current
+    setBidErrors(prev => [{ id, message }, ...prev])
+    const timeout = setTimeout(() => {
+      setBidErrors(prev => prev.filter(err => err.id !== id))
+      delete bidErrorTimeouts.current[id]
+    }, 10000) // Changed from 2000ms to 10000ms (10 seconds)
+    bidErrorTimeouts.current[id] = timeout
+  }, [])
+  const showBidError = useCallback((message: string) => {
+    setError(message)
+    pushBidError(message)
+  }, [pushBidError])
+  const canToggleConsole = !showPinnedConsole
+  const chatOffsetClass = (showPinnedConsole || isBidConsoleOpen) ? 'lg:right-[calc(30%+2rem)]' : 'lg:right-20'
   
+  // Bidding console panel component
+  const BidConsolePanel = useCallback(({ showClose = false, onClose }: { showClose?: boolean; onClose?: () => void }) => (
+    <div className="h-full w-full bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto">
+      <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-white" />
+          <div className="text-base font-bold text-white">Bidding Console</div>
+        </div>
+        {showClose && (
+          <div className="flex items-center gap-2">
+            <button
+              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="p-3 flex-1 overflow-y-auto bg-white dark:bg-gray-900">
+        <div className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1">
+          <span>👥</span>
+          <span>All Bidders</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse).map(bidder => (
+            <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
+                  {bidder.user?.name && bidder.teamName && (
+                    <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user.name}</div>
+                  )}
+                  <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 w-32">
+                  <Button
+                    size="sm"
+                    className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                    disabled={bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id}
+                    onClick={async (e) => {
+                      if (isPlacingBid || placingBidFor === bidder.id) return
+                      const btn = e.currentTarget
+                      btn.disabled = true
+                      btn.style.opacity = '0.5'
+
+                      const currentBidAmount = currentBid?.amount || 0
+                      const rules = auction.rules as AuctionRules | undefined
+                      const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const totalBid = currentBidAmount + minInc
+
+                      setIsPlacingBid(true)
+                      setPlacingBidFor(bidder.id)
+                      const previousBid = currentBid
+                      const previousHighestBidderId = highestBidderId
+
+                      setCurrentBid({
+                        bidderId: bidder.id,
+                        amount: totalBid,
+                        bidderName: bidder.user?.name || bidder.username,
+                        teamName: bidder.teamName || undefined
+                      })
+                      setHighestBidderId(bidder.id)
+
+                      const optimisticEntry: BidHistoryEntry = {
+                        bidderId: bidder.id,
+                        amount: totalBid,
+                        timestamp: new Date(),
+                        bidderName: bidder.user?.name || bidder.username,
+                        teamName: bidder.teamName || undefined,
+                        type: 'bid',
+                        playerId: currentPlayer?.id
+                      }
+                      setFullBidHistory(prev => [optimisticEntry, ...prev])
+
+                      try {
+                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                        })
+                        if (!response.ok) {
+                          const err = await response.json()
+                          pushBidError(err.error || 'Failed to place bid')
+                          setCurrentBid(previousBid)
+                          setHighestBidderId(previousHighestBidderId)
+                          setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                          setIsPlacingBid(false)
+                          setPlacingBidFor(null)
+                          btn.disabled = false
+                          btn.style.opacity = '1'
+                        } else {
+                          startTransition(() => {
+                            setIsPlacingBid(false)
+                            setPlacingBidFor(null)
+                          })
+                        }
+                      } catch {
+                        pushBidError('Network error')
+                        setCurrentBid(previousBid)
+                        setHighestBidderId(previousHighestBidderId)
+                        setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                        setIsPlacingBid(false)
+                        setPlacingBidFor(null)
+                        btn.disabled = false
+                        btn.style.opacity = '1'
+                      }
+                    }}
+                  >
+                    Raise
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-10 w-full text-xs !px-3 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400 disabled:text-white/90"
+                    disabled={bidder.id === highestBidderId || isPlacingBid}
+                    onClick={() => {
+                      if (!isPlacingBid) {
+                        setSelectedBidderForBid(bidder.id)
+                      }
+                    }}
+                  >
+                    Custom
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  ), [bidders, highestBidderId, isPlacingBid, placingBidFor, currentBid, auction, currentPlayer])
+
   // Keep refs in sync with state
   useEffect(() => {
     soldAnimationRef.current = soldAnimation
@@ -172,6 +325,28 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     pendingPlayerRef.current = pendingPlayer
   }, [pendingPlayer])
 
+  useEffect(() => {
+    const updateDeviceType = () => {
+      if (typeof window !== 'undefined') {
+        setIsDesktop(window.innerWidth >= 1024)
+      }
+    }
+    updateDeviceType()
+    window.addEventListener('resize', updateDeviceType)
+    return () => window.removeEventListener('resize', updateDeviceType)
+  }, [])
+
+  useEffect(() => {
+    if (showPinnedConsole && isBidConsoleOpen) {
+      setIsBidConsoleOpen(false)
+    }
+  }, [showPinnedConsole, isBidConsoleOpen])
+
+  useEffect(() => {
+    return () => {
+      Object.values(bidErrorTimeouts.current).forEach(clearTimeout)
+    }
+  }, [])
 
   // Find current user's bidder profile (for bidder view)
   const userBidder = bidders.find((b) => b.userId === session?.user?.id)
@@ -480,7 +655,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         // Remove the "sold" entry and all bid entries for this player
         // (keep unsold and sale-undo entries for other players)
         const filtered = prev.filter(entry => 
-          !(entry.playerId === data.playerId && (entry.type === 'sold' || entry.type === 'bid'))
+          !(entry.playerId === data.player.id && (entry.type === 'sold' || entry.type === 'bid'))
         )
         // Add the undo event at the beginning
         return [undoEvent, ...filtered]
@@ -675,6 +850,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     onAuctionResumed: handleAuctionResumed,
     onPlayersUpdated: handlePlayersUpdated,
     onAuctionEnded: handleAuctionEnded,
+    onBidError: (data) => {
+      // Display error message via Pusher
+      pushBidError(data.message)
+    },
   })
 
   // Countdown timer - don't auto-advance when timer hits 0
@@ -926,6 +1105,54 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     return playerData.name || playerData.Name || 'No Player Selected'
   }, [playerData])
 
+  // Determine auction phase based on player status and icon status
+  const auctionPhase = useMemo(() => {
+    if (!currentPlayer || players.length === 0) return null
+    
+    const totalPlayers = players.length
+    const soldPlayers = players.filter(p => p.status === 'SOLD').length
+    const unsoldPlayers = players.filter(p => p.status === 'UNSOLD').length
+    const availablePlayers = players.filter(p => p.status === 'AVAILABLE').length
+    
+    // Icon players phase
+    const iconPlayers = players.filter(p => (p as any).isIcon === true)
+    const soldIconPlayers = iconPlayers.filter(p => p.status === 'SOLD').length
+    const unsoldIconPlayers = iconPlayers.filter(p => p.status === 'UNSOLD').length
+    const availableIconPlayers = iconPlayers.filter(p => p.status === 'AVAILABLE').length
+    
+    // Check if current player is icon
+    const currentPlayerIsIcon = (currentPlayer as any)?.isIcon === true
+    
+    // Phase 1: Icon Players Auction (if icon players exist and current is icon or icon players not finished)
+    if (iconPlayers.length > 0 && (currentPlayerIsIcon || availableIconPlayers > 0)) {
+      return {
+        type: 'ICON_PLAYERS',
+        message: '⭐ Icon Players Auction Going On',
+        color: 'from-purple-600 to-pink-600'
+      }
+    }
+    
+    // Phase 3: Remaining/Unsold Players (if there are unsold players and no available regular players left)
+    if (unsoldPlayers > 0 && availablePlayers > 0 && availablePlayers === unsoldPlayers) {
+      return {
+        type: 'REMAINING_PLAYERS',
+        message: '🔄 Remaining Players Auction Going On',
+        color: 'from-orange-600 to-red-600'
+      }
+    }
+    
+    // Phase 2: Regular Players (default for all other cases when auction is ongoing)
+    if (availablePlayers > 0) {
+      return {
+        type: 'ALL_PLAYERS',
+        message: '🎯 All Player Auction Running',
+        color: 'from-blue-600 to-cyan-600'
+      }
+    }
+    
+    return null
+  }, [currentPlayer, players])
+
   // Check if there are any sold players (for showing Undo Last Sale button)
   const hasSoldPlayers = useMemo(() => {
     return players.some(p => p.status === 'SOLD')
@@ -1032,7 +1259,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-        <div className={`${isBidConsoleOpen ? 'lg:mr-[30%]' : ''} px-4 sm:px-6 lg:px-8 transition-all duration-200`}>
+        <div className={`${(showPinnedConsole || isBidConsoleOpen) ? 'lg:mr-[30%]' : ''} px-4 sm:px-6 lg:px-8 transition-all duration-200`}>
       <div className="max-w-[1400px] mx-auto py-4 sm:py-6 space-y-4">
         {/* Enhanced Header */}
         <div className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
@@ -1255,6 +1482,19 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     />
                   )}
                 </AnimatePresence>
+                
+                {/* Auction Phase Banner */}
+                {auctionPhase && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`mb-4 rounded-lg bg-gradient-to-r ${auctionPhase.color} px-4 py-3 shadow-lg`}
+                  >
+                    <p className="text-center text-sm sm:text-base md:text-lg font-bold text-white tracking-wide animate-pulse">
+                      {auctionPhase.message}
+                    </p>
+                  </motion.div>
+                )}
                 
                 <PlayerCard
                 name={playerName}
@@ -1585,7 +1825,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-6 text-base"
                     onClick={async () => {
                       if (!userBidder) {
-                        setError('Please log in to place a bid')
+                        showBidError('Please log in to place a bid')
                         return
                       }
                       
@@ -1596,7 +1836,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       const totalBid = currentBidAmount + minIncrement
                       
                       if (totalBid > userBidder.remainingPurse) {
-                        setError('Insufficient remaining purse')
+                        showBidError('Insufficient remaining purse')
                         return
                       }
 
@@ -1619,10 +1859,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           setBidAmount(0)
                           toast.success('Bid placed successfully!')
                         } else {
-                          setError(data.error || 'Failed to place bid')
+                          showBidError(data.error || 'Failed to place bid')
                         }
                       } catch {
-                        setError('Network error. Please try again.')
+                        showBidError('Network error. Please try again.')
                       } finally {
                         setIsPlacingBid(false)
                       }
@@ -1639,52 +1879,54 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
                   {/* Custom Bid */}
                   <div className="space-y-2">
-                    <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Custom Bid Amount (in ₹1000s):</Label>
+                    <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">Bid Amount (₹)</Label>
                     <div className="flex gap-2">
                       <Input
                         type="number"
-                        placeholder="Enter amount in thousands"
+                        placeholder="Enter total bid amount"
                         value={bidAmount === 0 ? '' : bidAmount}
                         onChange={(e) => {
                           const value = e.target.value === '' ? 0 : Number(e.target.value)
                           setBidAmount(value)
                           setError('')
                         }}
-                        min="1000"
-                        step="1000"
                         className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                       />
                       <Button 
                         className="bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap px-6"
                         onClick={async () => {
                           if (!userBidder) {
-                            setError('Please log in to place a bid')
+                            showBidError('Please log in to place a bid')
                             return
                           }
 
                           if (!bidAmount || bidAmount <= 0) {
-                            setError('Please enter a valid bid amount')
+                            showBidError('Please enter a valid bid amount')
                             return
                           }
 
-                          // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
                           const currentBidAmount = currentBid?.amount || 0
                           const rules = auction.rules as AuctionRules | undefined
                           const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
-                          
-                          // Validate bid is a multiple of the minimum increment
-                          if (bidAmount % minIncrement !== 0) {
-                            setError(`Bid amount must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
+                          const difference = bidAmount - currentBidAmount
+
+                          if (bidAmount <= currentBidAmount) {
+                            showBidError('Bid must exceed current amount')
                             return
                           }
-                          
-                          if (bidAmount < currentBidAmount + minIncrement) {
-                            setError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
+
+                          if (difference < minIncrement) {
+                            showBidError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
+                            return
+                          }
+
+                          if (difference % minIncrement !== 0) {
+                            showBidError(`Bid increase must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
                             return
                           }
 
                           if (bidAmount > userBidder.remainingPurse) {
-                            setError('Insufficient remaining purse')
+                            showBidError('Insufficient remaining purse')
                             return
                           }
 
@@ -1707,10 +1949,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                               setBidAmount(0)
                               toast.success('Bid placed successfully!')
                             } else {
-                              setError(data.error || 'Failed to place bid')
+                              showBidError(data.error || 'Failed to place bid')
                             }
                           } catch {
-                            setError('Network error. Please try again.')
+                            showBidError('Network error. Please try again.')
                           } finally {
                             setIsPlacingBid(false)
                           }
@@ -1719,23 +1961,36 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       >
                         {isPlacingBid ? 'Placing...' : 'Place Bid'}
                       </Button>
+                    </div>
                   </div>
-                </div>
               </CardContent>
             </Card>
             )}
 
           {/* Bid History */}
-            <Card className="border-0 lg:sticky lg:top-[calc(theme(spacing.4)+theme(spacing.4)+theme(spacing.4))]">
-              <CardHeader className="p-4 sm:p-6">
-                <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                  <span>📋</span> Live Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4">
-                <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-2">
-                  <ActivityLog
-                    items={bidHistory as any}
+          {bidErrors.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {bidErrors.map(err => (
+                <div
+                  key={err.id}
+                  className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs sm:text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200"
+                >
+                  <span className="mt-0.5 text-red-600 dark:text-red-300">⚠️</span>
+                  <span>{err.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <Card className="border-0 lg:sticky lg:top-[calc(theme(spacing.4)+theme(spacing.4)+theme(spacing.4))]">
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                <span>📋</span> Live Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-4">
+              <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-2">
+                <ActivityLog
+                  items={bidHistory as any}
         onUndoBid={viewMode === 'admin' ? async (entry) => {
           console.log('🎯 Undo button clicked for entry:', entry)
           try {
@@ -1792,7 +2047,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 const totalBid = currentBidAmount + minIncrement
                 
                 if (totalBid > userBidder.remainingPurse) {
-                  alert('Insufficient remaining purse')
+                  showBidError('Insufficient remaining purse')
                   return
                 }
                 
@@ -1808,12 +2063,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 }).then(response => response.json())
                   .then(data => {
                     if (data.error) {
-                      alert(data.error)
-                          } else {
+                      showBidError(data.error)
+                    } else {
                       toast.success('Bid placed successfully!')
                     }
                   }).catch(() => {
-                    alert('Network error. Please try again.')
+                    showBidError('Network error. Please try again.')
                   }).finally(() => {
                     setIsPlacingBid(false)
                   })
@@ -1908,19 +2163,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     onClick={async () => {
                       if (!userBidder || !bidAmount) return
 
+                      const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
-                      const minIncrement = rules?.minBidIncrement || 1000
-                      
-                      // Calculate total bid = current bid + custom increment (additive)
-                      const totalBid = (currentBid?.amount || 0) + bidAmount
-                      
-                      if (bidAmount < minIncrement) {
-                        setError(`Bid increment must be at least ₹${minIncrement.toLocaleString('en-IN')}`)
+                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const totalBid = bidAmount
+                      const difference = totalBid - currentBidAmount
+
+                      if (totalBid <= currentBidAmount) {
+                        showBidError('Bid must exceed current amount')
+                        return
+                      }
+
+                      if (difference < minIncrement) {
+                        showBidError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
+                        return
+                      }
+
+                      if (difference % minIncrement !== 0) {
+                        showBidError(`Bid increase must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
                         return
                       }
 
                       if (totalBid > userBidder.remainingPurse) {
-                        setError('Insufficient remaining purse')
+                        showBidError('Insufficient remaining purse')
                         return
                       }
 
@@ -1934,7 +2199,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           body: JSON.stringify({
                             bidderId: userBidder.id,
                             amount: totalBid
-                        })
+                          })
                         })
 
                         const data = await response.json()
@@ -1944,10 +2209,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           setCustomBidModalOpen(false)
                           toast.success('Bid placed successfully!')
                         } else {
-                          setError(data.error || 'Failed to place bid')
+                          showBidError(data.error || 'Failed to place bid')
                         }
                       } catch {
-                        setError('Network error. Please try again.')
+                        showBidError('Network error. Please try again.')
                       } finally {
                         setIsPlacingBid(false)
                       }
@@ -2230,378 +2495,25 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
     {/* Sliding Bidding Console (Admin only) */}
     {viewMode === 'admin' && (
-      <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50`}>
-        {/* Backdrop */}
-        <div
-          className="absolute inset-0 bg-black/20"
-          onClick={() => setIsBidConsoleOpen(false)}
-        />
-        {/* Panel */}
-        <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%] bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto">
-          {/* Header */}
-          <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-white" />
-              <div className="text-base font-bold text-white">Bidding Console</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all" 
-                onClick={() => setIsBidConsoleOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-          {/* All bidders */}
-          <div className="p-3 flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-            <div className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1">
-              <span>👥</span>
-              <span>All Bidders</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse).map(bidder => (
-                <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
-                      {bidder.user?.name && bidder.teamName && (
-                        <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user.name}</div>
-                      )}
-                      <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 w-32">
-                      <Button size="sm" className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`} 
-                        disabled={bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id}
-                        onClick={async (e) => {
-                          // Prevent multiple simultaneous bids for the same bidder
-                          if (isPlacingBid || placingBidFor === bidder.id) return
-                          
-                          // Instant feedback: disable button imperatively (before React re-render)
-                          const btn = e.currentTarget
-                          btn.disabled = true
-                          btn.style.opacity = '0.5'
-                          
-                          // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
-                          const currentBidAmount = currentBid?.amount || 0
-                          const rules = auction.rules as AuctionRules | undefined
-                          const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
-                          const totalBid = currentBidAmount + minInc
-                          
-                          // Optimistic state updates
-                          setIsPlacingBid(true)
-                          setPlacingBidFor(bidder.id)
-                          const previousPurse = bidder.remainingPurse
-                          const previousBid = currentBid
-                          const previousHighestBidderId = highestBidderId
-                          
-                          // Optimistic UI: set new bid immediately
-                          setCurrentBid({
-                            bidderId: bidder.id,
-                            amount: totalBid,
-                            bidderName: bidder.user?.name || bidder.username,
-                            teamName: bidder.teamName || undefined
-                          })
-                          setHighestBidderId(bidder.id)
-                          
-                          // Optimistic activity log entry (include playerId for proper deduplication)
-                          const optimisticEntry: BidHistoryEntry = {
-                            bidderId: bidder.id,
-                            amount: totalBid,
-                            timestamp: new Date(),
-                            bidderName: bidder.user?.name || bidder.username,
-                            teamName: bidder.teamName || undefined,
-                            type: 'bid',
-                            playerId: currentPlayer?.id
-                          }
-                          setFullBidHistory(prev => [optimisticEntry, ...prev])
-                          
-                          try {
-                            const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
-                            })
-                            if (!response.ok) { 
-                              const err = await response.json()
-                              toast.error(err.error || 'Failed to place bid')
-                              // Rollback optimistic updates
-                              setCurrentBid(previousBid)
-                              setHighestBidderId(previousHighestBidderId)
-                              setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                              setIsPlacingBid(false)
-                              setPlacingBidFor(null)
-                              btn.disabled = false
-                              btn.style.opacity = '1'
-                            } else {
-                              // Success - Pusher event will arrive shortly for reconciliation
-                              // Use startTransition for non-critical state updates
-                              startTransition(() => {
-                                setIsPlacingBid(false)
-                                setPlacingBidFor(null)
-                              })
-                            }
-                          } catch { 
-                            toast.error('Network error')
-                            // Rollback optimistic updates
-                            setCurrentBid(previousBid)
-                            setHighestBidderId(previousHighestBidderId)
-                            setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                            btn.disabled = false
-                            btn.style.opacity = '1'
-                          }
-                        }}>
-                        Raise
-                      </Button>
-                      <Button size="sm" className="h-10 w-full text-xs !px-3 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400 disabled:text-white/90" 
-                        disabled={bidder.id === highestBidderId || isPlacingBid}
-                        onClick={() => {
-                          if (!isPlacingBid) {
-                            setSelectedBidderForBid(bidder.id)
-                          }
-                        }}>
-                        Custom
-                      </Button>
-                    </div>
-                  </div>
-                  {/* compact inline buttons already added above; remove old vertical button group */}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Custom Bid Section - Appears at bottom when a bidder is selected */}
-          {selectedBidderForBid && (() => {
-            // Dynamic increment amounts: 2k minimum when current bid >= 10000
-            const currentBidAmount = currentBid?.amount || 0
-            const minIncrement = currentBidAmount >= 10000 ? 2000 : 1000
-            const incrementAmounts = currentBidAmount >= 10000 
-              ? [2000, 3000, 5000, 7000] // 2k, 3k, 5k, 7k when bid >= 10k
-              : [1000, 2000, 3000, 5000] // 1k, 2k, 3k, 5k when bid < 10k
-            
-            return (
-            <div className="p-3 border-t-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
-              <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
-                Custom Bid: {(() => {
-                  const bidder = bidders.find(b => b.id === selectedBidderForBid)
-                  return bidder ? `${bidder.teamName || bidder.username}` : ''
-                })()}
-              </div>
-              
-              {/* Quick increment buttons */}
-              <div className="grid grid-cols-4 gap-1 mb-2">
-                {incrementAmounts.map((amount) => (
-                  <Button
-                    key={amount}
-                    size="sm"
-                    className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-400 disabled:text-white/90"
-                    disabled={isPlacingBid}
-                    onClick={async (e) => {
-                      // Prevent multiple simultaneous bids
-                      if (isPlacingBid) return
-                      
-                      // Instant feedback: disable button imperatively
-                      const btn = e.currentTarget
-                      btn.disabled = true
-                      btn.style.opacity = '0.5'
-                      
-                      const totalBid = (currentBid?.amount || 0) + amount
-                      const bidder = bidders.find(b => b.id === selectedBidderForBid)
-                      
-                      // Optimistic state updates
-                      setIsPlacingBid(true)
-                      setPlacingBidFor(selectedBidderForBid!)
-                      const previousPurse = bidder?.remainingPurse || 0
-                      const previousBid = currentBid
-                      const previousHighestBidderId = highestBidderId
-                      
-                      // Optimistic UI: set new bid immediately
-                      setCurrentBid({
-                        bidderId: selectedBidderForBid!,
-                        amount: totalBid,
-                        bidderName: bidder?.user?.name || bidder?.username || '',
-                        teamName: bidder?.teamName || undefined
-                      })
-                      setHighestBidderId(selectedBidderForBid!)
-                      
-                      // Optimistic activity log entry
-                      const optimisticEntry: BidHistoryEntry = {
-                        bidderId: selectedBidderForBid!,
-                        amount: totalBid,
-                        timestamp: new Date(),
-                        bidderName: bidder?.user?.name || bidder?.username || '',
-                        teamName: bidder?.teamName || undefined,
-                        type: 'bid',
-                        playerId: currentPlayer?.id // Associate with current player
-                      }
-                      setFullBidHistory(prev => [optimisticEntry, ...prev])
-                      
-                      try {
-                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ bidderId: selectedBidderForBid, amount: totalBid })
-                        })
-                        if (!response.ok) {
-                          const error = await response.json()
-                          toast.error(error.error || 'Failed to place bid')
-                          // Rollback optimistic updates
-                          setCurrentBid(previousBid)
-                          setHighestBidderId(previousHighestBidderId)
-                          setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                          setIsPlacingBid(false)
-                          setPlacingBidFor(null)
-                          btn.disabled = false
-                          btn.style.opacity = '1'
-                        } else {
-                          // Success - clear form and use startTransition for cleanup
-                          setSelectedBidderForBid(null)
-                          setCustomBidAmount('')
-                          
-                          startTransition(() => {
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                          })
-                        }
-                      } catch {
-                        toast.error('Network error')
-                        // Rollback optimistic updates
-                        setCurrentBid(previousBid)
-                        setHighestBidderId(previousHighestBidderId)
-                        setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                        setIsPlacingBid(false)
-                        setPlacingBidFor(null)
-                        btn.disabled = false
-                        btn.style.opacity = '1'
-                      }
-                    }}
-                  >
-                    +₹{(amount/1000).toFixed(0)}k
-                  </Button>
-                ))}
-              </div>
-              
-              {/* Custom amount input */}
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder={currentBidAmount >= 10000 ? "Custom (₹2000s)" : "Custom (₹1000s)"}
-                  value={customBidAmount}
-                  onChange={(e) => setCustomBidAmount(e.target.value)}
-                  min={minIncrement.toString()}
-                  step={minIncrement.toString()}
-                  className="flex-1 h-8 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                />
-                <Button
-                  size="sm"
-                  className="h-8 text-xs px-3 bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-400 disabled:text-white/90"
-                  disabled={isPlacingBid}
-                  onClick={async () => {
-                    // Prevent multiple simultaneous bids
-                    if (isPlacingBid) return
-                    
-                    if (!customBidAmount) return
-                    const incrementAmount = parseFloat(customBidAmount)
-                    if (isNaN(incrementAmount) || incrementAmount <= 0) {
-                      toast.error('Invalid amount')
-                      return
-                    }
-                    
-                    // Validate bid meets minimum increment requirement
-                    if (incrementAmount < minIncrement) {
-                      toast.error(`Bid increment must be at least ₹${minIncrement.toLocaleString('en-IN')}`)
-                      return
-                    }
-                    
-                    // Validate bid is a multiple of the minimum increment
-                    if (incrementAmount % minIncrement !== 0) {
-                      toast.error(`Bid amount must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
-                      return
-                    }
-                    
-                    const totalBid = (currentBid?.amount || 0) + incrementAmount
-                    const bidder = bidders.find(b => b.id === selectedBidderForBid)
-                    
-                    // Disable all buttons globally
-                    setIsPlacingBid(true)
-                    setPlacingBidFor(selectedBidderForBid)
-                    
-                    // Note: We do NOT update purse here - purse only changes on final sale
-                    
-                    try {
-                      const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ bidderId: selectedBidderForBid, amount: totalBid })
-                      })
-                      if (!response.ok) {
-                        const error = await response.json()
-                        toast.error(error.error || 'Failed to place bid')
-                        setIsPlacingBid(false)
-                        setPlacingBidFor(null)
-                      } else {
-                        // Re-enable buttons immediately after successful API response
-                        setIsPlacingBid(false)
-                        setPlacingBidFor(null)
-                        
-                        // Optimistically update state from API response
-                        const optimisticBid = {
-                          bidderId: selectedBidderForBid,
-                          amount: totalBid,
-                          bidderName: bidder?.user?.name || bidder?.username || '',
-                          teamName: bidder?.teamName || undefined
-                        }
-                        
-                        setCurrentBid(optimisticBid)
-                        setHighestBidderId(selectedBidderForBid)
-                        
-                        // Optimistically add to bid history for instant activity log update
-                        const optimisticEntry = {
-                          type: 'bid' as const,
-                          bidderId: selectedBidderForBid,
-                          amount: totalBid,
-                          timestamp: new Date(),
-                          bidderName: optimisticBid.bidderName,
-                          teamName: optimisticBid.teamName,
-                          playerId: currentPlayer?.id
-                        }
-                        setFullBidHistory(prev => [optimisticEntry, ...prev])
-                        
-                        // Clear selected bidder after successful bid
-                        setSelectedBidderForBid(null)
-                        setCustomBidAmount('')
-                      }
-                      // Pusher event will still arrive and correct any state, but we don't block on it
-                    } catch {
-                      toast.error('Network error')
-                      setIsPlacingBid(false)
-                      setPlacingBidFor(null)
-                    }
-                  }}
-                >
-                  Bid
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 text-xs px-2"
-                  onClick={() => {
-                    setSelectedBidderForBid(null)
-                    setCustomBidAmount('')
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-            )
-          })()}
+      showPinnedConsole ? (
+        <div className="hidden lg:flex fixed right-0 top-0 h-full w-[30%] z-40">
+          <BidConsolePanel />
         </div>
-      </div>
+      ) : (
+        <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50`}>
+          <div
+            className="absolute inset-0 bg-black/20"
+            onClick={() => setIsBidConsoleOpen(false)}
+          />
+          <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%]">
+            <BidConsolePanel showClose={true} onClose={() => setIsBidConsoleOpen(false)} />
+          </div>
+        </div>
+      )
     )}
 
     {/* Public Chat */}
-    <PublicChat auctionId={auction.id} rightOffsetClass={isBidConsoleOpen ? 'lg:right-[calc(30%+2rem)]' : 'lg:right-20'} />
+    <PublicChat auctionId={auction.id} rightOffsetClass={chatOffsetClass} />
     
     {/* Undo Sale Dialog */}
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>

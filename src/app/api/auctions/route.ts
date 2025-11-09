@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import { generateSlug, ensureUniqueSlug } from '@/lib/slug'
 
 // GET /api/auctions - Fetch all auctions for logged-in admin user
 export async function GET(request: NextRequest) {
@@ -88,9 +89,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Generate a unique slug from the auction name
+    const baseSlug = generateSlug(name)
+    const existingAuctions = await prisma.auction.findMany({
+      where: {
+        slug: {
+          startsWith: baseSlug
+        }
+      },
+      select: {
+        slug: true
+      }
+    })
+    const existingSlugs = existingAuctions.map(a => a.slug).filter((s): s is string => s !== null)
+    const uniqueSlug = ensureUniqueSlug(baseSlug, existingSlugs)
+
     // Create auction
     const auctionData: any = {
       name,
+      slug: uniqueSlug,
       description: description || null,
       rules: rules as any, // Store as JSON
       isPublished: isPublished || false,

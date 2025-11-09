@@ -76,10 +76,22 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [localCurrentPlayer, setLocalCurrentPlayer] = useState(currentPlayer)
+  
+  // Bid error state for public view
+  const errorIdRef = useRef(0)
+  const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const [bidErrors, setBidErrors] = useState<Array<{ id: number; message: string }>>([])
 
   // Set client-side rendered flag
   useEffect(() => {
     setIsClient(true)
+  }, [])
+  
+  // Cleanup bid error timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(bidErrorTimeouts.current).forEach(clearTimeout)
+    }
   }, [])
 
   // Update local current player when prop changes
@@ -359,6 +371,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       }
       // Note: players update handled via onPlayerSold
     },
+    onBidError: (data) => {
+      // Display error message in public view
+      const id = ++errorIdRef.current
+      setBidErrors(prev => [{ id, message: data.message }, ...prev])
+      const timeout = setTimeout(() => {
+        setBidErrors(prev => prev.filter(err => err.id !== id))
+        delete bidErrorTimeouts.current[id]
+      }, 10000)
+      bidErrorTimeouts.current[id] = timeout
+    },
   })
 
   // Extract player data from JSON
@@ -369,6 +391,54 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   const playerData = getPlayerData(currentPlayer)
   const playerName = playerData.name || playerData.Name || 'No Player Selected'
+
+  // Determine auction phase based on player status and icon status
+  const auctionPhase = useMemo(() => {
+    if (!currentPlayer || players.length === 0) return null
+    
+    const totalPlayers = players.length
+    const soldPlayers = players.filter(p => p.status === 'SOLD').length
+    const unsoldPlayers = players.filter(p => p.status === 'UNSOLD').length
+    const availablePlayers = players.filter(p => p.status === 'AVAILABLE').length
+    
+    // Icon players phase
+    const iconPlayers = players.filter(p => (p as any).isIcon === true)
+    const soldIconPlayers = iconPlayers.filter(p => p.status === 'SOLD').length
+    const unsoldIconPlayers = iconPlayers.filter(p => p.status === 'UNSOLD').length
+    const availableIconPlayers = iconPlayers.filter(p => p.status === 'AVAILABLE').length
+    
+    // Check if current player is icon
+    const currentPlayerIsIcon = (currentPlayer as any)?.isIcon === true
+    
+    // Phase 1: Icon Players Auction (if icon players exist and current is icon or icon players not finished)
+    if (iconPlayers.length > 0 && (currentPlayerIsIcon || availableIconPlayers > 0)) {
+      return {
+        type: 'ICON_PLAYERS',
+        message: '⭐ Icon Players Auction Going On',
+        color: 'from-purple-600 to-pink-600'
+      }
+    }
+    
+    // Phase 3: Remaining/Unsold Players (if there are unsold players and no available regular players left)
+    if (unsoldPlayers > 0 && availablePlayers > 0 && availablePlayers === unsoldPlayers) {
+      return {
+        type: 'REMAINING_PLAYERS',
+        message: '🔄 Remaining Players Auction Going On',
+        color: 'from-orange-600 to-red-600'
+      }
+    }
+    
+    // Phase 2: Regular Players (default for all other cases when auction is ongoing)
+    if (availablePlayers > 0) {
+      return {
+        type: 'ALL_PLAYERS',
+        message: '🎯 All Player Auction Running',
+        color: 'from-blue-600 to-cyan-600'
+      }
+    }
+    
+    return null
+  }, [currentPlayer, players])
 
   // Get all player names for reveal animation
   // Only include AVAILABLE players (exclude SOLD, UNSOLD, RETIRED)
@@ -549,6 +619,19 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         />
                       )}
                     </AnimatePresence>
+                    
+                    {/* Auction Phase Banner */}
+                    {auctionPhase && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`mb-3 sm:mb-4 rounded-lg bg-gradient-to-r ${auctionPhase.color} px-3 sm:px-4 py-2 sm:py-3 shadow-lg`}
+                      >
+                        <p className="text-center text-xs sm:text-sm md:text-base lg:text-lg font-bold text-white tracking-wide animate-pulse">
+                          {auctionPhase.message}
+                        </p>
+                      </motion.div>
+                    )}
                     
                     <PlayerCard
                     name={playerName}
@@ -835,7 +918,22 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           </div>
 
           {/* Bid History */}
-          <div className="order-2 lg:order-1">
+          <div className="order-2 lg:order-1 space-y-3">
+            {/* Bid Errors Display */}
+            {bidErrors.length > 0 && (
+              <div className="space-y-2">
+                {bidErrors.map(err => (
+                  <div
+                    key={err.id}
+                    className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200 animate-in fade-in slide-in-from-top-2 duration-300"
+                  >
+                    <span className="mt-0.5 text-red-600 dark:text-red-300">⚠️</span>
+                    <span className="flex-1">{err.message}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            
             <Card>
               <CardHeader className="p-3 sm:p-4">
                 <CardTitle className="text-sm sm:text-base text-gray-900 dark:text-gray-100">Live Activity</CardTitle>

@@ -6,6 +6,18 @@ import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resetTimer } from '@/lib/auction-timer'
 
+// Helper function to broadcast bid error and return error response
+function broadcastBidError(auctionId: string, errorMessage: string, bidderName?: string, bidderId?: string) {
+  // Broadcast error via Pusher (non-blocking)
+  triggerAuctionEvent(auctionId, 'bid-error', {
+    message: errorMessage,
+    bidderName,
+    bidderId
+  } as any).catch(err => console.error('Failed to broadcast bid error:', err))
+  
+  return NextResponse.json({ error: errorMessage }, { status: 400 })
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -14,20 +26,20 @@ export async function POST(
     const session = await getServerSession(authOptions)
 
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Please log in to place a bid' }, { status: 401 })
     }
 
     const body = await request.json()
     const { bidderId, amount } = body
 
     if (!bidderId || !amount) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid bid data' }, { status: 400 })
     }
 
     // Validate bid amount is a multiple of 1000
     if (amount % 1000 !== 0) {
       return NextResponse.json({ 
-        error: 'Bid amount must be in multiples of ₹1,000' 
+        error: 'Bid must be in multiples of ₹1K' 
       }, { status: 400 })
     }
 
@@ -48,7 +60,7 @@ export async function POST(
     }
 
     if (auction.status !== 'LIVE') {
-      return NextResponse.json({ error: 'Auction is not live' }, { status: 400 })
+      return NextResponse.json({ error: 'Auction is not active' }, { status: 400 })
     }
 
     // Fetch current player and bidder in parallel for better performance
@@ -82,7 +94,7 @@ export async function POST(
     ])
 
     if (!currentPlayer || currentPlayer.status !== 'AVAILABLE') {
-      return NextResponse.json({ error: 'Player is not available' }, { status: 400 })
+      return NextResponse.json({ error: 'Player not available for bidding' }, { status: 400 })
     }
 
     if (!bidder) {
@@ -118,11 +130,15 @@ export async function POST(
 
     // Validate bid amount and roster constraints
     const rules = auction.rules as any
-    // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
-    const minIncrement = currentBid >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+    const baseIncrement = Number(rules?.minBidIncrement) || 1000
+    // Dynamic increment: 2k when current bid >= 10000, otherwise use base increment
+    const minIncrement = currentBid >= 10000 ? Math.max(2000, baseIncrement) : baseIncrement
     const mandatoryTeamSize = Number(rules?.mandatoryTeamSize) || null
     const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
-    const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || Number(minIncrement) || 0
+    // Auction purchases exclude the bidder (team size includes captain/bidder)
+    const targetAuctionPlayers = mandatoryTeamSize ? Math.max(mandatoryTeamSize - 1, 0) : null
+    const maxAuctionPlayers = maxTeamSize ? Math.max(maxTeamSize - 1, 0) : null
+    const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || baseIncrement
     
     logger.log('Bid validation', { 
       currentBid, 
@@ -133,39 +149,52 @@ export async function POST(
     })
 
     if (amount <= currentBid + minIncrement - 1) {
-      return NextResponse.json({ 
-        error: `Bid must be at least ₹${(currentBid + minIncrement).toLocaleString('en-IN')} (₹${minIncrement.toLocaleString('en-IN')} more than current bid)` 
-      }, { status: 400 })
+      return broadcastBidError(
+        params.id,
+        `Minimum bid: ₹${(currentBid + minIncrement).toLocaleString('en-IN')}`,
+        bidder.user?.name || bidder.username,
+        bidder.id
+      )
     }
 
     if (amount > bidder.remainingPurse) {
-      return NextResponse.json({ 
-        error: 'Insufficient remaining purse' 
-      }, { status: 400 })
+      return broadcastBidError(
+        params.id,
+        'Insufficient purse balance',
+        bidder.user?.name || bidder.username,
+        bidder.id
+      )
     }
 
     // Enforce roster-size financial feasibility: ensure enough purse remains
     // to reach mandatoryTeamSize with at least minPerPlayerReserve per remaining slot
-    if (mandatoryTeamSize) {
+    if (targetAuctionPlayers !== null) {
       // Count players already bought by this bidder in this auction
       const playersBoughtByBidder = await prisma.player.count({
         where: { auctionId: params.id, soldTo: bidder.id }
       })
 
       // If maxTeamSize is set, prevent bidding that would exceed it after winning
-      if (maxTeamSize && playersBoughtByBidder + 1 > maxTeamSize) {
-        return NextResponse.json({
-          error: `Team size limit reached (max ${maxTeamSize}). Cannot acquire more players.`
-        }, { status: 400 })
+      if (maxAuctionPlayers !== null && playersBoughtByBidder + 1 > maxAuctionPlayers) {
+        return broadcastBidError(
+          params.id,
+          `Team is full (max ${maxTeamSize} players)`,
+          bidder.user?.name || bidder.username,
+          bidder.id
+        )
       }
 
-      const remainingSlotsAfterThis = Math.max(mandatoryTeamSize - (playersBoughtByBidder + 1), 0)
+      const remainingSlotsAfterThis = Math.max(targetAuctionPlayers - (playersBoughtByBidder + 1), 0)
       const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
       const remainingAfterBid = bidder.remainingPurse - amount
       if (remainingAfterBid < requiredReserve) {
-        return NextResponse.json({
-          error: `This bid would leave insufficient purse to complete the mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after bid: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`
-        }, { status: 400 })
+        const bidderDisplayName = bidder.teamName || bidder.user?.name || bidder.username
+        return broadcastBidError(
+          params.id,
+          `${bidderDisplayName} needs ₹${requiredReserve.toLocaleString('en-IN')} reserve for remaining ${remainingSlotsAfterThis} slots`,
+          bidder.user?.name || bidder.username,
+          bidder.id
+        )
       }
     }
 
@@ -178,9 +207,12 @@ export async function POST(
     })
     
     if (currentPlayerBidHistory.length > 0 && currentPlayerBidHistory[0].bidderId === bidderId) {
-      return NextResponse.json({ 
-        error: 'You are already the highest bidder' 
-      }, { status: 400 })
+      return broadcastBidError(
+        params.id,
+        'You are already the highest bidder',
+        bidder.user?.name || bidder.username,
+        bidder.id
+      )
     }
 
     // Calculate the actual bid amount (not cumulative, just store the total bid)
