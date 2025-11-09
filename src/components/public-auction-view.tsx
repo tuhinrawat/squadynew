@@ -1073,10 +1073,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     return (
                       <div
                         key={card.id}
-                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-pink-200 shadow-[0_0_25px_rgba(244,114,182,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-pink-200/40 via-fuchsia-200/30 to-purple-300/40' : 'from-slate-900 via-slate-800 to-slate-900'}`}
+                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-violet-300 shadow-[0_0_25px_rgba(168,85,247,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-violet-900 via-purple-900 to-rose-800' : 'from-slate-900 via-slate-800 to-slate-900'}`}
                       >
                         <div className="absolute top-3 right-3 z-20">
-                          <Badge variant="secondary" className={`${isBidder ? 'bg-pink-200 text-pink-900 border border-pink-300 shadow-[0_0_12px_rgba(244,114,182,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}>
+                          <Badge variant="secondary" className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300 shadow-[0_0_12px_rgba(165,105,255,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}>
                             {card.statusLabel}
                           </Badge>
                         </div>
@@ -1085,10 +1085,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                             <img
                               src={card.imageUrl}
                               alt={card.name}
-                              className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity"
+                              className="h-full w-full object-cover opacity-10 group-hover:opacity-20 transition-opacity"
                             />
                           )}
-                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-pink-200/50 via-rose-400/40 to-purple-900/50' : 'bg-gradient_to-b from-black/60 via-black/80 to-black/90'}`} />
+                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-purple-500/50 via-fuchsia-800/70 to-black/90' : 'bg-gradient-to-b from-black/60 via-black/80 to-black/90'}`} />
                         </div>
                         <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
                           <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
@@ -1113,7 +1113,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                               {card.name}
                             </h4>
                             {card.statusLabel === 'Bidder' && (
-                              <p className="text-xs sm:text-sm text-pink-100">Registered bidder</p>
+                              <p className="text-xs sm:text-sm text-violet-200">Registered bidder</p>
                             )}
                             {card.statusLabel === 'Sold' && (
                               <p className="text-xs sm:text-sm text-white/70">Sold already</p>
@@ -1130,7 +1130,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                             )}
                             {card.statsSummary && <p>{card.statsSummary}</p>}
                             {card.statusLabel === 'Bidder' ? (
-                              <p className="text-pink-100">Participating as bidder</p>
+                              <p className="text-violet-200">Participating as bidder</p>
                             ) : card.purchasedPrice !== null ? (
                               <p>
                                 Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span>
