@@ -264,12 +264,12 @@ export function CountdownToLiveWrapper({
                     return (
                       <div
                         key={card.id}
-                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-amber-500/20 via-amber-600/10 to-amber-900/30' : 'from-slate-900 via-slate-800 to-slate-900'}`}
+                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-pink-200 shadow-[0_0_25px_rgba(244,114,182,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-pink-200/40 via-fuchsia-200/30 to-purple-300/40' : 'from-slate-900 via-slate-800 to-slate-900'}`}
                       >
                         <div className="absolute top-3 right-3 z-20">
                           <Badge
                             variant="secondary"
-                            className={`${isBidder ? 'bg-amber-400/90 text-amber-950 border border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}
+                            className={`${isBidder ? 'bg-pink-200 text-pink-900 border border-pink-300 shadow-[0_0_12px_rgba(244,114,182,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}
                           >
                             {card.statusLabel}
                           </Badge>
@@ -278,7 +278,7 @@ export function CountdownToLiveWrapper({
                           {card.imageUrl && (
                             <img src={card.imageUrl} alt={card.name} className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" />
                           )}
-                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-amber-400/40 via-amber-900/40 to-black/80' : 'bg-gradient-to-b from-black/60 via-black/80 to-black/90'}`} />
+                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-pink-200/50 via-rose-400/40 to-purple-900/50' : 'bg-gradient-to-b from-black/60 via-black/80 to-black/90'}`} />
                         </div>
                         <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
                           <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
@@ -294,7 +294,7 @@ export function CountdownToLiveWrapper({
                               <p className="text-xs sm:text-sm text-white/70">Sold already</p>
                             )}
                             {card.statusLabel === 'Bidder' && (
-                              <p className="text-xs sm:text-sm text-amber-200">Registered bidder</p>
+                              <p className="text-xs sm:text-sm text-pink-100">Registered bidder</p>
                             )}
                             {card.statusLabel === 'Unsold' && (
                               <p className="text-xs sm:text-sm text-white/70">Unsold</p>
@@ -306,7 +306,7 @@ export function CountdownToLiveWrapper({
                             )}
                             {card.statsSummary && <p>{card.statsSummary}</p>}
                             {card.statusLabel === 'Bidder' ? (
-                              <p className="text-amber-200">Participating as bidder</p>
+                              <p className="text-pink-100">Participating as bidder</p>
                             ) : card.purchasedPrice !== null ? (
                               <p>Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span></p>
                             ) : null}
