@@ -226,8 +226,13 @@ export default function PlayerRegistration() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Link2 className="h-4 w-4" />
-                          <Link href={auctionUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline truncate">
-                            {auctionUrl}
+                          <Link
+                            href={auctionUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 underline truncate"
+                          >
+                            {auction.name}
                           </Link>
                         </div>
                       </div>
