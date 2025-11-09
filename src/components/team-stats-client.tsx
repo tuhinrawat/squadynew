@@ -112,6 +112,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     const soldPlayers = teamPlayers.filter(p => p.status === 'SOLD')
     const totalSpent = soldPlayers.reduce((sum, p) => sum + (p.soldPrice || 0), 0)
     const remainingPurse = bidder.remainingPurse
+    const rules = (auction.rules as any) || {}
+    const mandatoryTeamSize = Number.isFinite(rules.mandatoryTeamSize) ? Number(rules.mandatoryTeamSize) : 12
+    const remainingSlots = Math.max(0, mandatoryTeamSize - soldPlayers.length)
+    const purseLimitPerPlayerRaw = remainingSlots > 0 ? remainingPurse / remainingSlots : 0
+    const purseLimitPerPlayer = purseLimitPerPlayerRaw > 0 ? purseLimitPerPlayerRaw : 0
 
     return {
       id: bidder.id,
@@ -120,6 +125,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       remainingPurse,
       totalPlayers: soldPlayers.length,
       players: soldPlayers,
+      remainingSlots,
+      purseLimitPerPlayer,
       colorScheme: teamColors[index % teamColors.length],
       bidder: bidder // Include the full bidder object
     }
@@ -305,6 +312,14 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             <span className="text-[11px] sm:text-sm opacity-75">Total Players</span>
                             <span className="text-sm sm:text-lg font-semibold">{team.totalPlayers}</span>
                           </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] sm:text-sm opacity-75">Purse / Player</span>
+                            <span className="text-sm sm:text-lg font-semibold">
+                              {team.remainingSlots > 0
+                                ? `₹${Math.round(team.purseLimitPerPlayer).toLocaleString('en-IN')}`
+                                : 'All slots filled'}
+                            </span>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -337,6 +352,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                               </p>
                               <p className="text-xs sm:text-sm text-white/70 truncate">
                                 ₹{team.remainingPurse.toLocaleString('en-IN')} remaining
+                              </p>
+                              <p className="text-[10px] sm:text-xs text-white/70 truncate">
+                                Purse / Player: {team.remainingSlots > 0
+                                  ? `₹${Math.round(team.purseLimitPerPlayer).toLocaleString('en-IN')}`
+                                  : 'All slots filled'}
                               </p>
                             </div>
                           </div>
@@ -473,7 +493,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     </p>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/30">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-3 border-t border-white/30">
                   <div>
                     <p className="text-xs text-white/70">Funds Remaining</p>
                     <p className="text-base sm:text-lg font-bold text-white">₹{selectedTeamData?.remainingPurse.toLocaleString('en-IN')}</p>
@@ -481,6 +501,19 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                   <div>
                     <p className="text-xs text-white/70">Total Players</p>
                     <p className="text-base sm:text-lg font-bold text-white">{selectedTeamData?.totalPlayers}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-white/70">Purse Limit / Player</p>
+                    <p className="text-base sm:text-lg font-bold text-white">
+                      {selectedTeamData && selectedTeamData.remainingSlots > 0
+                        ? `₹${Math.round(selectedTeamData.purseLimitPerPlayer).toLocaleString('en-IN')}`
+                        : 'All slots filled'}
+                    </p>
+                    {selectedTeamData && (
+                      <p className="text-[10px] text-white/60">
+                        {selectedTeamData.remainingSlots} slots remaining
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>

@@ -6,17 +6,20 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Calendar, Users, Clock } from 'lucide-react'
+import { Calendar, Users, Clock, Link2 } from 'lucide-react'
 
 interface PublishedAuction {
   id: string
+  slug: string | null
   name: string
   description: string | null
+  image: string | null
   rules: any
   status: string
   isPublished: boolean
   registrationOpen: boolean
   createdAt: string
+  scheduledStartDate: string | null
   _count: {
     players: number
     bidders: number
@@ -69,6 +72,32 @@ export default function PlayerRegistration() {
     )
   }
 
+  const formatStartDateTime = (isoDate: string | null) => {
+    if (!isoDate) {
+      return 'Start time TBD'
+    }
+    const date = new Date(isoDate)
+    if (Number.isNaN(date.getTime())) {
+      return 'Start time TBD'
+    }
+    const datePart = date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    })
+    const timePart = date.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+    return `${datePart} • ${timePart}`
+  }
+
+  const getAuctionUrl = (auction: PublishedAuction) => {
+    const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || ''
+    const path = `/auction/${auction.slug || auction.id}`
+    return base ? `${base}${path}` : path
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-teal-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Navigation */}
@@ -112,10 +141,10 @@ export default function PlayerRegistration() {
       <section className="relative py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto text-center">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-            Player Registration
+            Live Auctions
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
-            Register for upcoming sports auctions. Select an auction below and fill out the registration form to participate.
+            Discover every active auction in one place. Review the details, preview the auction room, and copy the live link before sharing with your bidders.
           </p>
         </div>
       </section>
@@ -147,56 +176,74 @@ export default function PlayerRegistration() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {auctions.map((auction) => (
-                <Card key={auction.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start mb-2">
-                      <CardTitle className="text-xl">{auction.name}</CardTitle>
-                      {getStatusBadge(auction.status, auction.registrationOpen)}
+              {auctions.map((auction) => {
+                const auctionUrl = getAuctionUrl(auction)
+                return (
+                  <Card key={auction.id} className="hover:shadow-xl transition-shadow flex flex-col overflow-hidden">
+                    <div className="relative aspect-video bg-gray-200 dark:bg-gray-800">
+                      {auction.image ? (
+                        <Image
+                          src={auction.image}
+                          alt={auction.name}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                          priority={false}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
+                          <span className="text-sm">No cover image</span>
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3">
+                        {getStatusBadge(auction.status, auction.registrationOpen)}
+                      </div>
                     </div>
-                    <CardDescription className="text-sm">
-                      {auction.description || 'No description available'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                      <div className="flex items-center">
-                        <Users className="h-4 w-4 mr-1" />
-                        {auction._count.players} players
-                      </div>
-                      <div className="flex items-center">
-                        <Calendar className="h-4 w-4 mr-1" />
-                        {new Date(auction.createdAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                    
-                    {auction.rules && (
-                      <div className="space-y-2">
-                        {auction.rules.minBidIncrement && (
-                          <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                            Min bid: ₹{auction.rules.minBidIncrement.toLocaleString('en-IN')}
-                          </div>
-                        )}
-                        {auction.rules.countdownSeconds && (
-                          <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
-                            <Clock className="h-4 w-4 mr-1" />
-                            Countdown: {auction.rules.countdownSeconds}s
-                          </div>
-                        )}
-                      </div>
-                    )}
 
-                    <div className="pt-4">
-                      <Button disabled className="w-full bg-gray-400 dark:bg-gray-700 cursor-not-allowed">
-                        Registration Disabled
-                      </Button>
-                      <p className="text-xs text-center text-gray-600 dark:text-gray-400 mt-2">
-                        Admins will keep the registration controls to themselves
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    <CardHeader>
+                      <div className="flex justify-between items-start mb-2">
+                        <CardTitle className="text-xl leading-tight line-clamp-2">
+                          {auction.name}
+                        </CardTitle>
+                      </div>
+                      <CardDescription className="text-sm line-clamp-3">
+                        {auction.description || 'No description available'}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 flex-1 flex flex-col">
+                      <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>{formatStartDateTime(auction.scheduledStartDate)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          <span>{auction._count.bidders} teams • {auction._count.players} players loaded</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>Min bid ₹{auction.rules?.minBidIncrement?.toLocaleString('en-IN') || '—'} · {auction.rules?.countdownSeconds || 0}s countdown</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Link2 className="h-4 w-4" />
+                          <Link href={auctionUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline truncate">
+                            {auctionUrl}
+                          </Link>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 mt-auto">
+                        <Button disabled className="w-full bg-gray-400 dark:bg-gray-700 cursor-not-allowed">
+                          Registration Disabled
+                        </Button>
+                        <p className="text-xs text-center text-gray-600 dark:text-gray-400 mt-2">
+                          Admins will keep the registration controls to themselves
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           )}
         </div>
