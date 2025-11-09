@@ -78,7 +78,7 @@ export default function ContactPage() {
               </Link>
               <Link href="/register">
                 <Button variant="ghost" className="hidden sm:flex text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
-                  Player Registration
+                  Live Auctions
                 </Button>
               </Link>
               <Link href="/signin">
