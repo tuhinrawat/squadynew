@@ -1110,9 +1110,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         <h4 className="text-base sm:text-lg font-bold line-clamp-2">
                           {card.name}
                         </h4>
-                        <p className="text-xs sm:text-sm text-white/70">
-                          {card.teamDisplay}
-                        </p>
+                        {card.statusLabel === 'Bidder' && (
+                          <p className="text-xs sm:text-sm text-amber-200">Registered bidder</p>
+                        )}
+                        {card.statusLabel === 'Sold' && (
+                          <p className="text-xs sm:text-sm text-white/70">Sold already</p>
+                        )}
+                        {card.statusLabel === 'Unsold' && (
+                          <p className="text-xs sm:text-sm text-white/70">Unsold</p>
+                        )}
                       </div>
                       <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
                         {card.specialty && (
@@ -1122,14 +1128,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         )}
                         {card.statsSummary && <p>{card.statsSummary}</p>}
                         {card.statusLabel === 'Bidder' ? (
-                          <p className="text-white/80">Participating as bidder</p>
+                          <p className="text-amber-200">Participating as bidder</p>
                         ) : card.purchasedPrice !== null ? (
                           <p>
                             Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span>
                           </p>
-                        ) : (
-                          <p className="text-white/80">Available</p>
-                        )}
+                        ) : null}
                         <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
                       </div>
                     </div>

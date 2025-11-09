@@ -259,52 +259,63 @@ export function CountdownToLiveWrapper({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
-                  {knowYourPlayersCards.map(card => (
-                    <div key={card.id} className="group relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl overflow-hidden border border-white/10 shadow-lg">
-                      <div className="absolute top-3 right-3 z-20">
-                        <Badge variant="secondary" className="bg-white/10 text-white backdrop-blur px-2 py-1 text-[10px] sm:text-xs">{card.statusLabel}</Badge>
-                      </div>
-                      <div className="absolute inset-0">
-                        {card.imageUrl && (
-                          <img src={card.imageUrl} alt={card.name} className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black/90" />
-                      </div>
-                      <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
-                        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
-                          {card.imageUrl ? (
-                            <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" onError={(e) => { const target = e.currentTarget as HTMLImageElement; target.style.display = 'none' }} />
-                          ) : (
-                            <span className="text-2xl sm:text-3xl font-bold">{card.name.charAt(0).toUpperCase()}</span>
-                          )}
+                  {knowYourPlayersCards.map(card => {
+                    const isBidder = card.statusLabel === 'Bidder'
+                    return (
+                      <div
+                        key={card.id}
+                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-amber-300 shadow-[0_0_25px_rgba(251,191,36,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-amber-500/20 via-amber-600/10 to-amber-900/30' : 'from-slate-900 via-slate-800 to-slate-900'}`}
+                      >
+                        <div className="absolute top-3 right-3 z-20">
+                          <Badge
+                            variant="secondary"
+                            className={`${isBidder ? 'bg-amber-400/90 text-amber-950 border border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}
+                          >
+                            {card.statusLabel}
+                          </Badge>
                         </div>
-                        <div className="space-y-1">
-                          <h4 className="text-base sm:text-lg font-bold line-clamp-2">{card.name}</h4>
-                          <p className="text-xs sm:text-sm text-white/70">
-                            {card.statusLabel === 'Sold'
-                              ? 'Sold already'
-                              : card.statusLabel === 'Bidder'
-                                ? 'Registered bidder'
-                                : 'Available in pool'}
-                          </p>
+                        <div className="absolute inset-0">
+                          {card.imageUrl && (
+                            <img src={card.imageUrl} alt={card.name} className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" />
+                          )}
+                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-amber-400/40 via-amber-900/40 to-black/80' : 'bg-gradient-to-b from-black/60 via-black/80 to-black/90'}`} />
                         </div>
-                        <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
-                          {card.specialty && (
-                            <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">{card.specialty}</p>
-                          )}
-                          {card.statsSummary && <p>{card.statsSummary}</p>}
-                          {card.statusLabel === 'Bidder' ? (
-                            <p className="text-white/80">Participating as bidder</p>
-                          ) : card.purchasedPrice !== null ? (
-                            <p>Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span></p>
-                          ) : (
-                            <p className="text-white/80">Available</p>
-                          )}
-                          <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
+                        <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
+                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
+                            {card.imageUrl ? (
+                              <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" onError={(e) => { const target = e.currentTarget as HTMLImageElement; target.style.display = 'none' }} />
+                            ) : (
+                              <span className="text-2xl sm:text-3xl font-bold">{card.name.charAt(0).toUpperCase()}</span>
+                            )}
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-base sm:text-lg font-bold line-clamp-2">{card.name}</h4>
+                            {card.statusLabel === 'Sold' && (
+                              <p className="text-xs sm:text-sm text-white/70">Sold already</p>
+                            )}
+                            {card.statusLabel === 'Bidder' && (
+                              <p className="text-xs sm:text-sm text-amber-200">Registered bidder</p>
+                            )}
+                            {card.statusLabel === 'Unsold' && (
+                              <p className="text-xs sm:text-sm text-white/70">Unsold</p>
+                            )}
+                          </div>
+                          <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
+                            {card.specialty && (
+                              <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">{card.specialty}</p>
+                            )}
+                            {card.statsSummary && <p>{card.statsSummary}</p>}
+                            {card.statusLabel === 'Bidder' ? (
+                              <p className="text-amber-200">Participating as bidder</p>
+                            ) : card.purchasedPrice !== null ? (
+                              <p>Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span></p>
+                            ) : null}
+                            <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
