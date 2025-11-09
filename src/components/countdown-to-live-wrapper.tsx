@@ -6,6 +6,8 @@ import { PublicAuctionView } from './public-auction-view'
 import { ProfessioPromoButton } from './professio-promo-button'
 import Link from 'next/link'
 import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+import { Eye } from 'lucide-react'
 
 interface CountdownToLiveWrapperProps {
   auction: {
@@ -41,6 +43,13 @@ export function CountdownToLiveWrapper({
   const [stats, setStats] = useState(initialStats)
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const scrollToKnowPlayers = useCallback(() => {
+    const target = document.getElementById('know-your-players')
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
 
   // Poll for auction status when countdown reaches zero
   const pollAuctionStatus = useCallback(async () => {
@@ -153,11 +162,22 @@ export function CountdownToLiveWrapper({
         <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
           <div className="text-center px-3 sm:px-4 w-full max-w-6xl">
             {/* Auction Name */}
-            <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16">
+            <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-3">
               <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-2 sm:mb-3 md:mb-4 drop-shadow-lg px-2 break-words">
                 {auction.name}
               </h1>
               <p className="text-sm sm:text-base md:text-xl lg:text-2xl text-blue-200">Starting Soon</p>
+              <div className="flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={scrollToKnowPlayers}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30 backdrop-blur-sm text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5"
+                >
+                  <Eye className="h-4 w-4" />
+                  Know Your Players
+                </Button>
+              </div>
             </div>
 
             {/* Countdown Timer - Full Screen Centered */}
@@ -191,7 +211,17 @@ export function CountdownToLiveWrapper({
                   className="h-6 sm:h-8 w-auto brightness-0 invert"
                 />
               </Link>
-              <a 
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={scrollToKnowPlayers}
+                  className="bg-white/10 hover:bg-white/20 text-white border-white/30 backdrop-blur-sm text-[10px] sm:text-xs px-2 py-1 flex items-center gap-1"
+                >
+                  <Eye className="h-3 w-3" />
+                  Know Players
+                </Button>
+                <a 
                 href="https://professio.ai/" 
                 target="_blank" 
                 rel="noopener noreferrer" 

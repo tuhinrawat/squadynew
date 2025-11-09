@@ -76,6 +76,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [localCurrentPlayer, setLocalCurrentPlayer] = useState(currentPlayer)
+  const knowYourPlayersRef = useRef<HTMLDivElement | null>(null)
   
   // Bid error state for public view
   const errorIdRef = useRef(0)
@@ -554,6 +555,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     })
   }, [players, biddersState, getProfilePhotoUrl, getPlayerName])
 
+  const scrollToKnowPlayers = useCallback(() => {
+    knowYourPlayersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   return (
     <>
       {/* Going Live Banner - Full Page Overlay */}
@@ -620,12 +625,19 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 </div>
               </div>
               
-              <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
-                <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
-                  <Trophy className="h-3 w-3 mr-1" />
-                  <span className="hidden sm:inline">Team Stats</span>
+              <div className="flex items-center gap-2">
+                <Button onClick={scrollToKnowPlayers} variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/30 h-8 text-xs" size="sm">
+                  <Eye className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Know Players</span>
+                  <span className="sm:hidden">Players</span>
                 </Button>
-              </Link>
+                <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
+                  <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
+                    <Trophy className="h-3 w-3 mr-1" />
+                    <span className="hidden sm:inline">Team Stats</span>
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
           
@@ -1031,7 +1043,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       </div>
 
       {/* Know Your Players Section */}
-      <div className="grid grid-cols-1">
+      <div ref={knowYourPlayersRef} className="grid grid-cols-1" id="know-your-players">
         <Card className="bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 shadow-lg">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
