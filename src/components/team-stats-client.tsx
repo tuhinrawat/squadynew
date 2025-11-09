@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Auction, Player, Bidder, User } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -136,6 +136,10 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     const data = player.data as any
     return data?.name || data?.Name || data?.player_name || 'Unknown Player'
   }
+
+  const sortedPlayers = useMemo(() => {
+    return [...auction.players].sort((a, b) => getPlayerName(a).localeCompare(getPlayerName(b)))
+  }, [auction.players])
 
   const getProfilePhotoUrl = (playerData: any): string | undefined => {
     const possibleKeys = [
@@ -488,14 +492,12 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 <CardContent className="p-3 sm:p-6">
                   <h3 className="text-white text-sm sm:text-base font-semibold mb-4">Know Your Players</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
-                    {auction.players.filter(player => player.status === 'SOLD').length === 0 ? (
+                    {sortedPlayers.length === 0 ? (
                       <div className="col-span-full text-center text-white/70 py-8">
-                        No players have been sold yet. Come back after the auction starts.
+                        No players found in this auction roster.
                       </div>
                     ) : (
-                      auction.players
-                        .filter(player => player.status === 'SOLD')
-                        .map(player => {
+                      sortedPlayers.map(player => {
                           const playerData = player.data as any
                           const imageUrl = getProfilePhotoUrl(playerData)
                           const bidder = auction.bidders.find(b => b.id === player.soldTo)
@@ -506,12 +508,26 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             playerData?.Batting || playerData?.batting,
                             playerData?.Bowling || playerData?.bowling
                           ].filter(Boolean).join(' • ')
+                          const statusLabel = (() => {
+                            if (player.status === 'SOLD') {
+                              return `Sold to ${bidder ? (bidder.teamName || bidder.username) : 'Unknown team'}`
+                            }
+                            if (player.status === 'UNSOLD') {
+                              return 'Unsold'
+                            }
+                            return 'Available'
+                          })()
 
                           return (
                             <div
                               key={player.id}
                               className="group relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl overflow-hidden border border-white/10 shadow-lg"
                             >
+                              <div className="absolute top-3 right-3 z-20">
+                                <Badge variant="secondary" className="bg-white/10 text-white backdrop-blur px-2 py-1 text-[10px] sm:text-xs">
+                                  {statusLabel}
+                                </Badge>
+                              </div>
                               <div className="absolute inset-0">
                                 {imageUrl && (
                                   <img
@@ -545,7 +561,9 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                     {getPlayerName(player)}
                                   </h4>
                                   <p className="text-xs sm:text-sm text-white/70">
-                                    {bidder ? (bidder.teamName || bidder.username) : 'Unassigned'}
+                                    {player.status === 'SOLD'
+                                      ? bidder ? (bidder.teamName || bidder.username) : 'Sold'
+                                      : 'Available in pool'}
                                   </p>
                                 </div>
                                 <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
@@ -557,10 +575,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                   {statsSummary && (
                                     <p>{statsSummary}</p>
                                   )}
-                                  <p>
-                                    Purchased for <span className="text-white font-semibold">₹{(player.soldPrice || 0).toLocaleString('en-IN')}</span>
-                                  </p>
-                                  {basePrice && (
+                                  {player.status === 'SOLD' ? (
+                                    <p>
+                                      Purchased for <span className="text-white font-semibold">₹{(player.soldPrice || 0).toLocaleString('en-IN')}</span>
+                                    </p>
+                                  ) : (
                                     <p>Base price ₹{Number(basePrice).toLocaleString('en-IN')}</p>
                                   )}
                                 </div>
