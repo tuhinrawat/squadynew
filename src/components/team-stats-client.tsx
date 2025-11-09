@@ -38,7 +38,7 @@ const teamColors = [
 export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProps) {
   const [auction, setAuction] = useState(initialAuction)
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'sold' | 'unsold'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'sold' | 'unsold' | 'know'>('overview')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [bidModalPlayer, setBidModalPlayer] = useState<Player | null>(null)
   const [bidModalItems, setBidModalItems] = useState<any[]>([])
@@ -135,6 +135,43 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   const getPlayerName = (player: Player) => {
     const data = player.data as any
     return data?.name || data?.Name || data?.player_name || 'Unknown Player'
+  }
+
+  const getProfilePhotoUrl = (playerData: any): string | undefined => {
+    const possibleKeys = [
+      'Profile Photo',
+      'profile photo',
+      'Profile photo',
+      'PROFILE PHOTO',
+      'profile_photo',
+      'ProfilePhoto'
+    ]
+
+    const rawValue = possibleKeys
+      .map(key => playerData?.[key])
+      .find(value => value !== undefined && value !== null && String(value).trim() !== '')
+
+    if (!rawValue) {
+      return undefined
+    }
+
+    const photoStr = String(rawValue).trim()
+
+    let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+    if (match && match[1]) {
+      return `/api/proxy-image?id=${match[1]}`
+    }
+
+    match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+    if (match && match[1]) {
+      return `/api/proxy-image?id=${match[1]}`
+    }
+
+    if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+      return photoStr
+    }
+
+    return undefined
   }
 
   const selectedTeamData = selectedTeam 
@@ -270,6 +307,15 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 <span className="sm:hidden">Unsold ({auction.players.filter(p => p.status === 'UNSOLD').length})</span>
                 <span className="hidden sm:inline">Unsold Players ({auction.players.filter(p => p.status === 'UNSOLD').length})</span>
               </Button>
+              <Button
+                variant={activeTab === 'know' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('know')}
+                className={`${activeTab === 'know' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4`}
+              >
+                <Eye className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Know Your Players</span>
+                <span className="sm:hidden">Players</span>
+              </Button>
             </div>
 
             {/* Teams Grid/List */}
@@ -396,33 +442,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         {getFilteredPlayers().map((player) => {
                           const bidder = auction.bidders.find(b => b.id === player.soldTo)
                           const playerData = player.data as any
+                          const imageUrl = getProfilePhotoUrl(playerData)
                           // Use same logic as PlayerCard component
-                          const profilePhotoLink = playerData?.['Profile Photo'] || 
-                                                  playerData?.['profile photo'] || 
-                                                  playerData?.['Profile photo'] || 
-                                                  playerData?.['PROFILE PHOTO'] || 
-                                                  playerData?.['profile_photo'] ||
-                                                  playerData?.['ProfilePhoto']
-                          
-                          let imageUrl: string | undefined = undefined
-                          if (profilePhotoLink && String(profilePhotoLink).trim()) {
-                            const photoStr = String(profilePhotoLink).trim()
-                            // Format 1: https://drive.google.com/file/d/[ID]/view
-                            let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-                            if (match && match[1]) {
-                              imageUrl = `/api/proxy-image?id=${match[1]}`
-                            } else {
-                              // Format 2: https://drive.google.com/open?id=[ID]
-                              match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-                              if (match && match[1]) {
-                                imageUrl = `/api/proxy-image?id=${match[1]}`
-                              } else if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-                                // If it's already a valid URL, use it directly
-                                imageUrl = photoStr
-                              }
-                            }
-                          }
-                          
                           return (
                             <tr key={player.id} className="border-b border-white/10 hover:bg-white/5">
                               <td className="py-2 sm:py-3 px-2">
@@ -456,6 +477,98 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         })}
                       </tbody>
                     </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Know Your Players */}
+            {activeTab === 'know' && (
+              <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                <CardContent className="p-3 sm:p-6">
+                  <h3 className="text-white text-sm sm:text-base font-semibold mb-4">Know Your Players</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+                    {auction.players.filter(player => player.status === 'SOLD').length === 0 ? (
+                      <div className="col-span-full text-center text-white/70 py-8">
+                        No players have been sold yet. Come back after the auction starts.
+                      </div>
+                    ) : (
+                      auction.players
+                        .filter(player => player.status === 'SOLD')
+                        .map(player => {
+                          const playerData = player.data as any
+                          const imageUrl = getProfilePhotoUrl(playerData)
+                          const bidder = auction.bidders.find(b => b.id === player.soldTo)
+                          const basePrice = playerData?.['Base Price'] || playerData?.['base price'] || 0
+                          const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
+                          const statsSummary = [
+                            playerData?.Role || playerData?.role,
+                            playerData?.Batting || playerData?.batting,
+                            playerData?.Bowling || playerData?.bowling
+                          ].filter(Boolean).join(' • ')
+
+                          return (
+                            <div
+                              key={player.id}
+                              className="group relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl overflow-hidden border border-white/10 shadow-lg"
+                            >
+                              <div className="absolute inset-0">
+                                {imageUrl && (
+                                  <img
+                                    src={imageUrl}
+                                    alt={getPlayerName(player)}
+                                    className="h-full w-full object-cover opacity-20 group-hover:opacity-30 transition-opacity"
+                                  />
+                                )}
+                                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/80 to-black/90" />
+                              </div>
+                              <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
+                                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
+                                  {imageUrl ? (
+                                    <img
+                                      src={imageUrl}
+                                      alt={getPlayerName(player)}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        const target = e.currentTarget as HTMLImageElement
+                                        target.style.display = 'none'
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="text-2xl sm:text-3xl font-bold">
+                                      {getPlayerName(player).charAt(0).toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="space-y-1">
+                                  <h4 className="text-base sm:text-lg font-bold line-clamp-2">
+                                    {getPlayerName(player)}
+                                  </h4>
+                                  <p className="text-xs sm:text-sm text-white/70">
+                                    {bidder ? (bidder.teamName || bidder.username) : 'Unassigned'}
+                                  </p>
+                                </div>
+                                <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
+                                  {specialty && (
+                                    <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">
+                                      {specialty}
+                                    </p>
+                                  )}
+                                  {statsSummary && (
+                                    <p>{statsSummary}</p>
+                                  )}
+                                  <p>
+                                    Purchased for <span className="text-white font-semibold">₹{(player.soldPrice || 0).toLocaleString('en-IN')}</span>
+                                  </p>
+                                  {basePrice && (
+                                    <p>Base price ₹{Number(basePrice).toLocaleString('en-IN')}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -535,33 +648,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     <tbody>
                       {selectedTeamData?.players.map((player) => {
                         const playerData = player.data as any
-                        // Use same logic as PlayerCard component
-                        const profilePhotoLink = playerData?.['Profile Photo'] || 
-                                                playerData?.['profile photo'] || 
-                                                playerData?.['Profile photo'] || 
-                                                playerData?.['PROFILE PHOTO'] || 
-                                                playerData?.['profile_photo'] ||
-                                                playerData?.['ProfilePhoto']
-                        
-                        let imageUrl: string | undefined = undefined
-                        if (profilePhotoLink && String(profilePhotoLink).trim()) {
-                          const photoStr = String(profilePhotoLink).trim()
-                          // Format 1: https://drive.google.com/file/d/[ID]/view
-                          let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-                          if (match && match[1]) {
-                            imageUrl = `/api/proxy-image?id=${match[1]}`
-                          } else {
-                            // Format 2: https://drive.google.com/open?id=[ID]
-                            match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-                            if (match && match[1]) {
-                              imageUrl = `/api/proxy-image?id=${match[1]}`
-                            } else if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-                              // If it's already a valid URL, use it directly
-                              imageUrl = photoStr
-                            }
-                          }
-                        }
-                        
+                        const imageUrl = getProfilePhotoUrl(playerData)
                         return (
                           <tr key={player.id} className="border-b border-white/10 hover:bg-white/5">
                             <td className="py-2 sm:py-3 px-2">
