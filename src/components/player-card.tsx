@@ -48,18 +48,18 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 			</div>
 			
 		{/* Content */}
-		<div className="relative z-10 p-3 sm:p-8 lg:p-10">
+		<div className="relative z-10 p-1 sm:p-8 lg:p-10">
 			{/* Player Name at Top */}
-			<div className="mb-3 sm:mb-6">
+			<div className="mb-1 sm:mb-6">
 				<h2 className="text-xl sm:text-4xl lg:text-5xl font-black text-white uppercase tracking-tight leading-tight">
 					{name}
 				</h2>
-				<div className="w-12 sm:w-20 h-0.5 sm:h-1 bg-white mt-2 sm:mt-4"></div>
+				<div className="w-12 sm:w-20 h-0.5 sm:h-1 bg-white mt-1 sm:mt-4"></div>
 			</div>
 			
 			{/* Speciality Section */}
 			{speciality && (
-				<div className="mb-4 sm:mb-8">
+				<div className="mb-1 sm:mb-8">
 					<div className="flex items-center gap-2 sm:gap-3">
 						<span className="text-[10px] sm:text-sm font-semibold text-white uppercase tracking-widest">SPECIALITY</span>
 						<span className="text-sm sm:text-xl lg:text-2xl font-black text-white uppercase">{speciality}</span>
@@ -68,7 +68,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 			)}
 				
 			{/* Player Image and Stats Side by Side */}
-			<div className="flex flex-col lg:flex-row items-center lg:items-start gap-3 sm:gap-6 lg:gap-12 mb-4 sm:mb-8">
+			<div className="flex flex-col lg:flex-row items-center lg:items-start gap-1 sm:gap-6 lg:gap-12 mb-1 sm:mb-8">
 				{/* Player Image */}
 				<div className="flex flex-col items-center lg:items-start">
 					<div className="relative w-40 h-40 sm:w-96 sm:h-96 lg:w-[28rem] lg:h-[28rem] mb-2 sm:mb-3">
@@ -96,7 +96,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 						</div>
 						
 					{/* Stats below image on mobile, hidden on desktop */}
-					<div className="flex flex-col lg:hidden items-center gap-2 sm:gap-4 mt-2 sm:mt-4 w-full">
+					<div className="flex flex-col lg:hidden items-center gap-1 sm:gap-4 mt-1 sm:mt-4 w-full">
 						{batting && (
 							<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
 								<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BATSMEN</span>

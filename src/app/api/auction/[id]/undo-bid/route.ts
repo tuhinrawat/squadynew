@@ -50,9 +50,9 @@ export async function POST(
       ? await prisma.player.findUnique({ where: { id: auction.currentPlayerId }, select: { id: true } })
       : null
 
-    // Filter to only bids for current player (strict)
+    // Filter to only actual bids for current player (strict) - exclude sold/unsold/bid-undo
     const filteredHistory = currentPlayer?.id
-      ? fullHistory.filter(b => (b.playerId === currentPlayer.id) && b.type !== 'sold' && b.type !== 'unsold')
+      ? fullHistory.filter(b => (b.playerId === currentPlayer.id) && b.type !== 'sold' && b.type !== 'unsold' && b.type !== 'bid-undo')
       : []
 
     if (filteredHistory.length === 0) {
@@ -65,15 +65,24 @@ export async function POST(
       return NextResponse.json({ error: 'You are not the last bidder for this player' }, { status: 400 })
     }
 
-    // Remove last bid only from the overall history (not just filtered array)
+    // Remove last bid from history (permanently - don't persist "bid-undo" markers to DB)
     const indexInFull = fullHistory.findIndex(b => b === lastBid)
     if (indexInFull === -1) {
       return NextResponse.json({ error: 'Bid not found in history' }, { status: 400 })
     }
     const [undoneBid] = fullHistory.splice(indexInFull, 1)
 
-    // Determine previous bid for current player (strict)
-    const previousBid = fullHistory.find(b => (currentPlayer && b.playerId === currentPlayer.id) && b.type !== 'sold' && b.type !== 'unsold') || null
+    // NOTE: We do NOT add "bid-undo" entries to the database
+    // The frontend will show temporary "BID UNDONE" indicators for real-time viewers only
+    // On page refresh, the bid is simply gone (clean history)
+
+    // Determine previous bid for current player (strict) - exclude any stale bid-undo entries
+    const previousBid = fullHistory.find(b => 
+      (currentPlayer && b.playerId === currentPlayer.id) && 
+      b.type !== 'sold' && 
+      b.type !== 'unsold' && 
+      b.type !== 'bid-undo'
+    ) || null
 
     // Reset timer (non-blocking)
     const rules = auction.rules as any

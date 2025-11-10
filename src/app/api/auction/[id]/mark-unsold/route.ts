@@ -125,14 +125,6 @@ export async function POST(
       }
     }
 
-    // Add unsold event to bid history
-    const unsoldEvent = {
-      type: 'unsold',
-      playerId: playerId,
-      playerName: playerName,
-      timestamp: new Date().toISOString()
-    }
-    
     // Fetch current bid history
     let bidHistory: any[] = []
     if (auction.bidHistory && typeof auction.bidHistory === 'object') {
@@ -142,7 +134,26 @@ export async function POST(
       }
     }
     
-    const updatedHistory = [unsoldEvent, ...bidHistory]
+    // Remove ALL bids for this player (clean slate when marked unsold)
+    // Keep bids for other players and other event types
+    const cleanedHistory = bidHistory.filter(entry => {
+      // Keep entries that don't belong to this player
+      if (entry.playerId !== playerId) return true
+      // Remove all bids and bid-undo entries for this player
+      if (!entry.type || entry.type === 'bid' || entry.type === 'bid-undo') return false
+      // Keep sold/unsold events for history (but there shouldn't be sold events for unsold players)
+      return true
+    })
+    
+    // Add unsold event to bid history
+    const unsoldEvent = {
+      type: 'unsold',
+      playerId: playerId,
+      playerName: playerName,
+      timestamp: new Date().toISOString()
+    }
+    
+    const updatedHistory = [unsoldEvent, ...cleanedHistory]
 
     // Update auction
     await prisma.auction.update({

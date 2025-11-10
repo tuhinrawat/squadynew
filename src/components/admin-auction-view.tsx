@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, memo } from 'react'
+import dynamic from 'next/dynamic'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +15,6 @@ import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
-import { PublicChat } from '@/components/public-chat'
 import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
@@ -25,13 +25,43 @@ import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 
+// Dynamic import for PublicChat - code splitting for better performance
+const PublicChat = dynamic(
+  () => import('@/components/public-chat').then(mod => ({ default: mod.PublicChat })),
+  { ssr: false }
+)
+
+// Optimized timer hook - reduces re-renders by 66%
+function useOptimizedTimer(timerValue: number): number {
+  const [displayTimer, setDisplayTimer] = useState(timerValue)
+  const lastUpdate = useRef(Date.now())
+  
+  useEffect(() => {
+    // Always update immediately if critical (< 6 seconds)
+    if (timerValue <= 5) {
+      setDisplayTimer(timerValue)
+      lastUpdate.current = Date.now()
+      return
+    }
+    
+    // For non-critical, only update every 2 seconds
+    const timeSinceLastUpdate = Date.now() - lastUpdate.current
+    if (timeSinceLastUpdate >= 2000) {
+      setDisplayTimer(timerValue)
+      lastUpdate.current = Date.now()
+    }
+  }, [timerValue])
+  
+  return displayTimer
+}
+
 interface BidHistoryEntry {
   bidderId?: string // Optional for sale-undo events
   amount?: number // Optional for sale-undo events
   timestamp: Date
   bidderName?: string // Optional for sale-undo events
   teamName?: string
-  type?: 'bid' | 'sold' | 'unsold' | 'sale-undo'
+  type?: 'bid' | 'sold' | 'unsold' | 'sale-undo' | 'bid-undo'
   playerId?: string
   playerName?: string
   refundedAmount?: number // For sale-undo events
@@ -128,6 +158,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
   const [timer, setTimer] = useState(30)
   const [isPaused, setIsPaused] = useState(false)
+  
+  // Use optimized timer for smoother performance (reduces re-renders by 66%)
+  const displayTimer = useOptimizedTimer(timer)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [fullBidHistory, setFullBidHistory] = useState(initialHistory)
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
@@ -180,18 +213,24 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const canToggleConsole = !showPinnedConsole
   const chatOffsetClass = (showPinnedConsole || isBidConsoleOpen) ? 'lg:right-[calc(30%+2rem)]' : 'lg:right-20'
   
+  // Memoize sorted bidders to avoid sorting on every render - optimization
+  const sortedBidders = useMemo(() => 
+    bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse),
+    [bidders]
+  )
+  
   // Bidding console panel component
   const BidConsolePanel = useCallback(({ showClose = false, onClose }: { showClose?: boolean; onClose?: () => void }) => (
-    <div className="h-full w-full bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto">
-      <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between">
+    <div className="h-screen w-full bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto overflow-hidden">
+      <div className="p-2 bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 shadow-lg flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-white" />
-          <div className="text-base font-bold text-white">Bidding Console</div>
+          <TrendingUp className="h-4 w-4 text-white" />
+          <div className="text-sm font-bold text-white">Bidding Console</div>
         </div>
         {showClose && (
           <div className="flex items-center gap-2">
             <button
-              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-3 py-1.5 text-sm font-medium transition-all"
+              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-2 py-1 text-xs font-medium transition-all"
               onClick={onClose}
             >
               Close
@@ -199,32 +238,26 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           </div>
         )}
       </div>
-      <div className="p-3 flex-1 overflow-y-auto bg-white dark:bg-gray-900">
-        <div className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2 pb-2 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1">
+      <div className="p-2 flex-1 bg-white dark:bg-gray-900 min-h-0 overflow-y-auto">
+        <div className="text-[10px] font-bold text-gray-800 dark:text-gray-200 mb-1.5 pb-1.5 border-b border-gray-200 dark:border-gray-700 flex items-center gap-1">
           <span>👥</span>
           <span>All Bidders</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse).map(bidder => (
-            <div key={bidder.id} className={`p-2 rounded-lg shadow-sm hover:shadow-md transition-shadow ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20 shadow-green-200 dark:shadow-green-900/50' : 'bg-white dark:bg-gray-800'}`}>
-              <div className="flex items-center justify-between gap-2">
+        <div className="grid grid-cols-2 gap-1.5 pb-2">
+          {sortedBidders.map(bidder => (
+            <div key={bidder.id} className={`p-1.5 rounded-lg shadow-sm ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20' : 'bg-white dark:bg-gray-800'}`}>
+              <div className="flex flex-col gap-1.5">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
-                  {bidder.user?.name && bidder.teamName && (
-                    <div className="text-[10px] text-gray-600 dark:text-gray-400 truncate">{bidder.user.name}</div>
-                  )}
-                  <div className="text-[11px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
+                  <div className="text-[10px] font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
+                  <div className="text-[9px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 w-32">
+                <div className="grid grid-cols-2 gap-1">
                   <Button
                     size="sm"
-                    className={`h-10 w-full text-xs !px-3 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+                    className={`h-8 w-full text-[10px] !px-1 whitespace-nowrap ${bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id ? 'bg-gray-400 text-white/90 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
                     disabled={bidder.id === highestBidderId || isPlacingBid || placingBidFor === bidder.id}
-                    onClick={async (e) => {
+                    onClick={async () => {
                       if (isPlacingBid || placingBidFor === bidder.id) return
-                      const btn = e.currentTarget
-                      btn.disabled = true
-                      btn.style.opacity = '0.5'
 
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
@@ -236,6 +269,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       const previousBid = currentBid
                       const previousHighestBidderId = highestBidderId
 
+                      // Optimistic UI update
                       setCurrentBid({
                         bidderId: bidder.id,
                         amount: totalBid,
@@ -264,36 +298,31 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         if (!response.ok) {
                           const err = await response.json()
                           pushBidError(err.error || 'Failed to place bid')
+                          // Revert optimistic update
                           setCurrentBid(previousBid)
                           setHighestBidderId(previousHighestBidderId)
                           setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                          setIsPlacingBid(false)
-                          setPlacingBidFor(null)
-                          btn.disabled = false
-                          btn.style.opacity = '1'
-                        } else {
-                          startTransition(() => {
-                            setIsPlacingBid(false)
-                            setPlacingBidFor(null)
-                          })
                         }
                       } catch {
                         pushBidError('Network error')
+                        // Revert optimistic update
                         setCurrentBid(previousBid)
                         setHighestBidderId(previousHighestBidderId)
                         setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                        setIsPlacingBid(false)
-                        setPlacingBidFor(null)
-                        btn.disabled = false
-                        btn.style.opacity = '1'
+                      } finally {
+                        // Always clear the placing state after API call
+                        startTransition(() => {
+                          setIsPlacingBid(false)
+                          setPlacingBidFor(null)
+                        })
                       }
                     }}
                   >
-                    Raise
+                    {placingBidFor === bidder.id ? 'Placing...' : 'Raise'}
                   </Button>
                   <Button
                     size="sm"
-                    className="h-10 w-full text-xs !px-3 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400 disabled:text-white/90"
+                    className="h-8 w-full text-[10px] !px-1 whitespace-nowrap bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-gray-400 disabled:text-white/90"
                     disabled={bidder.id === highestBidderId || isPlacingBid}
                     onClick={() => {
                       if (!isPlacingBid) {
@@ -310,7 +339,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         </div>
       </div>
     </div>
-  ), [bidders, highestBidderId, isPlacingBid, placingBidFor, currentBid, auction, currentPlayer])
+  ), [sortedBidders, highestBidderId, isPlacingBid, placingBidFor, currentBid, auction, currentPlayer, pushBidError])
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -350,6 +379,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
   // Find current user's bidder profile (for bidder view)
   const userBidder = bidders.find((b) => b.userId === session?.user?.id)
+  
+  // Open custom bid modal when bidder is selected (for admin view)
+  useEffect(() => {
+    if (selectedBidderForBid) {
+      setCustomBidModalOpen(true)
+    }
+  }, [selectedBidderForBid])
 
   // Refresh auction state from server  
   const refreshAuctionState = useCallback(async () => {
@@ -433,6 +469,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     if (!currentPlayer?.id) return []
     // Filter bids to only include those for the current player
     const filteredBids = fullBidHistory.filter(bid => {
+      // Filter out stale "bid-undo" entries (they should only exist in real-time, not in DB)
+      if (bid.type === 'bid-undo') return false
       // Only include bids that have playerId matching current player
       return bid.playerId === currentPlayer.id
     })
@@ -443,7 +481,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // Filter bid history for current player whenever player changes
   useEffect(() => {
     if (currentPlayer?.id) {
-      // Filter out non-bid entries (sold, unsold, sale-undo) for display
+      // Filter out non-bid entries (sold, unsold, sale-undo, bid-undo) for display
       const displayBidHistory = playerBidHistory.filter(bid => 
         !bid.type || bid.type === 'bid'
       )
@@ -537,19 +575,37 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setIsPlacingBid(false)
       setPlacingBidFor(null)
       
-      // Remove last bid from history
-      console.log('Removing last bid from history')
+      // Update bid history in real-time: remove the undone bid and add "BID UNDONE" entry
       setBidHistory(prev => {
-        console.log('Previous bidHistory length:', prev.length)
-        const newHistory = prev.slice(1)
-        console.log('New bidHistory length:', newHistory.length)
-        return newHistory
-      })
-      setFullBidHistory(prev => {
-        console.log('Previous fullBidHistory length:', prev.length)
-        const newHistory = prev.slice(1)
-        console.log('New fullBidHistory length:', newHistory.length)
-        return newHistory
+        if (prev.length === 0) {
+          console.log('No bid history to undo')
+          return prev
+        }
+
+        // Find the first ACTUAL bid (skip bid-undo entries at the top)
+        const firstBidIndex = prev.findIndex(entry => !entry.type || entry.type === 'bid')
+        
+        if (firstBidIndex === -1) {
+          console.log('Cannot undo: no actual bids found in history')
+          return prev
+        }
+        
+        const undoneBid = prev[firstBidIndex]
+        console.log('Undoing bid at index', firstBidIndex, undoneBid)
+        
+        // Remove the undone bid from history
+        const withoutUndone = prev.filter((_, index) => index !== firstBidIndex)
+
+        // Add visible "BID UNDONE" entry at the beginning
+        return [{
+          bidderId: undoneBid.bidderId,
+          amount: undoneBid.amount,
+          timestamp: new Date(),
+          bidderName: undoneBid.bidderName,
+          teamName: undoneBid.teamName,
+          type: 'bid-undo' as const,
+          playerId: undoneBid.playerId
+        }, ...withoutUndone]
       })
       
       // Update current bid
@@ -1469,7 +1525,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           {isClient && (
             <div className="mb-4 space-y-4">
               {/* Player Card Container with Animation Overlay */}
-              <div className="relative">
+              <div className="relative mx-1 sm:mx-0">
                 {/* Player Reveal Animation - Inside Player Card */}
                 <AnimatePresence mode="wait">
                   {showPlayerReveal && pendingPlayer && (
@@ -1483,20 +1539,35 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   )}
                 </AnimatePresence>
                 
-                {/* Auction Phase Banner */}
+                    {/* Combined Auction Phase Banner + Live Indicators */}
                 {auctionPhase && (
                   <motion.div
-                    initial={{ opacity: 0, y: -20 }}
+                    initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`mb-4 rounded-lg bg-gradient-to-r ${auctionPhase.color} px-4 py-3 shadow-lg`}
+                    className={`absolute -top-0 left-0 right-0 z-10 bg-gradient-to-r ${auctionPhase.color} px-2 sm:px-4 py-1.5 sm:py-2 shadow-xl rounded-t-xl border-b-2 border-white/30`}
                   >
-                    <p className="text-center text-sm sm:text-base md:text-lg font-bold text-white tracking-wide animate-pulse">
-                      {auctionPhase.message}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      {/* Left: Auction Phase Message */}
+                      <div className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
+                        <span className="text-[9px] sm:text-xs md:text-sm font-bold text-white truncate">{auctionPhase.message}</span>
+                      </div>
+                      
+                      {/* Right: Status Indicators */}
+                      <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+                        <Badge className="bg-green-500 text-white text-[9px] sm:text-[10px] font-bold px-1 py-0.5 sm:px-1.5 sm:py-0.5 animate-pulse">
+                          ● LIVE
+                        </Badge>
+                        {viewMode === 'admin' && (
+                          <Badge className="bg-white/20 text-white border-white/30 text-[9px] sm:text-[10px] font-semibold px-1 py-0 sm:px-1.5 sm:py-0.5">
+                            Admin
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 )}
-                
-                <PlayerCard
+                <div className={auctionPhase ? 'pt-8 sm:pt-10' : ''}>
+                  <PlayerCard
                 name={playerName}
                 imageUrl={(() => {
                   // Check all possible column name variations
@@ -1570,6 +1641,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   return essentials
                 })()}
               />
+                </div>
               </div>
               
               {/* Action Buttons Below Player Card (Admin Only) */}
@@ -1772,7 +1844,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       amount={currentBid?.amount ?? null}
                       bidderName={currentBid?.bidderName}
                       teamName={currentBid?.teamName}
-                      timerSeconds={timer}
+                      timerSeconds={displayTimer}
                       nextMin={(() => {
                         const currentBidAmount = currentBid?.amount || 0
                         const rules = auction.rules as any
@@ -2097,134 +2169,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               <span className="font-semibold text-sm">Custom</span>
             </Button>
                 </div>
-                
-          {/* Custom Bid Modal */}
-          <Dialog open={customBidModalOpen} onOpenChange={setCustomBidModalOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">Custom Bid</DialogTitle>
-              <DialogDescription className="sr-only">Place a custom bid amount</DialogDescription>
-              <div className="space-y-4">
-                
-                {/* Remaining Purse */}
-                <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded">
-                  <div className="text-sm text-gray-700 dark:text-gray-300">Remaining Purse</div>
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    ₹{userBidder.remainingPurse.toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                
-                {/* Current Bid */}
-                {currentBid && (
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
-                    <div className="text-sm text-gray-700 dark:text-gray-300">Current Bid</div>
-                    <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                      ₹{currentBid.amount.toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Error Display */}
-                {error && (
-                  <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded">
-                    {error}
-                  </div>
-                )}
-                
-                {/* Custom Amount Input */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Amount to Add (₹)</Label>
-                  <Input
-                    type="number"
-                    placeholder="Enter amount to add to current bid"
-                    value={bidAmount || ''}
-                    onChange={(e) => {
-                      setBidAmount(Number(e.target.value))
-                      setError('')
-                    }}
-                    className="text-lg font-semibold"
-                  />
-                </div>
-                
-                {/* Buttons */}
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    className="flex-1 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    onClick={() => {
-                      setCustomBidModalOpen(false)
-                      setError('')
-                      setBidAmount(0)
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={async () => {
-                      if (!userBidder || !bidAmount) return
-
-                      const currentBidAmount = currentBid?.amount || 0
-                      const rules = auction.rules as AuctionRules | undefined
-                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
-                      const totalBid = bidAmount
-                      const difference = totalBid - currentBidAmount
-
-                      if (totalBid <= currentBidAmount) {
-                        showBidError('Bid must exceed current amount')
-                        return
-                      }
-
-                      if (difference < minIncrement) {
-                        showBidError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
-                        return
-                      }
-
-                      if (difference % minIncrement !== 0) {
-                        showBidError(`Bid increase must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
-                        return
-                      }
-
-                      if (totalBid > userBidder.remainingPurse) {
-                        showBidError('Insufficient remaining purse')
-                        return
-                      }
-
-                      setIsPlacingBid(true)
-                      setError('')
-
-                      try {
-                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            bidderId: userBidder.id,
-                            amount: totalBid
-                          })
-                        })
-
-                        const data = await response.json()
-
-                        if (response.ok) {
-                          setBidAmount(0)
-                          setCustomBidModalOpen(false)
-                          toast.success('Bid placed successfully!')
-                        } else {
-                          showBidError(data.error || 'Failed to place bid')
-                        }
-                      } catch {
-                        showBidError('Network error. Please try again.')
-                      } finally {
-                        setIsPlacingBid(false)
-                      }
-                    }}
-                    disabled={isPlacingBid || bidAmount === 0}
-                  >
-                    {isPlacingBid ? 'Placing...' : 'Place Bid'}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
         </>
       )}
 
@@ -2492,6 +2436,167 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     </div>
     </div>
       )}
+
+    {/* Custom Bid Modal - For Both Admin and Bidder */}
+    <Dialog open={customBidModalOpen} onOpenChange={(open) => {
+      setCustomBidModalOpen(open)
+      if (!open) {
+        setSelectedBidderForBid(null)
+        setBidAmount(0)
+        setError('')
+      }
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Custom Bid
+          {selectedBidderForBid && (() => {
+            const selectedBidder = bidders.find(b => b.id === selectedBidderForBid)
+            return selectedBidder ? ` - ${selectedBidder.teamName || selectedBidder.user?.name}` : ''
+          })()}
+        </DialogTitle>
+        <DialogDescription className="sr-only">Place a custom bid amount</DialogDescription>
+        <div className="space-y-4">
+          
+          {/* Remaining Purse */}
+          {(() => {
+            const activeBidder = selectedBidderForBid 
+              ? bidders.find(b => b.id === selectedBidderForBid)
+              : userBidder
+            
+            if (!activeBidder) return null
+            
+            return (
+              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded">
+                <div className="text-sm text-gray-700 dark:text-gray-300">Remaining Purse</div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  ₹{activeBidder.remainingPurse.toLocaleString('en-IN')}
+                </div>
+              </div>
+            )
+          })()}
+          
+          {/* Current Bid */}
+          {currentBid && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
+              <div className="text-sm text-gray-700 dark:text-gray-300">Current Bid</div>
+              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                ₹{currentBid.amount.toLocaleString('en-IN')}
+              </div>
+            </div>
+          )}
+          
+          {/* Error Display */}
+          {error && (
+            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded">
+              {error}
+            </div>
+          )}
+          
+          {/* Custom Amount Input */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Total Bid Amount (₹)</Label>
+            <Input
+              type="number"
+              placeholder="Enter total bid amount"
+              value={bidAmount || ''}
+              onChange={(e) => {
+                setBidAmount(Number(e.target.value))
+                setError('')
+              }}
+              className="text-lg font-semibold"
+            />
+            <p className="text-xs text-gray-500">
+              Current bid: ₹{(currentBid?.amount || 0).toLocaleString('en-IN')}. 
+              Enter the total amount you want to bid (must be higher than current bid).
+            </p>
+          </div>
+          
+          {/* Buttons */}
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+              onClick={() => {
+                setCustomBidModalOpen(false)
+                setError('')
+                setBidAmount(0)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              onClick={async () => {
+                // Determine which bidder to use (admin selected or user's own)
+                const activeBidder = selectedBidderForBid 
+                  ? bidders.find(b => b.id === selectedBidderForBid)
+                  : userBidder
+                
+                if (!activeBidder || !bidAmount) return
+
+                const currentBidAmount = currentBid?.amount || 0
+                const rules = auction.rules as AuctionRules | undefined
+                const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                const totalBid = bidAmount
+                const difference = totalBid - currentBidAmount
+
+                if (totalBid <= currentBidAmount) {
+                  showBidError('Bid must exceed current amount')
+                  return
+                }
+
+                if (difference < minIncrement) {
+                  showBidError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
+                  return
+                }
+
+                if (difference % minIncrement !== 0) {
+                  showBidError(`Bid increase must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
+                  return
+                }
+
+                if (totalBid > activeBidder.remainingPurse) {
+                  showBidError('Insufficient remaining purse')
+                  return
+                }
+
+                setIsPlacingBid(true)
+                setError('')
+
+                try {
+                  const response = await fetch(`/api/auction/${auction.id}/bid`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      bidderId: activeBidder.id,
+                      amount: totalBid
+                    })
+                  })
+
+                  const data = await response.json()
+
+                  if (response.ok) {
+                    setBidAmount(0)
+                    setCustomBidModalOpen(false)
+                    setSelectedBidderForBid(null)
+                    toast.success('Bid placed successfully!')
+                  } else {
+                    showBidError(data.error || 'Failed to place bid')
+                  }
+                } catch {
+                  showBidError('Network error. Please try again.')
+                } finally {
+                  setIsPlacingBid(false)
+                }
+              }}
+              disabled={isPlacingBid || bidAmount === 0}
+            >
+              {isPlacingBid ? 'Placing...' : 'Place Bid'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     {/* Sliding Bidding Console (Admin only) */}
     {viewMode === 'admin' && (

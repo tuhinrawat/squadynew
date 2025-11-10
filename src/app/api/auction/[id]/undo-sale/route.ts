@@ -102,6 +102,11 @@ export async function POST(
     const refundAmount = lastSoldPlayer.soldPrice
     const newPurseAmount = bidder.remainingPurse + refundAmount
 
+    // Remove all bids for this player from bid history so bidding starts fresh
+    const clearedBidHistory = bidHistory.filter((bid: any) => 
+      bid.playerId !== lastSoldPlayer.id
+    )
+
     // Revert the sale in a transaction
     await prisma.$transaction([
       prisma.player.update({
@@ -122,7 +127,8 @@ export async function POST(
         where: { id: params.id },
         data: {
           currentPlayerId: lastSoldPlayer.id,
-          // Keep the bid history as is (it should still have the bids for this player)
+          // Clear bid history for this player so bidding starts fresh from base price
+          bidHistory: clearedBidHistory as any
         }
       })
     ])

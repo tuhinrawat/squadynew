@@ -20,6 +20,9 @@ interface ChatMessage {
 interface PublicChatProps {
   auctionId: string
   rightOffsetClass?: string // optional class to shift floating button when panels are open
+  hideFloatingButton?: boolean // hide the floating button (control from parent)
+  externalIsOpen?: boolean // control open state from parent
+  externalSetIsOpen?: (open: boolean) => void // callback to control open state from parent
 }
 
 // Memoized Message Component for performance
@@ -65,8 +68,10 @@ const ChatMessageItem = memo(({ msg, userId, isFirstInGroup }: {
 })
 ChatMessageItem.displayName = 'ChatMessageItem'
 
-export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
-  const [isOpen, setIsOpen] = useState(false)
+export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = false, externalIsOpen, externalSetIsOpen }: PublicChatProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false)
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen
+  const setIsOpen = externalSetIsOpen || setInternalIsOpen
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [username, setUsername] = useState('')
   const [userId, setUserId] = useState('')
@@ -309,20 +314,22 @@ export function PublicChat({ auctionId, rightOffsetClass }: PublicChatProps) {
   return (
     <>
       {/* Floating Chat Button - Left side on mobile, shiftable on desktop */}
-      <div className={`fixed bottom-6 left-4 lg:left-auto ${rightOffsetClass ?? 'lg:right-20'} z-40`}>
-        <Button
-          onClick={() => setIsOpen(true)}
-          className="rounded-full px-6 py-4 sm:px-8 sm:py-5 h-auto shadow-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white hover:scale-110 transition-transform flex items-center gap-2"
-        >
-          <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" />
-          <span className="text-sm sm:text-base font-semibold">Chat</span>
-          {unreadCount > 0 && (
-            <span className="bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </span>
-          )}
-        </Button>
-      </div>
+      {!hideFloatingButton && (
+        <div className={`fixed bottom-6 left-4 lg:left-auto ${rightOffsetClass ?? 'lg:right-20'} z-40`}>
+          <Button
+            onClick={() => setIsOpen(true)}
+            className="rounded-full px-6 py-4 sm:px-8 sm:py-5 h-auto shadow-2xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white hover:scale-110 transition-transform flex items-center gap-2"
+          >
+            <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" />
+            <span className="text-sm sm:text-base font-semibold">Chat</span>
+            {unreadCount > 0 && (
+              <span className="bg-red-500 text-white text-xs rounded-full h-6 w-6 flex items-center justify-center font-bold shadow-lg">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Mobile Chat Sheet - Only render on mobile to avoid overlay on desktop */}
       {isMobile && (

@@ -11,6 +11,7 @@ import { ResultsView } from '@/components/results-view'
 import { ChevronRight, Home } from 'lucide-react'
 import { PreAuctionBanner } from '@/components/pre-auction-banner'
 import { CountdownToLiveWrapper } from '@/components/countdown-to-live-wrapper'
+import { PublicHeaderWithChat } from '@/components/public-header-with-chat'
 import { isCuid } from '@/lib/slug'
 import type { Metadata } from 'next'
 
@@ -308,65 +309,8 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       // For LIVE and PAUSED status, show full auction view
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-          {/* Banner for LIVE/PAUSED published auctions */}
-          {auction.status === 'LIVE' && (
-            <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 shadow-lg">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                <div className="flex items-center justify-center gap-3 text-white">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    <h2 className="text-lg md:text-xl font-bold">{auction.name}</h2>
-                  </div>
-                  <span className="text-sm md:text-base text-green-100">• LIVE - Open to Public</span>
-                </div>
-              </div>
-            </div>
-          )}
-          {auction.status === 'PAUSED' && (
-            <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 shadow-lg">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                <div className="flex items-center justify-center gap-3 text-white">
-                  <h2 className="text-lg md:text-xl font-bold">{auction.name}</h2>
-                  <span className="text-sm md:text-base text-yellow-100">• PAUSED - Open to Public</span>
-                </div>
-              </div>
-            </div>
-          )}
-          {/* Header for Public View */}
-          <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${(auction.status === 'LIVE' || auction.status === 'PAUSED') ? 'mt-[88px]' : ''}`}>
-            <div className="max-w-full mx-auto px-4 sm:px-6">
-              <div className="flex justify-between items-center h-16">
-                <Link href="/" className="flex items-center">
-                  <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
-                </Link>
-              <div className="flex items-center gap-4">
-                <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 animate-pulse">
-                  <span className="hidden sm:inline">Powered by</span>
-                  <span className="font-semibold">Professio AI</span>
-                </a>
-                  <Link href="/register">
-                    <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300">
-                      Register
-                    </Button>
-                  </Link>
-                  <Link href="/signin">
-                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                      Sign In
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </header>
-          {/* Mobile promo banner */}
-          <div className="sm:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div className="px-4 py-2 flex justify-center">
-              <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm animate-pulse">
-                <span>Powered by</span>
-                <span className="font-semibold">Professio AI</span>
-              </a>
-            </div>
-          </div>
+          {/* Header for Public View with Chat */}
+          <PublicHeaderWithChat auctionId={auction.id} />
           
           {/* Breadcrumbs - Hidden on mobile for public view */}
           <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -391,6 +335,24 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             bidHistory={fullBidHistory}
             bidders={auction.bidders}
           />
+          
+          {/* Footer for Public View */}
+          <footer className="mt-8 bg-gray-900 dark:bg-black text-white py-6 px-4">
+            <div className="max-w-7xl mx-auto">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-6 w-auto brightness-0 invert" />
+                  <span className="text-xs sm:text-sm text-gray-400">© 2025 Squady. All rights reserved.</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-purple-600 text-white border-purple-500 shadow-sm hover:bg-purple-700">
+                    <span>Powered by</span>
+                    <span className="font-semibold">Professio AI</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </footer>
         </div>
       )
     }

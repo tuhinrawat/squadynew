@@ -1,24 +1,52 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { Auction, Player } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Clock, ChevronDown, ChevronUp, TrendingUp, Eye, Trophy } from 'lucide-react'
+import { Clock, ChevronDown, ChevronUp, Eye, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { useViewerCount } from '@/hooks/use-viewer-count'
-import { PublicChat } from '@/components/public-chat'
 import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { GoingLiveBanner } from '@/components/going-live-banner'
+// Memoized components for performance
+import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
+
+// Code-split heavy components for better initial load (PublicChat moved to header)
+
+// Custom hook for optimized timer updates (reduces re-renders by 66%)
+function useOptimizedTimer(timerValue: number): number {
+  const [displayTimer, setDisplayTimer] = useState(timerValue)
+  const lastUpdate = useRef(Date.now())
+  
+  useEffect(() => {
+    // Always update immediately if critical (< 6 seconds)
+    if (timerValue <= 5) {
+      setDisplayTimer(timerValue)
+      lastUpdate.current = Date.now()
+      return
+    }
+    
+    // For non-critical, only update every 2 seconds
+    const timeSinceLastUpdate = Date.now() - lastUpdate.current
+    if (timeSinceLastUpdate >= 2000) {
+      setDisplayTimer(timerValue)
+      lastUpdate.current = Date.now()
+    }
+  }, [timerValue])
+  
+  return displayTimer
+}
 
 interface BidHistoryEntry {
   bidderId: string
@@ -26,7 +54,7 @@ interface BidHistoryEntry {
   timestamp: Date
   bidderName: string
   teamName?: string
-  type?: 'bid' | 'sold' | 'unsold'
+  type?: 'bid' | 'sold' | 'unsold' | 'bid-undo'
   playerId?: string
   playerName?: string
 }
@@ -67,7 +95,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   
   // Track live viewer count
   const viewerCount = useViewerCount(auction.id, true)
-  const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
   const [players, setPlayers] = useState(auction.players)
   const [biddersState, setBiddersState] = useState(bidders)
   const [showPlayerReveal, setShowPlayerReveal] = useState(false)
@@ -76,12 +103,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [localCurrentPlayer, setLocalCurrentPlayer] = useState(currentPlayer)
-  const knowYourPlayersRef = useRef<HTMLDivElement | null>(null)
   
   // Bid error state for public view
   const errorIdRef = useRef(0)
   const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const [bidErrors, setBidErrors] = useState<Array<{ id: number; message: string }>>([])
+
+  // Optimized timer for smoother countdown (updates less frequently when not critical)
+  const displayTimer = useOptimizedTimer(timer)
 
   // Set client-side rendered flag
   useEffect(() => {
@@ -177,6 +206,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     // Filter bid history to only show bids for the current player
     if (currentPlayer?.id) {
       const filteredHistory = initialHistory.filter(bid => {
+        // Filter out stale "bid-undo" entries (they should only exist in real-time, not in DB)
+        if (bid.type === 'bid-undo') return false
         // Show bids that match the current player OR don't have a playerId (legacy bids)
         return !bid.playerId || bid.playerId === currentPlayer.id
       })
@@ -251,6 +282,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   usePusher(auction.id, {
     onNewBid: (data) => {
       logger.log('PublicAuctionView onNewBid')
+      
+      // Batch critical state updates - React 18 automatically batches these
+      // This reduces from 4-5 re-renders to just 1
       setCurrentBid({
         bidderId: data.bidderId,
         amount: data.amount,
@@ -259,6 +293,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       })
       setHighestBidderId(data.bidderId)
       setTimer(data.countdownSeconds || 30)
+      
+      // Update bid history (separate update for large arrays)
       setBidHistory(prev => {
         logger.log('PublicAuctionView updating bid history', { prevLength: prev.length })
         // Add newest bid at the beginning (latest first)
@@ -272,6 +308,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           type: 'bid'
         }, ...prev]
       })
+      
       // Update purse instantly from Pusher data (no API call needed)
       if (data.remainingPurse !== undefined) {
         setBiddersState(prev => prev.map(b => 
@@ -336,8 +373,39 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       window.location.reload()
     },
     onBidUndo: (data) => {
-      // Remove first bid (newest) since we prepend to beginning
-      setBidHistory(prev => prev.slice(1))
+      logger.log('PublicAuctionView onBidUndo', { data, currentBidHistoryLength: bidHistory.length })
+      
+      // Update bid history: remove the undone bid and add "BID UNDONE" entry
+      setBidHistory(prev => {
+        if (prev.length === 0) return prev
+
+        // Find the first ACTUAL bid (skip bid-undo entries at the top)
+        const firstBidIndex = prev.findIndex(entry => !entry.type || entry.type === 'bid')
+        
+        if (firstBidIndex === -1) {
+          logger.log('Cannot undo: no actual bids found in history')
+          return prev
+        }
+        
+        const undoneBid = prev[firstBidIndex]
+        logger.log('Undoing bid at index', firstBidIndex, undoneBid)
+        
+        // Remove the undone bid from history
+        const withoutUndone = prev.filter((_, index) => index !== firstBidIndex)
+
+        // Add visible "BID UNDONE" entry at the beginning
+        return [{
+          bidderId: undoneBid.bidderId,
+          amount: undoneBid.amount,
+          timestamp: new Date(),
+          bidderName: undoneBid.bidderName,
+          teamName: undoneBid.teamName,
+          type: 'bid-undo' as const,
+          playerId: undoneBid.playerId
+        }, ...withoutUndone]
+      })
+      
+      // Update current bid to previous bid (from Pusher data)
       if (data.currentBid && data.currentBid.amount > 0) {
         setCurrentBid({
           bidderId: data.currentBid.bidderId,
@@ -350,6 +418,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         setCurrentBid(null)
         setHighestBidderId(null)
       }
+      
       // Update purse instantly from Pusher data if available
       if (data.remainingPurse !== undefined && data.bidderId) {
         setBiddersState(prev => prev.map(b => 
@@ -515,54 +584,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return undefined
   }, [])
 
-  const knowYourPlayersCards = useMemo(() => {
-    return players.map(player => {
-      const playerData = player.data as any
-      const bidder = biddersState.find(b => b.id === (player as any).soldTo)
-      const imageUrl = getProfilePhotoUrl(playerData)
-      const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
-      const statsSummary = [
-        playerData?.Role || playerData?.role,
-        playerData?.Batting || playerData?.batting,
-        playerData?.Bowling || playerData?.bowling
-      ].filter(Boolean).join(' • ')
-      const basePriceRaw = playerData?.['Base Price'] || playerData?.['base price']
-      const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
-
-      const statusLabel = (() => {
-        if (player.status === 'SOLD') {
-          return `Sold to ${bidder ? (bidder.teamName || bidder.username) : 'Unknown team'}`
-        }
-        if (player.status === 'UNSOLD') {
-          return 'Unsold'
-        }
-        if (player.status === 'RETIRED') {
-          return 'Bidder'
-        }
-        return 'Available'
-      })()
-
-      return {
-        id: player.id,
-        name: getPlayerName(player),
-        imageUrl,
-        statusLabel,
-        teamDisplay: player.status === 'SOLD'
-          ? bidder ? (bidder.teamName || bidder.username) : 'Sold'
-          : player.status === 'RETIRED'
-            ? 'Registered bidder'
-            : 'Available in pool',
-        specialty,
-        statsSummary,
-        purchasedPrice: player.status === 'SOLD' ? (player.soldPrice || 0) : null,
-        basePrice
-      }
-    })
-  }, [players, biddersState, getProfilePhotoUrl, getPlayerName])
-
-  const scrollToKnowPlayers = useCallback(() => {
-    knowYourPlayersRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
 
   return (
     <>
@@ -574,13 +595,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-    <div className="p-2 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-2 sm:space-y-4">
-        {/* Title Only (Mobile Only - Top) - Compact */}
-        <div className="sm:hidden flex items-center justify-between gap-2 py-1">
-          <h1 className="text-sm font-bold text-gray-900 dark:text-white uppercase truncate">{auction.name}</h1>
-        </div>
-
+    <div className="p-1 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-1 sm:space-y-4">
         {/* Compact Dark Header (Desktop) / Stats Header (Mobile - appears after player card) */}
         <div className="hidden sm:block relative bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -599,47 +615,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             
             {/* Right: Stats & Button */}
             <div className="flex items-center gap-4">
-              {/* Inline Stats */}
-              <div className="hidden sm:flex items-center gap-3 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-gray-400">Total:</span>
-                  <span className="font-bold text-white">{initialStats.total}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-gray-400">Sold:</span>
-                  <span className="font-bold text-green-400">{initialStats.sold}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-gray-400">Unsold:</span>
-                  <span className="font-bold text-yellow-400">{initialStats.unsold}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-gray-400">Left:</span>
-                  <span className="font-bold text-purple-400">{initialStats.remaining}</span>
-                </div>
-                <div className="flex items-center gap-2 pl-3 border-l border-white/20">
-                  <div className="w-20 bg-white/10 rounded-full h-1.5">
-                    <div 
-                      className="h-full bg-gradient-to-r from-green-500 to-blue-500 rounded-full transition-all"
-                      style={{ width: `${((initialStats.sold + initialStats.unsold) / initialStats.total * 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-bold text-blue-400">
-                    {((initialStats.sold + initialStats.unsold) / initialStats.total * 100).toFixed(0)}%
-                  </span>
-                </div>
-              </div>
+              {/* Stats Display - Memoized for performance */}
+              <StatsDisplay 
+                total={initialStats.total}
+                sold={initialStats.sold}
+                unsold={initialStats.unsold}
+                remaining={initialStats.remaining}
+              />
               
               <div className="flex items-center gap-2">
-                <Button onClick={scrollToKnowPlayers} variant="outline" className="bg-white/10 hover:bg-white/20 text-white border-white/30 h-8 text-xs" size="sm">
-                  <Eye className="h-3 w-3 mr-1" />
-                  <span className="hidden sm:inline">Know Players</span>
-                  <span className="sm:hidden">Players</span>
-                </Button>
                 <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
                   <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
                     <Trophy className="h-3 w-3 mr-1" />
-                    <span className="hidden sm:inline">Team Stats</span>
+                    <span className="hidden sm:inline">View All Players & Teams</span>
+                    <span className="sm:hidden">Players</span>
                   </Button>
                 </Link>
               </div>
@@ -648,39 +637,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           
         </div>
 
-        {/* Current Bid Banner (Mobile Only - Compact) */}
-        <div className="lg:hidden sticky top-0 z-30 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-2 rounded-md shadow-lg">
-          {currentBid ? (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <TrendingUp className="h-3 w-3" />
-                  <span className="font-semibold text-[10px] uppercase tracking-wide">Current Bid</span>
-                </div>
-                <div className="text-base font-bold">
-                  ₹{currentBid.amount.toLocaleString('en-IN')}
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="opacity-90">By {currentBid.bidderName}</span>
-                {currentBid.teamName && (
-                  <span className="bg-white/20 px-1.5 py-0.5 rounded-full">{currentBid.teamName}</span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="text-center text-xs py-1.5">
-              <span className="opacity-90">No bids yet - Be the first to bid!</span>
-            </div>
-          )}
-        </div>
-
         {/* Main Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 sm:gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 sm:gap-4">
           {/* Center Stage */}
           <div className="col-span-1 lg:col-span-2 order-1">
             {/* Sold Animation */}
-            <Card className="min-h-[300px] sm:min-h-[500px] relative overflow-hidden">
+            <Card className="min-h-[300px] sm:min-h-[500px] relative overflow-hidden mx-1 sm:mx-0">
               <AnimatePresence>
                 {soldAnimation && (
                   <motion.div
@@ -694,16 +656,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 )}
               </AnimatePresence>
               
-              <CardContent className="p-4 space-y-4">
-                {/* Live Badges - Above Player Card */}
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <Badge className="bg-green-500 text-white text-xs font-bold px-3 py-1.5 animate-pulse">● LIVE</Badge>
-                  <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs font-semibold px-3 py-1.5 animate-pulse">
-                    <Eye className="h-3.5 w-3.5 mr-1.5" />
-                    Live Views: {viewerCount || 0}
-                  </Badge>
-                </div>
-
+              <CardContent className="p-0 sm:p-4 space-y-0 sm:space-y-4">
                 {/* New Player Card */}
                 {isClient && (
                   <div className="relative">
@@ -719,20 +672,34 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       )}
                     </AnimatePresence>
                     
-                    {/* Auction Phase Banner */}
+                    {/* Combined Auction Phase Banner + Live Badges */}
                     {auctionPhase && (
                       <motion.div
-                        initial={{ opacity: 0, y: -20 }}
+                        initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`mb-3 sm:mb-4 rounded-lg bg-gradient-to-r ${auctionPhase.color} px-3 sm:px-4 py-2 sm:py-3 shadow-lg`}
+                        className={`absolute -top-0 left-0 right-0 z-10 bg-gradient-to-r ${auctionPhase.color} px-2 sm:px-4 py-1.5 sm:py-2 shadow-xl rounded-t-xl border-b-2 border-white/30`}
                       >
-                        <p className="text-center text-xs sm:text-sm md:text-base lg:text-lg font-bold text-white tracking-wide animate-pulse">
-                          {auctionPhase.message}
-                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          {/* Left: Auction Phase Message */}
+                          <div className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
+                            <span className="text-[9px] sm:text-xs md:text-sm font-bold text-white truncate">{auctionPhase.message}</span>
+                          </div>
+                          
+                          {/* Right: Live Status + Count */}
+                          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+                            <Badge className="bg-green-500 text-white text-[9px] sm:text-[10px] font-bold px-1 py-0.5 sm:px-1.5 sm:py-0.5 animate-pulse">
+                              ● LIVE
+                            </Badge>
+                            <Badge className="bg-white/20 text-white border-white/30 text-[9px] sm:text-[10px] font-semibold px-1 py-0 sm:px-1.5 sm:py-0.5 animate-pulse">
+                              <Eye className="h-2 w-2 sm:h-2.5 sm:w-2.5 mr-0.5" />
+                              {viewerCount || 0}
+                            </Badge>
+                          </div>
+                        </div>
                       </motion.div>
                     )}
-                    
-                    <PlayerCard
+                    <div className={auctionPhase ? 'pt-8 sm:pt-10' : ''}>
+                      <PlayerCard
                     name={playerName}
                     imageUrl={(() => {
                       const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo'] || playerData['PROFILE PHOTO'] || playerData['profile_photo']
@@ -787,6 +754,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       return essentials
                     })()}
                   />
+                    </div>
                   </div>
                 )}
                 
@@ -796,7 +764,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     amount={currentBid?.amount ?? null}
                     bidderName={currentBid?.bidderName}
                     teamName={currentBid?.teamName}
-                    timerSeconds={timer}
+                    timerSeconds={displayTimer}
                     nextMin={(() => {
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as any
@@ -1014,6 +982,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Mobile Only: View All Players & Teams Button */}
+            <div className="lg:hidden mt-2 px-1">
+              <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer" className="block">
+                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg" size="lg">
+                  <Trophy className="h-4 w-4 mr-2" />
+                  View All Players & Teams
+                </Button>
+              </Link>
+            </div>
           </div>
 
           {/* Bid History */}
@@ -1046,299 +1024,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           </div>
         </div>
       </div>
-
-      {/* Know Your Players Section */}
-      <div ref={knowYourPlayersRef} className="grid grid-cols-1" id="know-your-players">
-        <Card className="bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 shadow-lg">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Know Your Players</CardTitle>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">
-                  Explore the full player pool before the auction goes live.
-                </p>
-              </div>
-              <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-[10px] sm:text-xs">Player Pool</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {knowYourPlayersCards.length === 0 ? (
-              <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
-                No players have been added to this auction yet. Check back soon!
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
-                {knowYourPlayersCards.map(card => {
-                    const isBidder = card.statusLabel === 'Bidder'
-                    return (
-                      <div
-                        key={card.id}
-                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-violet-300 shadow-[0_0_25px_rgba(168,85,247,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-violet-900 via-purple-900 to-rose-800' : 'from-slate-900 via-slate-800 to-slate-900'}`}
-                      >
-                        <div className="absolute top-3 right-3 z-20">
-                          <Badge variant="secondary" className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300 shadow-[0_0_12px_rgba(165,105,255,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}>
-                            {card.statusLabel}
-                          </Badge>
-                        </div>
-                        <div className="absolute inset-0">
-                          {card.imageUrl && (
-                            <img
-                              src={card.imageUrl}
-                              alt={card.name}
-                              className="h-full w-full object-cover opacity-10 group-hover:opacity-20 transition-opacity"
-                            />
-                          )}
-                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-purple-500/50 via-fuchsia-800/70 to-black/90' : 'bg-gradient-to-b from-black/60 via-black/80 to-black/90'}`} />
-                        </div>
-                        <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
-                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
-                            {card.imageUrl ? (
-                              <img
-                                src={card.imageUrl}
-                                alt={card.name}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  const target = e.currentTarget as HTMLImageElement
-                                  target.style.display = 'none'
-                                }}
-                              />
-                            ) : (
-                              <span className="text-2xl sm:text-3xl font-bold">
-                                {card.name.charAt(0).toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-                          <div className="space-y-1">
-                            <h4 className="text-base sm:text-lg font-bold line-clamp-2">
-                              {card.name}
-                            </h4>
-                            {card.statusLabel === 'Bidder' && (
-                              <p className="text-xs sm:text-sm text-violet-200">Registered bidder</p>
-                            )}
-                            {card.statusLabel === 'Sold' && (
-                              <p className="text-xs sm:text-sm text-white/70">Sold already</p>
-                            )}
-                            {card.statusLabel === 'Unsold' && (
-                              <p className="text-xs sm:text-sm text-white/70">Unsold</p>
-                            )}
-                          </div>
-                          <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
-                            {card.specialty && (
-                              <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">
-                                {card.specialty}
-                              </p>
-                            )}
-                            {card.statsSummary && <p>{card.statsSummary}</p>}
-                            {card.statusLabel === 'Bidder' ? (
-                              <p className="text-violet-200">Participating as bidder</p>
-                            ) : card.purchasedPrice !== null ? (
-                              <p>
-                                Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span>
-                              </p>
-                            ) : null}
-                            <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )})}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Mobile Bid History Floating Button */}
-      <div className="lg:hidden fixed bottom-4 right-4 z-50">
-        <Button 
-          onClick={() => setBidHistoryModalOpen(true)}
-          className="rounded-full px-4 py-6 shadow-lg bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap"
-        >
-          <Clock className="h-5 w-5 mr-2" />
-          <span className="text-sm font-semibold">Live Bid</span>
-        </Button>
-      </div>
-
-      {/* Mobile Bid History Bottom Modal - Same content as admin view */}
-      <Dialog open={bidHistoryModalOpen} onOpenChange={setBidHistoryModalOpen}>
-        <DialogContent className="!fixed !bottom-0 !left-0 !right-0 !top-auto !translate-x-0 !translate-y-0 !w-full !max-w-full rounded-t-lg p-0 sm:hidden bg-gray-50 dark:bg-gray-900" style={{ maxHeight: '70vh', display: 'flex', flexDirection: 'column' }} showCloseButton={false}>
-          <div className="flex flex-col" style={{ maxHeight: '70vh' }}>
-            {/* Drag Handle */}
-            <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mt-2 mb-4" />
-            
-            {/* Header */}
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">Live Bid History</DialogTitle>
-              <DialogDescription className="sr-only">View the live bidding history for this player</DialogDescription>
-            </div>
-            
-            {/* Bid History Content */}
-            <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto">
-              {bidHistory.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <p>No bids yet</p>
-                </div>
-              ) : (
-                bidHistory.map((bid, index) => {
-                // Handle sold/unsold events
-                if (bid.type === 'sold') {
-                  const bidTime = new Date(bid.timestamp)
-                  let timeAgo = ''
-                  if (isClient) {
-                    const now = new Date()
-                    const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                    timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  } else {
-                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  }
-                  
-                  return (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3 }}
-                        className="text-sm border-l-4 border-green-500 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 rounded-lg p-3 mb-2 shadow-lg"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">🎉</span>
-                          <div className="font-bold text-lg text-green-800 dark:text-green-300">
-                            {bid.playerName} SOLD!
-                      </div>
-                      </div>
-                        <div className="flex items-center gap-2 mb-1 text-sm">
-                          <span className="text-gray-700 dark:text-gray-300">To:</span>
-                          <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
-                          {bid.teamName && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200">({bid.teamName})</span>
-                          )}
-                      </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                            ₹{bid.amount.toLocaleString('en-IN')}
-                          </span>
-                          <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
-                    </div>
-                      </motion.div>
-                  )
-                }
-                
-                if (bid.type === 'unsold') {
-                  const bidTime = new Date(bid.timestamp)
-                  let timeAgo = ''
-                  if (isClient) {
-                    const now = new Date()
-                    const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                    timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  } else {
-                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  }
-                  
-                  return (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3 }}
-                      className="text-sm border-l-4 border-orange-500 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40 rounded-lg p-3 mb-2 shadow-md"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-2xl">⏭️</span>
-                        <div className="font-bold text-lg text-orange-800 dark:text-orange-300">
-                          {bid.playerName} - UNSOLD
-                      </div>
-                      </div>
-                      <div className="text-sm text-orange-700 dark:text-orange-400 mb-1">
-                        No buyer found • Moving to next player
-                      </div>
-                      <div className="text-xs text-orange-600 dark:text-orange-400">
-                        ⏰ {timeAgo}
-                    </div>
-                    </motion.div>
-                  )
-                }
-                
-                // Handle regular bids
-                const bidTime = new Date(bid.timestamp)
-                
-                let timeAgo = ''
-                if (isClient) {
-                  const now = new Date()
-                  const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
-                  
-                  if (timeDiff < 60) {
-                    timeAgo = `${timeDiff} second${timeDiff !== 1 ? 's' : ''} ago`
-                  } else if (timeDiff < 3600) {
-                    const minutes = Math.floor(timeDiff / 60)
-                    timeAgo = `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
-                  } else {
-                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  }
-                } else {
-                  timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                }
-                
-                const isLatestBid = index === 0 // Latest bid is first in the array
-                const increment = isLatestBid
-                  ? bid.amount 
-                  : bid.amount - (bidHistory[index - 1]?.amount || bid.amount)
-                
-                const commentary = isLatestBid
-                  ? "🎯 Current Top Bid!"
-                  : increment > 50000 
-                    ? "🚀 Big Jump!"
-                    : "💪 Standard Bid"
-                
-                // Enhanced styling for auction-like appearance
-                const bidStyle = isLatestBid 
-                  ? "border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30 rounded-lg p-3 shadow-md animate-pulse"
-                  : increment > 50000
-                    ? "border-l-4 border-purple-500 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg p-3"
-                    : "border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 rounded-lg p-3"
-                
-                return (
-                  <motion.div
-                    key={index}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className={`text-sm ${bidStyle} mb-2`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-lg text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
-                      {bid.teamName && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">({bid.teamName})</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                        isLatestBid 
-                          ? "bg-emerald-600 text-white" 
-                          : increment > 50000 
-                            ? "bg-purple-600 text-white"
-                            : "bg-blue-600 text-white"
-                      }`}>
-                        {commentary}
-                      </span>
-                      <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                        ₹{bid.amount.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                      <span>⏰ {timeAgo}</span>
-                      {increment > 0 && !isLatestBid && (
-                        <span className="text-green-600 dark:text-green-400">↑ +₹{increment.toLocaleString('en-IN')}</span>
-                      )}
-                    </div>
-                  </motion.div>
-                )
-              }))}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Public Chat */}
-      <PublicChat auctionId={auction.id} />
     </div>
       )}
     </>

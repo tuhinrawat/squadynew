@@ -111,9 +111,14 @@ export async function POST(
       }
     }
 
-    // Filter bids for the CURRENT player only (strict). Do not include legacy bids without playerId.
+    // Filter bids for the CURRENT player only (strict). Exclude sold/unsold/bid-undo entries.
     const currentPlayerBidHistory = currentPlayer?.id 
-      ? bidHistory.filter(bid => bid.playerId === currentPlayer.id)
+      ? bidHistory.filter(bid => 
+          bid.playerId === currentPlayer.id && 
+          bid.type !== 'sold' && 
+          bid.type !== 'unsold' && 
+          bid.type !== 'bid-undo'
+        )
       : []
   
     logger.log('Filtering bids for current player', {

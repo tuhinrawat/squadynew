@@ -6,7 +6,7 @@ import { Clock } from 'lucide-react'
 export type ActivityLogEntry = {
 	// Common
 	timestamp: Date | string
-	type?: 'bid' | 'sold' | 'unsold' | 'sale-undo'
+	type?: 'bid' | 'sold' | 'unsold' | 'sale-undo' | 'bid-undo'
 	// Bid
 	bidderId?: string
 	bidderName?: string
@@ -15,7 +15,7 @@ export type ActivityLogEntry = {
 	// Player context
 	playerId?: string
 	playerName?: string
-	// Sale undo
+	// Sale undo / Bid undo
 	refundedAmount?: number
 }
 
@@ -59,6 +59,7 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 					const isSold = it.type === 'sold'
 					const isUnsold = it.type === 'unsold'
 					const isSaleUndo = it.type === 'sale-undo'
+					const isBidUndo = it.type === 'bid-undo'
 					return (
                         <li
                             key={idx}
@@ -69,6 +70,8 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
                                     ? 'bg-orange-50/70 dark:bg-orange-900/10'
                                     : isSaleUndo
                                     ? 'bg-purple-50/70 dark:bg-purple-900/10'
+                                    : isBidUndo
+                                    ? 'bg-red-50/70 dark:bg-red-900/10'
                                     : 'bg-white/60 dark:bg-gray-900/20 hover:bg-blue-50/40 dark:hover:bg-blue-900/10'}
                             `}
                         >
@@ -77,6 +80,7 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 								isSold ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
 								: isUnsold ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
 								: isSaleUndo ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+								: isBidUndo ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
 								: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 							}`}>
 								{(it.bidderName || it.playerName || '•').charAt(0).toUpperCase()}
@@ -122,6 +126,19 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 												<>
 													<span className="text-gray-500 dark:text-gray-400 hidden sm:inline">refunded</span>
 													<span className="font-semibold text-xs sm:text-sm">₹{it.refundedAmount.toLocaleString('en-IN')}</span>
+												</>
+											)}
+										</>
+									)}
+									{isBidUndo && (
+										<>
+                                            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 font-semibold text-[11px] sm:text-xs">BID UNDONE</span>
+											{it.amount && (
+												<>
+													<span className="text-gray-500 dark:text-gray-400 hidden sm:inline">₹{it.amount.toLocaleString('en-IN')}</span>
+													{it.teamName && (
+														<span className="text-gray-500 dark:text-gray-400">({it.teamName})</span>
+													)}
 												</>
 											)}
 										</>

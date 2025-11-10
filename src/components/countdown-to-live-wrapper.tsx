@@ -7,9 +7,10 @@ import { ProfessioPromoButton } from './professio-promo-button'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Eye } from 'lucide-react'
+import { Eye, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 interface CountdownToLiveWrapperProps {
   auction: {
@@ -44,6 +45,7 @@ export function CountdownToLiveWrapper({
   const [currentPlayer, setCurrentPlayer] = useState(initialCurrentPlayer)
   const [stats, setStats] = useState(initialStats)
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
+  const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
 
@@ -76,6 +78,7 @@ export function CountdownToLiveWrapper({
       ].filter(Boolean).join(' • ')
       const basePriceRaw = playerData?.['Base Price'] || playerData?.['base price']
       const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
+      const cricherosLink = playerData?.['Cricheros Profile'] || playerData?.['cricheros profile'] || playerData?.['Cricheros Link'] || playerData?.['cricheros_profile']
       const status = player.status
 
       const statusLabel = status === 'SOLD'
@@ -94,7 +97,8 @@ export function CountdownToLiveWrapper({
         statsSummary,
         basePrice,
         statusLabel,
-        purchasedPrice: status === 'SOLD' ? (player.soldPrice || 0) : null
+        purchasedPrice: status === 'SOLD' ? (player.soldPrice || 0) : null,
+        cricherosLink
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
   }, [auction.players])
@@ -258,60 +262,113 @@ export function CountdownToLiveWrapper({
                   Player list not available yet. Check back soon!
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
                   {knowYourPlayersCards.map(card => {
                     const isBidder = card.statusLabel === 'Bidder'
                     return (
                       <div
                         key={card.id}
-                        className={`group relative rounded-xl overflow-hidden border shadow-lg transition-shadow duration-500 ${isBidder ? 'border-violet-300 shadow-[0_0_25px_rgba(168,85,247,0.45)] animate-pulse' : 'border-white/10'} bg-gradient-to-br ${isBidder ? 'from-violet-900 via-purple-900 to-rose-800' : 'from-slate-900 via-slate-800 to-slate-900'}`}
+                        className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${isBidder ? 'border-violet-300 shadow-[0_0_25px_rgba(168,85,247,0.45)] animate-pulse' : 'border-white/20'} bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 max-w-md mx-auto w-full`}
                       >
-                        <div className="absolute top-3 right-3 z-20">
+                        {/* Status Badge */}
+                        <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
                           <Badge
                             variant="secondary"
-                            className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300 shadow-[0_0_12px_rgba(165,105,255,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[10px] sm:text-xs`}
+                            className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300 shadow-[0_0_12px_rgba(165,105,255,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[9px] sm:text-xs font-bold`}
                           >
                             {card.statusLabel}
                           </Badge>
                         </div>
-                        <div className="absolute inset-0">
-                          {card.imageUrl && (
-                            <img src={card.imageUrl} alt={card.name} className="h-full w-full object-cover opacity-10 group-hover:opacity-20 transition-opacity" />
+
+                        {/* Player Photo - Portrait Style */}
+                        <div 
+                          className="relative h-48 sm:h-56 bg-gradient-to-b from-slate-700 to-slate-900 flex items-center justify-center cursor-pointer group/photo"
+                          onClick={() => card.imageUrl && setFullScreenImage(card.imageUrl)}
+                        >
+                          {card.imageUrl ? (
+                            <>
+                              <img
+                                src={card.imageUrl}
+                                alt={card.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.currentTarget as HTMLImageElement
+                                  target.style.display = 'none'
+                                }}
+                              />
+                              {/* Hover overlay with zoom icon */}
+                              <div className="absolute inset-0 bg-black/0 group-hover/photo:bg-black/40 transition-all duration-200 flex items-center justify-center">
+                                <Eye className="h-8 w-8 sm:h-10 sm:w-10 text-white opacity-0 group-hover/photo:opacity-100 transition-opacity duration-200" />
+                              </div>
+                            </>
+                          ) : (
+                            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white/20 flex items-center justify-center">
+                              <span className="text-4xl sm:text-5xl font-bold text-white">
+                                {card.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
                           )}
-                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-b from-purple-500/50 via-fuchsia-800/70 to-black/90' : 'bg-gradient-to-b from-black/60 via-black/80 to-black/90'}`} />
+                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-t from-purple-900 via-transparent to-transparent' : 'bg-gradient-to-t from-slate-900 via-transparent to-transparent'}`} />
                         </div>
-                        <div className="relative z-10 flex flex-col items-center p-4 sm:p-5 text-white text-center space-y-3">
-                          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full border-2 border-white/30 overflow-hidden bg-white/10 flex items-center justify-center">
-                            {card.imageUrl ? (
-                              <img src={card.imageUrl} alt={card.name} className="w-full h-full object-cover" onError={(e) => { const target = e.currentTarget as HTMLImageElement; target.style.display = 'none' }} />
-                            ) : (
-                              <span className="text-2xl sm:text-3xl font-bold">{card.name.charAt(0).toUpperCase()}</span>
+
+                        {/* Player Info */}
+                        <div className="p-3 sm:p-4 space-y-2">
+                          {/* Name and Bidder Status */}
+                          <div>
+                            <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2">
+                              {card.name}
+                            </h4>
+                            {isBidder && (
+                              <p className="text-violet-300 text-[10px] sm:text-xs font-bold uppercase tracking-wide">Registered Bidder</p>
                             )}
-                          </div>
-                          <div className="space-y-1">
-                            <h4 className="text-base sm:text-lg font-bold line-clamp-2">{card.name}</h4>
-                            {card.statusLabel === 'Sold' && (
-                              <p className="text-xs sm:text-sm text-white/70">Sold already</p>
-                            )}
-                            {card.statusLabel === 'Bidder' && (
-                              <p className="text-xs sm:text-sm text-violet-200">Registered bidder</p>
-                            )}
-                            {card.statusLabel === 'Unsold' && (
-                              <p className="text-xs sm:text-sm text-white/70">Unsold</p>
-                            )}
-                          </div>
-                          <div className="w-full space-y-1 text-xs sm:text-sm text-white/70">
                             {card.specialty && (
-                              <p className="font-medium text-white/80 uppercase tracking-wide text-[10px] sm:text-xs">{card.specialty}</p>
+                              <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
                             )}
-                            {card.statsSummary && <p>{card.statsSummary}</p>}
-                            {card.statusLabel === 'Bidder' ? (
-                              <p className="text-violet-200">Participating as bidder</p>
-                            ) : card.purchasedPrice !== null ? (
-                              <p>Purchased for <span className="text-white font-semibold">₹{card.purchasedPrice.toLocaleString('en-IN')}</span></p>
-                            ) : null}
-                            <p>Base price ₹{card.basePrice.toLocaleString('en-IN')}</p>
                           </div>
+
+                          {/* Price Info */}
+                          <div className="space-y-1.5">
+                            {isBidder ? (
+                              <div className="bg-violet-500/20 border border-violet-400/30 rounded-lg p-2 text-center">
+                                <p className="text-violet-200 text-[9px] sm:text-[10px] font-semibold">PARTICIPATING</p>
+                                <p className="text-white text-xs sm:text-sm font-bold">As Bidder</p>
+                              </div>
+                            ) : card.purchasedPrice !== null ? (
+                              <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg p-2 text-center border-2 border-green-400/30">
+                                <p className="text-green-200 text-[9px] sm:text-[10px] font-semibold">PURCHASED FOR</p>
+                                <p className="text-white font-black text-base sm:text-lg break-words">₹{card.purchasedPrice.toLocaleString('en-IN')}</p>
+                              </div>
+                            ) : (
+                              <div className="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
+                                <p className="text-white/60 text-[9px] sm:text-[10px] font-semibold">STATUS</p>
+                                <p className="text-white text-xs sm:text-sm font-bold">Available</p>
+                              </div>
+                            )}
+                            
+                            {/* Base Price */}
+                            <div className="bg-white/5 rounded-lg p-1.5 border border-white/10">
+                              <div className="flex items-center justify-between">
+                                <span className="text-white/60 text-[9px] sm:text-[10px]">Base Price</span>
+                                <span className="text-white font-bold text-[10px] sm:text-xs">₹{card.basePrice.toLocaleString('en-IN')}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Cricheros Link */}
+                          {card.cricherosLink && (
+                            <a
+                              href={card.cricherosLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-semibold rounded-lg transition-colors duration-200 border border-white/30 w-full"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              <span>View Profile</span>
+                            </a>
+                          )}
                         </div>
                       </div>
                     )
@@ -324,6 +381,30 @@ export function CountdownToLiveWrapper({
 
         {/* Professio AI Promo Button at Bottom */}
         <ProfessioPromoButton />
+        
+        {/* Full Screen Image Modal */}
+        <Dialog open={!!fullScreenImage} onOpenChange={(o) => { if (!o) setFullScreenImage(null) }}>
+          <DialogContent className="max-w-full w-full h-full p-0 bg-black/95">
+            <button
+              onClick={() => setFullScreenImage(null)}
+              className="absolute top-4 right-4 z-50 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="flex items-center justify-center w-full h-full p-4">
+              {fullScreenImage && (
+                <img
+                  src={fullScreenImage}
+                  alt="Player"
+                  className="max-w-full max-h-full object-contain"
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
