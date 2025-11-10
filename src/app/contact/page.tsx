@@ -77,7 +77,7 @@ export default function ContactPage() {
                 </Button>
               </Link>
               <Link href="/register">
-                <Button variant="ghost" className="hidden sm:flex text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                <Button variant="ghost" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
                   Live Auctions
                 </Button>
               </Link>

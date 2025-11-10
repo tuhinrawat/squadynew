@@ -591,7 +591,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         <img 
                           src={teamData.logo}
                           alt={bidder.teamName || bidder.username}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain p-2"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
@@ -675,7 +675,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         <img 
                           src={imageUrl}
                           alt={getPlayerName(player)}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain p-2"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
@@ -1000,12 +1000,12 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                 className="relative h-48 sm:h-56 bg-gradient-to-b from-slate-700 to-slate-900 flex items-center justify-center cursor-pointer group/photo"
                                 onClick={() => card.imageUrl && setFullScreenImage(card.imageUrl)}
                               >
-                                {card.imageUrl ? (
+                                  {card.imageUrl ? (
                                   <>
                                     <img
                                       src={card.imageUrl}
                                       alt={card.name}
-                                      className="w-full h-full object-cover"
+                                      className="w-full h-full object-contain p-2"
                                       onError={(e) => {
                                         const target = e.currentTarget as HTMLImageElement
                                         target.style.display = 'none'
@@ -1016,15 +1016,15 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                       <Eye className="h-8 w-8 sm:h-10 sm:w-10 text-white opacity-0 group-hover/photo:opacity-100 transition-opacity duration-200" />
                                     </div>
                                   </>
-                                ) : (
+                                  ) : (
                                   <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white/20 flex items-center justify-center">
                                     <span className="text-4xl sm:text-5xl font-bold text-white">
                                       {card.name.charAt(0).toUpperCase()}
                                     </span>
                                   </div>
-                                )}
+                                  )}
                                 <div className={`absolute inset-0 ${card.isBidder ? 'bg-gradient-to-t from-purple-900 via-transparent to-transparent' : 'bg-gradient-to-t from-slate-900 via-transparent to-transparent'}`} />
-                              </div>
+                                </div>
 
                               {/* Player Info */}
                               <div className="p-3 sm:p-4 space-y-2">
@@ -1065,7 +1065,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                     <div className="flex items-center justify-between">
                                       <span className="text-white/60 text-[9px] sm:text-[10px]">Base Price</span>
                                       <span className="text-white font-bold text-[10px] sm:text-xs">₹{card.basePrice.toLocaleString('en-IN')}</span>
-                                    </div>
+                                </div>
                                   </div>
                                 </div>
 

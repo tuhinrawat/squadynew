@@ -290,7 +290,7 @@ export function CountdownToLiveWrapper({
                               <img
                                 src={card.imageUrl}
                                 alt={card.name}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain p-2"
                                 onError={(e) => {
                                   const target = e.currentTarget as HTMLImageElement
                                   target.style.display = 'none'

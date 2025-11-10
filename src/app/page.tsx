@@ -25,7 +25,7 @@ export default function Home() {
                   Tutorial
                 </Button>
               </Link>
-              <Link href="/register" className="hidden sm:block">
+              <Link href="/register">
                 <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
                   Live Auctions
                 </Button>
