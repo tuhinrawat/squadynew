@@ -81,7 +81,7 @@ export function FullScreenCountdown({ scheduledStartDate, auctionName, onCountdo
       const difference = startDate - now
 
       if (difference <= 0) {
-        setTimeLeft(null)
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 })
         // Call callback instead of reloading page
         if (onCountdownComplete) {
           onCountdownComplete()
@@ -109,6 +109,9 @@ export function FullScreenCountdown({ scheduledStartDate, auctionName, onCountdo
   if (!timeLeft) {
     return null
   }
+
+  // Check if timer has reached zero
+  const isTimerComplete = timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.minutes === 0 && timeLeft.seconds === 0
 
   const formatNumber = (num: number) => String(num).padStart(2, '0')
 
@@ -240,47 +243,80 @@ export function FullScreenCountdown({ scheduledStartDate, auctionName, onCountdo
       </div>
 
       <div className="relative flex flex-col items-center justify-center gap-4 sm:gap-6 md:gap-8 w-full px-2 min-h-[200px] z-10">
-        {/* Header - static */}
-        <div className="relative z-10 flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
-          <Clock className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 lg:w-10 lg:h-10 flex-shrink-0 text-cyan-400 drop-shadow-[0_0_10px_rgba(0,240,255,0.8)]" />
-          <span 
-            className="text-sm sm:text-base md:text-xl lg:text-2xl font-semibold"
-            style={{
-              background: 'linear-gradient(90deg, #67e8f9, #fbbf24, #a78bfa, #67e8f9)',
-              backgroundSize: '200% 100%',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
+        {isTimerComplete ? (
+          /* Show "Starting Soon" message when timer reaches 0 */
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="relative z-10 flex flex-col items-center gap-4 sm:gap-6"
           >
-            Auction Starts In
-          </span>
-          <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-400" />
-        </div>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 text-yellow-400 animate-pulse" />
+              <h2 
+                className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold text-center"
+                style={{
+                  background: 'linear-gradient(90deg, #67e8f9, #fbbf24, #a78bfa, #67e8f9)',
+                  backgroundSize: '200% 100%',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  animation: 'gradient-shift 3s ease infinite',
+                }}
+              >
+                Starting Soon
+              </h2>
+              <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 text-yellow-400 animate-pulse" />
+            </div>
+            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-blue-200 text-center animate-pulse">
+              Please stay tuned...
+            </p>
+          </motion.div>
+        ) : (
+          <>
+            {/* Header - static */}
+            <div className="relative z-10 flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
+              <Clock className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 lg:w-10 lg:h-10 flex-shrink-0 text-cyan-400 drop-shadow-[0_0_10px_rgba(0,240,255,0.8)]" />
+              <span 
+                className="text-sm sm:text-base md:text-xl lg:text-2xl font-semibold"
+                style={{
+                  background: 'linear-gradient(90deg, #67e8f9, #fbbf24, #a78bfa, #67e8f9)',
+                  backgroundSize: '200% 100%',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                Auction Starts In
+              </span>
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-yellow-400" />
+            </div>
 
-        {/* Countdown Cards - Single Line on All Screens */}
-        <div className="relative z-10 flex flex-row items-center justify-center gap-2 sm:gap-3 md:gap-4 lg:gap-5 xl:gap-6 w-full max-w-5xl flex-nowrap px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16" style={{ overflowY: 'visible', overflowX: 'visible' }}>
-          {timeLeft.days > 0 && (
-            <>
+            {/* Countdown Cards - Single Line on All Screens */}
+            <div className="relative z-10 flex flex-row items-center justify-center gap-2 sm:gap-3 md:gap-4 lg:gap-5 xl:gap-6 w-full max-w-5xl flex-nowrap px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16" style={{ overflowY: 'visible', overflowX: 'visible' }}>
+              {timeLeft.days > 0 && (
+                <>
+                  <CountdownCard 
+                    value={timeLeft.days} 
+                    label="Days" 
+                  />
+                  {/* Separator */}
+                  <div className="h-12 sm:h-16 md:h-20 w-px bg-gradient-to-b from-transparent via-cyan-400/50 to-transparent flex-shrink-0" />
+                </>
+              )}
               <CountdownCard 
-                value={timeLeft.days} 
-                label="Days" 
+                value={timeLeft.hours} 
+                label="Hours" 
               />
               {/* Separator */}
-              <div className="h-12 sm:h-16 md:h-20 w-px bg-gradient-to-b from-transparent via-cyan-400/50 to-transparent flex-shrink-0" />
-            </>
-          )}
-          <CountdownCard 
-            value={timeLeft.hours} 
-            label="Hours" 
-          />
-          {/* Separator */}
-          <div className="h-12 sm:h-16 md:h-20 w-px bg-gradient-to-b from-transparent via-purple-400/50 to-transparent flex-shrink-0" />
-          <CountdownCard 
-            value={timeLeft.minutes} 
-            label="Minutes" 
-          />
-        </div>
+              <div className="h-12 sm:h-16 md:h-20 w-px bg-gradient-to-b from-transparent via-purple-400/50 to-transparent flex-shrink-0" />
+              <CountdownCard 
+                value={timeLeft.minutes} 
+                label="Minutes" 
+              />
+            </div>
+          </>
+        )}
       </div>
     </>
   )

@@ -245,7 +245,7 @@ export function CountdownToLiveWrapper({
         </header>
 
         {/* Centered Countdown Content */}
-        <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
+        <div className="flex-1 flex items-center justify-center pt-4 sm:pt-8 pb-0">
           <div className="text-center px-3 sm:px-4 w-full max-w-6xl">
             {/* Auction Logo & Name */}
             <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-3">
@@ -282,8 +282,7 @@ export function CountdownToLiveWrapper({
                   {auction.description}
                 </p>
               )}
-              <p className="text-sm sm:text-base md:text-xl lg:text-2xl text-blue-200">Starting Soon</p>
-              <div className="flex justify-center">
+              <div className="flex justify-center mt-4">
                 <Button
                   type="button"
                   variant="outline"
@@ -305,7 +304,7 @@ export function CountdownToLiveWrapper({
           </div>
         </div>
 
-        <div ref={knowPlayersSectionRef} id="know-your-players" className="px-4 sm:px-6 lg:px-8 pb-8">
+        <div ref={knowPlayersSectionRef} id="know-your-players" className="px-4 sm:px-6 lg:px-8 -mt-4 pb-4">
           <Card className="bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 shadow-lg">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
