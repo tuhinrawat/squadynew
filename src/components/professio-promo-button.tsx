@@ -65,7 +65,7 @@ export function ProfessioPromoButton() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
               <a
-                href="https://professio.ai/"
+                href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold px-4 py-2.5 transition-colors"
@@ -73,7 +73,7 @@ export function ProfessioPromoButton() {
                 Build an ATS Resume
               </a>
               <a
-                href="https://professio.ai/"
+                href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-purple-400/50 bg-purple-900/30 hover:bg-purple-800/50 text-white text-sm font-semibold px-4 py-2.5 transition-colors"
@@ -81,7 +81,7 @@ export function ProfessioPromoButton() {
                 Analyze My CV
               </a>
               <a
-                href="https://professio.ai/"
+                href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-md border border-purple-400/50 bg-purple-900/30 hover:bg-purple-800/50 text-white text-sm font-semibold px-4 py-2.5 transition-colors"
@@ -92,7 +92,7 @@ export function ProfessioPromoButton() {
 
             <div className="pt-2 border-t border-purple-500/30">
               <a
-                href="https://professio.ai/"
+                href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-sm font-semibold px-4 py-3 transition-all hover:scale-105 shadow-lg"

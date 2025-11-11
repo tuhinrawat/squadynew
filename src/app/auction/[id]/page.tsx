@@ -347,7 +347,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
                   <span className="text-xs sm:text-sm text-gray-400">© 2025 Squady. All rights reserved.</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-purple-600 text-white border-purple-500 shadow-sm hover:bg-purple-700">
+                  <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-purple-600 text-white border-purple-500 shadow-sm hover:bg-purple-700">
                     <span>Powered by</span>
                     <span className="font-semibold">Professio AI</span>
                   </a>
@@ -433,7 +433,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             
             {/* User Info */}
             <div className="flex items-center gap-4">
-              <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30">
+              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30">
                 <span className="hidden sm:inline">Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
@@ -453,7 +453,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       {/* Mobile promo banner */}
       <div className="sm:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="px-4 py-2 flex justify-center">
-          <a href="https://professio.ai/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm">
+          <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm">
             <span>Powered by</span>
             <span className="font-semibold">Professio AI</span>
           </a>
