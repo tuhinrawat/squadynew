@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, ArrowLeft, BookOpen, Play, Users, Settings, Globe, Zap, ChevronRight } from 'lucide-react'
+import { ArrowRight, ArrowLeft, BookOpen, Play, Users, Settings, Globe, Zap, ChevronRight, Instagram } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type TutorialStep = {
@@ -380,28 +380,38 @@ export default function TutorialPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Navigation */}
       <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center">
-              <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <Link href="/" className="flex items-center flex-shrink-0">
+              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
             </Link>
-            <div className="flex items-center space-x-2 sm:space-x-4">
-              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 animate-pulse">
-                <span className="hidden sm:inline">Powered by</span>
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {/* Instagram Icon - Always visible */}
+              <a
+                href="https://www.instagram.com/squady.auction/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-2"
+                aria-label="Follow us on Instagram"
+              >
+                <Instagram className="h-5 w-5" />
+              </a>
+              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 animate-pulse whitespace-nowrap">
+                <span className="hidden md:inline">Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
               <Link href="/register">
-                <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9 text-xs sm:text-sm">
                   Live Auctions
                 </Button>
               </Link>
               <Link href="/signin" className="hidden md:block">
-                <Button variant="ghost" className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9 text-xs sm:text-sm">
                   Sign In
                 </Button>
               </Link>
               <Link href="/signup">
-                <Button className="text-sm px-3 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white">
+                <Button size="sm" className="px-3 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs sm:text-sm">
                   <span className="hidden sm:inline">Get Started</span>
                   <span className="sm:hidden">Start</span>
                 </Button>
