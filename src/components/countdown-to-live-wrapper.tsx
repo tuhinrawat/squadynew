@@ -418,13 +418,13 @@ export function CountdownToLiveWrapper({
                     return (
                       <div
                         key={card.id}
-                        className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${isBidder ? 'border-violet-300 shadow-[0_0_25px_rgba(168,85,247,0.45)] animate-pulse' : 'border-white/20'} bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 max-w-md mx-auto w-full`}
+                        className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${isBidder ? 'border-violet-400 shadow-[0_0_20px_rgba(168,85,247,0.6)] bg-gradient-to-br from-violet-900 via-purple-900 to-slate-950' : 'border-white/20 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950'} max-w-md mx-auto w-full`}
                       >
                         {/* Status Badge */}
                         <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
                           <Badge
                             variant="secondary"
-                            className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300 shadow-[0_0_12px_rgba(165,105,255,0.6)]' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[9px] sm:text-xs font-bold`}
+                            className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[9px] sm:text-xs font-bold`}
                           >
                             {card.statusLabel}
                           </Badge>
