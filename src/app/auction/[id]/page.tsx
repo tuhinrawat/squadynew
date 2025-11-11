@@ -164,7 +164,9 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
                      auction.status === 'PAUSED' ? '⏸️ PAUSED' : 
                      auction.status === 'COMPLETED' ? '✅ COMPLETED' : '📋 DRAFT'
 
-  const imageUrl = auction.image || '/squady-logo.svg'
+  // Always use Squady logo for social sharing with absolute URL
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'
+  const imageUrl = `${siteUrl}/squady-logo.svg`
 
   return {
     title,
@@ -181,7 +183,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
           url: imageUrl,
           width: 1200,
           height: 630,
-          alt: auction.name,
+          alt: 'Squady - Live Auction Platform',
         }
       ]
     },
