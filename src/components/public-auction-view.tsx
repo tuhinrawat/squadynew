@@ -703,22 +703,32 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     name={playerName}
                     imageUrl={(() => {
                       const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo'] || playerData['PROFILE PHOTO'] || playerData['profile_photo']
-                      if (!profilePhotoLink) return undefined
+                      console.log('Profile Photo Link for', playerName, ':', profilePhotoLink)
+                      if (!profilePhotoLink) {
+                        console.log('No profile photo link found for', playerName)
+                        return undefined
+                      }
                       // Try to extract Google Drive ID from various formats
                       // Format 1: https://drive.google.com/file/d/[ID]/view
                       let match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
                       if (match && match[1]) {
-                        return `/api/proxy-image?id=${match[1]}`
+                        const url = `/api/proxy-image?id=${match[1]}`
+                        console.log('Constructed proxy URL for', playerName, ':', url)
+                        return url
                       }
                       // Format 2: https://drive.google.com/open?id=[ID]
                       match = profilePhotoLink.match(/[?&]id=([a-zA-Z0-9_-]+)/)
                       if (match && match[1]) {
-                        return `/api/proxy-image?id=${match[1]}`
+                        const url = `/api/proxy-image?id=${match[1]}`
+                        console.log('Constructed proxy URL (format 2) for', playerName, ':', url)
+                        return url
                       }
                       // If it's already a valid URL, use it directly
                       if (typeof profilePhotoLink === 'string' && (profilePhotoLink.startsWith('http://') || profilePhotoLink.startsWith('https://'))) {
+                        console.log('Using direct URL for', playerName, ':', profilePhotoLink)
                         return profilePhotoLink
                       }
+                      console.log('Returning raw profile photo link for', playerName, ':', profilePhotoLink)
                       return profilePhotoLink
                     })()}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}

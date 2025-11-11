@@ -1578,7 +1578,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                                           playerData['profile_photo'] ||
                                           playerData['ProfilePhoto']
                   
+                  console.log('Admin - Profile Photo Link for', playerName, ':', profilePhotoLink)
+                  
                   if (!profilePhotoLink || profilePhotoLink === '') {
+                    console.log('Admin - No profile photo link found for', playerName)
                     return undefined
                   }
                   
@@ -1588,20 +1591,26 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   // Format 1: https://drive.google.com/file/d/[ID]/view
                   let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
                   if (match && match[1]) {
-                    return `/api/proxy-image?id=${match[1]}`
+                    const url = `/api/proxy-image?id=${match[1]}`
+                    console.log('Admin - Constructed proxy URL for', playerName, ':', url)
+                    return url
                   }
                   
                   // Format 2: https://drive.google.com/open?id=[ID]
                   match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
                   if (match && match[1]) {
-                    return `/api/proxy-image?id=${match[1]}`
+                    const url = `/api/proxy-image?id=${match[1]}`
+                    console.log('Admin - Constructed proxy URL (format 2) for', playerName, ':', url)
+                    return url
                   }
                   
                   // If it's already a valid URL, use it directly
                   if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+                    console.log('Admin - Using direct URL for', playerName, ':', photoStr)
                     return photoStr
                   }
                   
+                  console.log('Admin - No valid URL format found for', playerName)
                   return undefined
                 })()}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
