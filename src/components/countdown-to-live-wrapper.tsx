@@ -252,14 +252,15 @@ export function CountdownToLiveWrapper({
         <header className="w-full bg-black/70 backdrop-blur-md border-b border-white/40">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-14 sm:h-16">
-              <Link href="/" className="flex items-center flex-shrink-0">
+              <Link href="/" className="flex flex-col items-start justify-center flex-shrink-0">
                 <Image 
                   src="/squady-logo.svg" 
                   alt="Squady" 
                   width={100} 
                   height={33} 
-                  className="h-7 sm:h-8 w-auto brightness-0 invert"
+                  className="h-6 sm:h-7 w-auto brightness-0 invert"
                 />
+                <span className="text-[8px] sm:text-[9px] text-white/60 -mt-0.5">Powered by Professio</span>
               </Link>
               <div className="flex items-center gap-0.5 sm:gap-3">
                 {/* Instagram Icon */}
@@ -684,14 +685,15 @@ export function CountdownToLiveWrapper({
         <header className="w-full bg-black/70 backdrop-blur-md border-b border-white/40">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-14 sm:h-16">
-              <Link href="/" className="flex items-center flex-shrink-0">
+              <Link href="/" className="flex flex-col items-start justify-center flex-shrink-0">
                 <Image 
                   src="/squady-logo.svg" 
                   alt="Squady" 
                   width={100} 
                   height={33} 
-                  className="h-7 sm:h-8 w-auto brightness-0 invert"
+                  className="h-6 sm:h-7 w-auto brightness-0 invert"
                 />
+                <span className="text-[8px] sm:text-[9px] text-white/60 -mt-0.5">Powered by Professio</span>
               </Link>
               <div className="flex items-center gap-0.5 sm:gap-3">
                 {/* Instagram Icon */}
