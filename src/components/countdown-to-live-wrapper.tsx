@@ -260,7 +260,7 @@ export function CountdownToLiveWrapper({
                   height={33} 
                   className="h-6 sm:h-7 w-auto brightness-0 invert"
                 />
-                <span className="text-[8px] sm:text-[9px] text-white/60 -mt-0.5">Powered by Professio</span>
+                <span className="text-[8px] sm:text-[9px] text-white/60 mt-0.5">Powered by Professio</span>
               </Link>
               <div className="flex items-center gap-0.5 sm:gap-3">
                 {/* Instagram Icon */}
@@ -693,7 +693,7 @@ export function CountdownToLiveWrapper({
                   height={33} 
                   className="h-6 sm:h-7 w-auto brightness-0 invert"
                 />
-                <span className="text-[8px] sm:text-[9px] text-white/60 -mt-0.5">Powered by Professio</span>
+                <span className="text-[8px] sm:text-[9px] text-white/60 mt-0.5">Powered by Professio</span>
               </Link>
               <div className="flex items-center gap-0.5 sm:gap-3">
                 {/* Instagram Icon */}
