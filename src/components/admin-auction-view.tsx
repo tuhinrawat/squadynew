@@ -248,7 +248,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             <div key={bidder.id} className={`p-1.5 rounded-lg shadow-sm ${bidder.id === highestBidderId ? 'bg-green-50 dark:bg-green-900/20' : 'bg-white dark:bg-gray-800'}`}>
               <div className="flex flex-col gap-1.5">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-semibold truncate text-gray-900 dark:text-gray-100">{bidder.teamName || bidder.user?.name || 'Bidder'}</div>
+                  <div className="text-[10px] font-bold truncate text-gray-900 dark:text-gray-100">{bidder.user?.name || bidder.username || 'Bidder'}</div>
+                  {bidder.teamName && <div className="text-[9px] font-medium truncate text-gray-600 dark:text-gray-400">{bidder.teamName}</div>}
                   <div className="text-[9px] font-medium text-gray-700 dark:text-gray-300">₹{bidder.remainingPurse.toLocaleString('en-IN')}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-1">
