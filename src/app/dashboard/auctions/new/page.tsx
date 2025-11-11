@@ -47,9 +47,9 @@ export default function NewAuction() {
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setErrors({ ...errors, image: 'File too large. Maximum size is 5MB' })
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors({ ...errors, image: 'File too large. Maximum size is 2MB' })
       return
     }
 
@@ -282,7 +282,7 @@ export default function NewAuction() {
                           <span className="font-semibold text-blue-600 dark:text-blue-400">Click to upload</span> or drag and drop
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-500">
-                          PNG, JPG, GIF or WebP (max 5MB)
+                          PNG, JPG, GIF or WebP (max 2MB)
                         </p>
                       </>
                     )}

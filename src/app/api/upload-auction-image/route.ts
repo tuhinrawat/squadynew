@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,48 +13,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed' },
+        { error: 'Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed' },
         { status: 400 }
       )
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024 // 5MB
+    // Validate file size (max 2MB for base64 storage)
+    const maxSize = 2 * 1024 * 1024 // 2MB
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: 'File too large. Maximum size is 5MB' },
+        { error: 'File too large. Maximum size is 2MB for optimal performance' },
         { status: 400 }
       )
     }
 
-    // Create unique filename
-    const timestamp = Date.now()
-    const randomString = Math.random().toString(36).substring(7)
-    const extension = file.name.split('.').pop()
-    const filename = `auction-${timestamp}-${randomString}.${extension}`
-
-    // Ensure upload directory exists
-    const uploadDir = join(process.cwd(), 'public', 'uploads', 'auctions')
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
-
-    // Convert file to buffer and save
+    // Convert file to base64 data URL (works on serverless platforms)
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    
-    const filepath = join(uploadDir, filename)
-    await writeFile(filepath, buffer)
-
-    // Return the public URL
-    const imageUrl = `/uploads/auctions/${filename}`
+    const base64 = buffer.toString('base64')
+    const mimeType = file.type
+    const dataUrl = `data:${mimeType};base64,${base64}`
 
     return NextResponse.json({
       success: true,
-      imageUrl,
+      imageUrl: dataUrl,
       message: 'Image uploaded successfully'
     })
   } catch (error) {
