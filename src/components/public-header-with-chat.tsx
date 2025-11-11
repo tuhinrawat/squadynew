@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Instagram } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { PROFESSIO_URL_HEADER } from '@/lib/constants'
 
@@ -36,8 +36,18 @@ export function PublicHeaderWithChat({ auctionId }: PublicHeaderWithChatProps) {
                 <span className="font-semibold">Professio</span>
               </a>
             </div>
-            {/* Right: Chat Icon + Register & Sign In (Desktop only) */}
+            {/* Right: Instagram + Chat Icon + Register & Sign In (Desktop only) */}
             <div className="flex items-center gap-2 sm:gap-4">
+              {/* Instagram Icon - Always visible */}
+              <a
+                href="https://www.instagram.com/squady.auction/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300"
+              >
+                <Instagram className="h-5 w-5" />
+                <span className="sr-only">Follow us on Instagram</span>
+              </a>
               {/* Chat Icon - Always visible */}
               <Button
                 onClick={() => setIsChatOpen(true)}
