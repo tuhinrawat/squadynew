@@ -1570,49 +1570,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   <PlayerCard
                 name={playerName}
                 imageUrl={(() => {
-                  // Check all possible column name variations
-                  const profilePhotoLink = playerData['Profile Photo'] || 
-                                          playerData['profile photo'] || 
-                                          playerData['Profile photo'] || 
-                                          playerData['PROFILE PHOTO'] || 
-                                          playerData['profile_photo'] ||
-                                          playerData['ProfilePhoto']
-                  
-                  console.log('Admin - Profile Photo Link for', playerName, ':', profilePhotoLink)
-                  console.log('Admin - All available fields for', playerName, ':', Object.keys(playerData))
-                  
-                  if (!profilePhotoLink || profilePhotoLink === '') {
-                    console.log('Admin - No profile photo link found for', playerName)
-                    console.log('Admin - PlayerData:', playerData)
-                    return undefined
-                  }
-                  
-                  const photoStr = String(profilePhotoLink).trim()
-                  
-                  // Try to extract Google Drive ID from various formats
-                  // Format 1: https://drive.google.com/file/d/[ID]/view
+                  const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
+                  const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+                  if (!value) return undefined
+                  const photoStr = String(value).trim()
                   let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
                   if (match && match[1]) {
-                    const url = `/api/proxy-image?id=${match[1]}`
-                    console.log('Admin - Constructed proxy URL for', playerName, ':', url)
-                    return url
+                    return `/api/proxy-image?id=${match[1]}`
                   }
-                  
-                  // Format 2: https://drive.google.com/open?id=[ID]
                   match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
                   if (match && match[1]) {
-                    const url = `/api/proxy-image?id=${match[1]}`
-                    console.log('Admin - Constructed proxy URL (format 2) for', playerName, ':', url)
-                    return url
+                    return `/api/proxy-image?id=${match[1]}`
                   }
-                  
-                  // If it's already a valid URL, use it directly
                   if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-                    console.log('Admin - Using direct URL for', playerName, ':', photoStr)
                     return photoStr
                   }
-                  
-                  console.log('Admin - No valid URL format found for', playerName)
                   return undefined
                 })()}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}

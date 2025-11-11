@@ -702,36 +702,22 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       <PlayerCard
                     name={playerName}
                     imageUrl={(() => {
-                      const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo'] || playerData['PROFILE PHOTO'] || playerData['profile_photo']
-                      console.log('Profile Photo Link for', playerName, ':', profilePhotoLink)
-                      console.log('All available fields for', playerName, ':', Object.keys(playerData))
-                      if (!profilePhotoLink) {
-                        console.log('No profile photo link found for', playerName)
-                        console.log('PlayerData:', playerData)
-                        return undefined
-                      }
-                      // Try to extract Google Drive ID from various formats
-                      // Format 1: https://drive.google.com/file/d/[ID]/view
-                      let match = profilePhotoLink.match(/\/d\/([a-zA-Z0-9_-]+)/)
+                      const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
+                      const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+                      if (!value) return undefined
+                      const photoStr = String(value).trim()
+                      let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
                       if (match && match[1]) {
-                        const url = `/api/proxy-image?id=${match[1]}`
-                        console.log('Constructed proxy URL for', playerName, ':', url)
-                        return url
+                        return `/api/proxy-image?id=${match[1]}`
                       }
-                      // Format 2: https://drive.google.com/open?id=[ID]
-                      match = profilePhotoLink.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+                      match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
                       if (match && match[1]) {
-                        const url = `/api/proxy-image?id=${match[1]}`
-                        console.log('Constructed proxy URL (format 2) for', playerName, ':', url)
-                        return url
+                        return `/api/proxy-image?id=${match[1]}`
                       }
-                      // If it's already a valid URL, use it directly
-                      if (typeof profilePhotoLink === 'string' && (profilePhotoLink.startsWith('http://') || profilePhotoLink.startsWith('https://'))) {
-                        console.log('Using direct URL for', playerName, ':', profilePhotoLink)
-                        return profilePhotoLink
+                      if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+                        return photoStr
                       }
-                      console.log('Returning raw profile photo link for', playerName, ':', profilePhotoLink)
-                      return profilePhotoLink
+                      return undefined
                     })()}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}

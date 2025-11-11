@@ -79,16 +79,12 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 										alt={name} 
 										className="w-full h-full object-contain"
 										onError={(e) => {
-											console.error(`Failed to load image for ${name}:`, imageUrl)
 											// If image fails to load, hide it and show initials
 											e.currentTarget.style.display = 'none'
 											const parent = e.currentTarget.parentElement
 											if (parent) {
 												parent.innerHTML = `<span class="text-8xl sm:text-9xl font-black text-white/80">${name.charAt(0).toUpperCase()}</span>`
 											}
-										}}
-										onLoad={() => {
-											console.log(`Successfully loaded image for ${name}:`, imageUrl)
 										}}
 									/>
 								</div>
