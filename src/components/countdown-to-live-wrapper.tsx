@@ -216,7 +216,7 @@ export function CountdownToLiveWrapper({
     return (
       <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
         {/* Header with Squady Logo, Instagram and Professio Branding */}
-        <header className="w-full bg-black/40 backdrop-blur-sm border-b border-white/20">
+        <header className="w-full bg-black/70 backdrop-blur-md border-b border-white/40">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
               {/* Squady Logo */}
@@ -247,7 +247,7 @@ export function CountdownToLiveWrapper({
                   href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-[9px] sm:text-xs font-semibold hover:bg-white/20 transition-colors shadow-sm whitespace-nowrap"
+                  className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/50 bg-white/25 backdrop-blur-md text-white text-[9px] sm:text-xs font-semibold hover:bg-white/35 transition-colors shadow-sm whitespace-nowrap"
                 >
                   <span className="text-[9px] sm:text-xs">Powered by</span>
                   <span className="text-[9px] sm:text-xs font-bold">Professio AI</span>
@@ -265,7 +265,7 @@ export function CountdownToLiveWrapper({
               {/* Auction Logo - Large centered display */}
               {auction.image && (
                 <div className="flex flex-col items-center">
-                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/20 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/30 shadow-2xl">
+                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/40 backdrop-blur-md rounded-2xl p-4 border-2 border-white/60 shadow-2xl">
                     <Image 
                       src={auction.image} 
                       alt={auction.name} 
@@ -283,9 +283,9 @@ export function CountdownToLiveWrapper({
               
               {/* Official Tech Partner Badge - Smaller */}
               <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/30 backdrop-blur-sm rounded-md border border-white/40">
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/50 backdrop-blur-md rounded-md border border-white/60">
                   <span className="text-white text-[9px] sm:text-[10px] font-medium">Official Tech Partner</span>
-                  <div className="h-3 w-px bg-white/50"></div>
+                  <div className="h-3 w-px bg-white/70"></div>
                   <Image 
                     src="/squady-logo.svg" 
                     alt="Squady" 
@@ -319,7 +319,7 @@ export function CountdownToLiveWrapper({
                   type="button"
                   variant="outline"
                   onClick={scrollToKnowPlayers}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/40 backdrop-blur-sm text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5"
+                  className="bg-white/35 hover:bg-white/45 text-white border-white/60 backdrop-blur-md text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5"
                 >
                   <Eye className="h-4 w-4" />
                   Know Your Players
@@ -582,7 +582,7 @@ export function CountdownToLiveWrapper({
   if (!showCountdown && (auctionData.status === 'DRAFT' || auctionData.status === 'PAUSED')) {
     return (
       <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
-        <header className="w-full bg-black/40 backdrop-blur-sm border-b border-white/20">
+        <header className="w-full bg-black/70 backdrop-blur-md border-b border-white/40">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
               {/* Squady Logo */}
@@ -600,7 +600,7 @@ export function CountdownToLiveWrapper({
                   type="button"
                   variant="outline"
                   onClick={scrollToKnowPlayers}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/40 backdrop-blur-sm text-[10px] sm:text-xs px-2 py-1 flex items-center gap-1"
+                  className="bg-white/35 hover:bg-white/45 text-white border-white/60 backdrop-blur-md text-[10px] sm:text-xs px-2 py-1 flex items-center gap-1"
                 >
                   <Eye className="h-3 w-3" />
                   Know Players
@@ -609,7 +609,7 @@ export function CountdownToLiveWrapper({
                   href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-[9px] sm:text-xs md:text-sm font-semibold hover:bg-white/20 transition-colors shadow-sm"
+                  className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/50 bg-white/25 backdrop-blur-md text-white text-[9px] sm:text-xs md:text-sm font-semibold hover:bg-white/35 transition-colors shadow-sm"
                 >
                   <span className="text-[9px] sm:text-xs md:text-sm">Powered by</span>
                   <span className="text-[9px] sm:text-xs md:text-sm font-bold">Professio AI</span>
@@ -625,7 +625,7 @@ export function CountdownToLiveWrapper({
               {/* Auction Logo */}
               {auctionData.image && (
                 <div className="flex flex-col items-center">
-                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-white/20 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/30 shadow-2xl">
+                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-white/40 backdrop-blur-md rounded-2xl p-4 border-2 border-white/60 shadow-2xl">
                     <Image 
                       src={auctionData.image} 
                       alt={auctionData.name} 
@@ -643,9 +643,9 @@ export function CountdownToLiveWrapper({
               
               {/* Official Tech Partner Badge - Smaller */}
               <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/30 backdrop-blur-sm rounded-md border border-white/40">
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-white/50 backdrop-blur-md rounded-md border border-white/60">
                   <span className="text-white text-[9px] sm:text-[10px] font-medium">Official Tech Partner</span>
-                  <div className="h-3 w-px bg-white/50"></div>
+                  <div className="h-3 w-px bg-white/70"></div>
                   <Image 
                     src="/squady-logo.svg" 
                     alt="Squady" 
@@ -678,7 +678,7 @@ export function CountdownToLiveWrapper({
                 <p className="text-xl sm:text-2xl md:text-3xl text-blue-200 mb-6">
                   Waiting for auction to start...
                 </p>
-                <div className="bg-white/20 backdrop-blur-sm border border-white/30 rounded-lg p-6">
+                <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-lg p-6">
                   <p className="text-base sm:text-lg text-purple-200">
                     The scheduled time has arrived. The auction will begin shortly.
                   </p>
