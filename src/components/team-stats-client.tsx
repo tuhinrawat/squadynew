@@ -43,6 +43,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   const [bidModalPlayer, setBidModalPlayer] = useState<Player | null>(null)
   const [bidModalItems, setBidModalItems] = useState<any[]>([])
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
+  const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders'>('all')
 
   // Subscribe to real-time updates with incremental updates (no API calls - millisecond latency)
   useEffect(() => {
@@ -221,8 +222,9 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       const basePriceRaw = playerData?.['Base Price'] || playerData?.['base price']
       const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
       const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
+      const role = playerData?.Role || playerData?.role || ''
       const statsSummary = [
-        playerData?.Role || playerData?.role,
+        role,
         playerData?.Batting || playerData?.batting,
         playerData?.Bowling || playerData?.bowling
       ].filter(Boolean).join(' • ')
@@ -251,6 +253,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
           ? bidder ? (bidder.teamName || bidder.username) : 'Sold'
           : 'Available in pool',
         specialty,
+        role,
         statsSummary,
         purchasedPrice: player.status === 'SOLD' ? (player.soldPrice || 0) : null,
         basePrice: basePrice,
@@ -258,6 +261,31 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       }
     })
   }, [sortedPlayers, auction.bidders])
+
+  // Filter players based on selected filter
+  const filteredPlayerCards = useMemo(() => {
+    if (playerFilter === 'all') {
+      return playerCards
+    }
+    
+    return playerCards.filter(card => {
+      const roleStr = (card.role || '').toLowerCase()
+      const specialtyStr = (card.specialty || '').toLowerCase()
+      
+      switch (playerFilter) {
+        case 'batsmen':
+          return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+        case 'bowlers':
+          return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+        case 'all-rounders':
+          return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+        case 'bidders':
+          return card.isBidder
+        default:
+          return true
+      }
+    })
+  }, [playerCards, playerFilter])
 
   const selectedTeamData = selectedTeam 
     ? teamsData.find(t => t.id === selectedTeam)
@@ -974,13 +1002,90 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               <Card className="bg-white/10 backdrop-blur-md border-white/20">
                 <CardContent className="p-3 sm:p-6">
                   <h3 className="text-white text-sm sm:text-base font-semibold mb-4">Know Your Players</h3>
+                  
+                  {/* Filter Buttons */}
+                  <div className="mb-4 sm:mb-6 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant={playerFilter === 'all' ? 'default' : 'outline'}
+                      onClick={() => setPlayerFilter('all')}
+                      className={`${
+                        playerFilter === 'all'
+                          ? 'bg-white text-blue-900 hover:bg-white/90'
+                          : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                      } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                    >
+                      All ({playerCards.length})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={playerFilter === 'batsmen' ? 'default' : 'outline'}
+                      onClick={() => setPlayerFilter('batsmen')}
+                      className={`${
+                        playerFilter === 'batsmen'
+                          ? 'bg-white text-blue-900 hover:bg-white/90'
+                          : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                      } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                    >
+                      Batsmen ({playerCards.filter(card => {
+                        const roleStr = (card.role || '').toLowerCase()
+                        const specialtyStr = (card.specialty || '').toLowerCase()
+                        return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+                      }).length})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={playerFilter === 'bowlers' ? 'default' : 'outline'}
+                      onClick={() => setPlayerFilter('bowlers')}
+                      className={`${
+                        playerFilter === 'bowlers'
+                          ? 'bg-white text-blue-900 hover:bg-white/90'
+                          : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                      } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                    >
+                      Bowlers ({playerCards.filter(card => {
+                        const roleStr = (card.role || '').toLowerCase()
+                        const specialtyStr = (card.specialty || '').toLowerCase()
+                        return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+                      }).length})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={playerFilter === 'all-rounders' ? 'default' : 'outline'}
+                      onClick={() => setPlayerFilter('all-rounders')}
+                      className={`${
+                        playerFilter === 'all-rounders'
+                          ? 'bg-white text-blue-900 hover:bg-white/90'
+                          : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                      } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
+                    >
+                      All Rounders ({playerCards.filter(card => {
+                        const roleStr = (card.role || '').toLowerCase()
+                        const specialtyStr = (card.specialty || '').toLowerCase()
+                        return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+                      }).length})
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={playerFilter === 'bidders' ? 'default' : 'outline'}
+                      onClick={() => setPlayerFilter('bidders')}
+                      className={`${
+                        playerFilter === 'bidders'
+                          ? 'bg-white text-blue-900 hover:bg-white/90'
+                          : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
+                      } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                    >
+                      Bidders ({playerCards.filter(card => card.isBidder).length})
+                    </Button>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                    {sortedPlayers.length === 0 ? (
+                    {filteredPlayerCards.length === 0 ? (
                       <div className="col-span-full text-center text-white/70 py-8">
-                        No players found in this auction roster.
+                        No players found{playerFilter !== 'all' ? ` for ${playerFilter}` : ' in this auction roster'}.
                       </div>
                     ) : (
-                      playerCards.map(card => (
+                      filteredPlayerCards.map(card => (
                             <div
                               key={card.id}
                               className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${card.isBidder ? 'border-violet-300 shadow-[0_0_25px_rgba(168,85,247,0.45)] animate-pulse' : 'border-white/20'} bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 max-w-md mx-auto w-full`}

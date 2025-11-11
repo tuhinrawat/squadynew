@@ -46,6 +46,7 @@ export function CountdownToLiveWrapper({
   const [stats, setStats] = useState(initialStats)
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
+  const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders'>('all')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
 
@@ -71,8 +72,9 @@ export function CountdownToLiveWrapper({
         return undefined
       })()
       const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
+      const role = playerData?.Role || playerData?.role || ''
       const statsSummary = [
-        playerData?.Role || playerData?.role,
+        role,
         playerData?.Batting || playerData?.batting,
         playerData?.Bowling || playerData?.bowling
       ].filter(Boolean).join(' • ')
@@ -80,12 +82,13 @@ export function CountdownToLiveWrapper({
       const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
       const cricherosLink = playerData?.['Cricheros Profile'] || playerData?.['cricheros profile'] || playerData?.['Cricheros Link'] || playerData?.['cricheros_profile']
       const status = player.status
+      const isBidder = status === 'RETIRED'
 
       const statusLabel = status === 'SOLD'
         ? 'Sold'
         : status === 'UNSOLD'
           ? 'Unsold'
-          : status === 'RETIRED'
+          : isBidder
             ? 'Bidder'
             : 'Available'
 
@@ -94,14 +97,41 @@ export function CountdownToLiveWrapper({
         name: playerData?.name || playerData?.Name || playerData?.player_name || 'Unknown Player',
         imageUrl,
         specialty,
+        role,
         statsSummary,
         basePrice,
         statusLabel,
+        isBidder,
         purchasedPrice: status === 'SOLD' ? (player.soldPrice || 0) : null,
         cricherosLink
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
   }, [auction.players])
+
+  // Filter players based on selected filter
+  const filteredKnowYourPlayersCards = useMemo(() => {
+    if (playerFilter === 'all') {
+      return knowYourPlayersCards
+    }
+    
+    return knowYourPlayersCards.filter(card => {
+      const roleStr = (card.role || '').toLowerCase()
+      const specialtyStr = (card.specialty || '').toLowerCase()
+      
+      switch (playerFilter) {
+        case 'batsmen':
+          return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+        case 'bowlers':
+          return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+        case 'all-rounders':
+          return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+        case 'bidders':
+          return card.isBidder
+        default:
+          return true
+      }
+    })
+  }, [knowYourPlayersCards, playerFilter])
 
   const scrollToKnowPlayers = useCallback(() => {
     knowPlayersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -287,13 +317,91 @@ export function CountdownToLiveWrapper({
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {knowYourPlayersCards.length === 0 ? (
+              {/* Filter Buttons */}
+              <div className="mb-4 sm:mb-6 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={playerFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setPlayerFilter('all')}
+                  className={`${
+                    playerFilter === 'all'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                >
+                  All ({knowYourPlayersCards.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={playerFilter === 'batsmen' ? 'default' : 'outline'}
+                  onClick={() => setPlayerFilter('batsmen')}
+                  className={`${
+                    playerFilter === 'batsmen'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                >
+                  Batsmen ({knowYourPlayersCards.filter(card => {
+                    const roleStr = (card.role || '').toLowerCase()
+                    const specialtyStr = (card.specialty || '').toLowerCase()
+                    return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+                  }).length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={playerFilter === 'bowlers' ? 'default' : 'outline'}
+                  onClick={() => setPlayerFilter('bowlers')}
+                  className={`${
+                    playerFilter === 'bowlers'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                >
+                  Bowlers ({knowYourPlayersCards.filter(card => {
+                    const roleStr = (card.role || '').toLowerCase()
+                    const specialtyStr = (card.specialty || '').toLowerCase()
+                    return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+                  }).length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={playerFilter === 'all-rounders' ? 'default' : 'outline'}
+                  onClick={() => setPlayerFilter('all-rounders')}
+                  className={`${
+                    playerFilter === 'all-rounders'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
+                >
+                  All Rounders ({knowYourPlayersCards.filter(card => {
+                    const roleStr = (card.role || '').toLowerCase()
+                    const specialtyStr = (card.specialty || '').toLowerCase()
+                    return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+                  }).length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant={playerFilter === 'bidders' ? 'default' : 'outline'}
+                  onClick={() => setPlayerFilter('bidders')}
+                  className={`${
+                    playerFilter === 'bidders'
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                >
+                  Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})
+                </Button>
+              </div>
+
+              {filteredKnowYourPlayersCards.length === 0 ? (
                 <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
-                  Player list not available yet. Check back soon!
+                  {knowYourPlayersCards.length === 0 
+                    ? 'Player list not available yet. Check back soon!' 
+                    : `No players found${playerFilter !== 'all' ? ` for ${playerFilter}` : ''}.`}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                  {knowYourPlayersCards.map(card => {
+                  {filteredKnowYourPlayersCards.map(card => {
                     const isBidder = card.statusLabel === 'Bidder'
                     return (
                       <div
