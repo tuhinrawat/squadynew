@@ -233,7 +233,7 @@ export function CountdownToLiveWrapper({
             <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-3">
               {/* Auction Logo - Large centered display */}
               {auction.image && (
-                <div className="flex justify-center mb-4 sm:mb-6">
+                <div className="flex flex-col items-center mb-4 sm:mb-6">
                   <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
                     <Image 
                       src={auction.image} 
@@ -242,11 +242,28 @@ export function CountdownToLiveWrapper({
                       className="object-contain p-2"
                     />
                   </div>
+                  {/* Official Tech Partner Badge */}
+                  <div className="mt-4 flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                    <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
+                    <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+                    <Image 
+                      src="/squady-logo.svg" 
+                      alt="Squady" 
+                      width={80} 
+                      height={24} 
+                      className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                    />
+                  </div>
                 </div>
               )}
               <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-2 sm:mb-3 md:mb-4 drop-shadow-lg px-2 break-words">
                 {auction.name}
               </h1>
+              {auction.description && (
+                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-white/80 mb-3 sm:mb-4 px-4 max-w-3xl mx-auto">
+                  {auction.description}
+                </p>
+              )}
               <p className="text-sm sm:text-base md:text-xl lg:text-2xl text-blue-200">Starting Soon</p>
               <div className="flex justify-center">
                 <Button
@@ -491,7 +508,7 @@ export function CountdownToLiveWrapper({
           <div className="text-center px-4 max-w-2xl">
             {/* Auction Logo */}
             {auctionData.image && (
-              <div className="flex justify-center mb-6">
+              <div className="flex flex-col items-center mb-6">
                 <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
                   <Image 
                     src={auctionData.image} 
@@ -500,11 +517,28 @@ export function CountdownToLiveWrapper({
                     className="object-contain p-2"
                   />
                 </div>
+                {/* Official Tech Partner Badge */}
+                <div className="mt-4 flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                  <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
+                  <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+                  <Image 
+                    src="/squady-logo.svg" 
+                    alt="Squady" 
+                    width={80} 
+                    height={24} 
+                    className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                  />
+                </div>
               </div>
             )}
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
               {auction.name}
             </h1>
+            {auctionData.description && (
+              <p className="text-sm sm:text-base md:text-lg text-white/80 mb-4 px-4 max-w-2xl mx-auto">
+                {auctionData.description}
+              </p>
+            )}
             <p className="text-xl sm:text-2xl md:text-3xl text-blue-200 mb-6">
               Waiting for auction to start...
             </p>
