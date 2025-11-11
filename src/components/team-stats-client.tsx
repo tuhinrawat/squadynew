@@ -328,12 +328,12 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
             {/* Top row on mobile: Back button, Instagram and view toggle */}
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Link href={`/auction/${auction.id}`}>
+              <Link href={`/auction/${auction.id}`}>
                   <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 px-2 sm:px-3 h-9">
-                    <ArrowLeft className="h-4 w-4 sm:mr-2" />
-                    <span className="hidden sm:inline">{selectedTeam ? 'Back to Teams' : 'Back to Auction'}</span>
-                  </Button>
-                </Link>
+                  <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">{selectedTeam ? 'Back to Teams' : 'Back to Auction'}</span>
+                </Button>
+              </Link>
                 {/* Instagram Icon - Always visible */}
                 <a
                   href="https://www.instagram.com/squady.auction/"
@@ -632,6 +632,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                           src={teamData.logo}
                           alt={bidder.teamName || bidder.username}
                           className="w-full h-full object-contain p-2"
+                          loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
@@ -716,6 +718,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                           src={imageUrl}
                           alt={getPlayerName(player)}
                           className="w-full h-full object-contain p-2"
+                          loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement
                             target.style.display = 'none'
@@ -1123,6 +1127,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                       src={card.imageUrl}
                                       alt={card.name}
                                       className="w-full h-full object-contain p-2"
+                                      loading="lazy"
+                                      decoding="async"
                                       onError={(e) => {
                                         const target = e.currentTarget as HTMLImageElement
                                         target.style.display = 'none'
@@ -1148,9 +1154,9 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                   {/* Name and Specialty */}
                                   <div>
                                     <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2">
-                                      {card.name}
-                                    </h4>
-                                    {card.specialty && (
+                                    {card.name}
+                                  </h4>
+                                  {card.specialty && (
                                       <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
                                     )}
                                 </div>

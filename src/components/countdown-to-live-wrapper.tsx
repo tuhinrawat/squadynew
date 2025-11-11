@@ -484,6 +484,8 @@ export function CountdownToLiveWrapper({
                                 src={card.imageUrl}
                                 alt={card.name}
                                 className="w-full h-full object-contain p-2"
+                                loading="lazy"
+                                decoding="async"
                                 onError={(e) => {
                                   const target = e.currentTarget as HTMLImageElement
                                   target.style.display = 'none'
