@@ -704,7 +704,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     imageUrl={(() => {
                       const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
                       const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
-                      if (!value) return undefined
+                      if (!value) {
+                        console.log('DEBUG - Player data fields:', Object.keys(playerData))
+                        return undefined
+                      }
                       const photoStr = String(value).trim()
                       let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
                       if (match && match[1]) {
