@@ -1143,19 +1143,16 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                 <div className={`absolute inset-0 ${card.isBidder ? 'bg-gradient-to-t from-purple-900 via-transparent to-transparent' : 'bg-gradient-to-t from-slate-900 via-transparent to-transparent'}`} />
                                 </div>
 
-                              {/* Player Info */}
-                              <div className="p-3 sm:p-4 space-y-2">
-                                {/* Name and Bidder Status */}
-                                <div>
-                                  <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2">
-                                    {card.name}
-                                  </h4>
-                                  {card.isBidder && (
-                                    <p className="text-violet-300 text-[10px] sm:text-xs font-bold uppercase tracking-wide">Registered Bidder</p>
-                                  )}
-                                  {card.specialty && (
-                                    <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
-                                  )}
+                                {/* Player Info */}
+                                <div className="p-3 sm:p-4 space-y-2">
+                                  {/* Name and Specialty */}
+                                  <div>
+                                    <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2">
+                                      {card.name}
+                                    </h4>
+                                    {card.specialty && (
+                                      <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
+                                    )}
                                 </div>
 
                                 {/* Price Info */}

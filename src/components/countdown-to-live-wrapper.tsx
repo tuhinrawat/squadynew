@@ -247,8 +247,8 @@ export function CountdownToLiveWrapper({
                 {/* Powered by Professio - Desktop only */}
                 <a 
                   href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                target="_blank" 
+                rel="noopener noreferrer" 
                   className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs border-white/50 bg-white/25 backdrop-blur-md text-white hover:bg-white/35 transition-colors shadow-sm whitespace-nowrap"
                 >
                   <span className="hidden md:inline">Powered by</span>
@@ -506,14 +506,11 @@ export function CountdownToLiveWrapper({
 
                         {/* Player Info */}
                         <div className="p-3 sm:p-4 space-y-2">
-                          {/* Name and Bidder Status */}
+                          {/* Name and Specialty */}
                           <div>
                             <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2">
                               {card.name}
                             </h4>
-                            {isBidder && (
-                              <p className="text-violet-300 text-[10px] sm:text-xs font-bold uppercase tracking-wide">Registered Bidder</p>
-                            )}
                             {card.specialty && (
                               <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
                             )}
@@ -525,7 +522,7 @@ export function CountdownToLiveWrapper({
                               <div className="bg-violet-500/20 border border-violet-400/30 rounded-lg p-2 text-center">
                                 <p className="text-violet-200 text-[9px] sm:text-[10px] font-semibold">PARTICIPATING</p>
                                 <p className="text-white text-xs sm:text-sm font-bold">As Bidder</p>
-                              </div>
+                          </div>
                             ) : card.purchasedPrice !== null ? (
                               <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg p-2 text-center border-2 border-green-400/30">
                                 <p className="text-green-200 text-[9px] sm:text-[10px] font-semibold">PURCHASED FOR</p>
@@ -692,8 +689,8 @@ export function CountdownToLiveWrapper({
               
               {/* Auction Name - Bigger and prominent */}
               <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-4 sm:mb-6 drop-shadow-lg px-2 break-words">
-                {auction.name}
-              </h1>
+              {auction.name}
+            </h1>
               
               {/* Official Tech Partner Badge - Smaller */}
               <div className="flex flex-col items-center gap-2">
@@ -729,18 +726,18 @@ export function CountdownToLiveWrapper({
               
               {/* Waiting Message */}
               <div className="mt-8">
-                <p className="text-xl sm:text-2xl md:text-3xl text-blue-200 mb-6">
-                  Waiting for auction to start...
-                </p>
+            <p className="text-xl sm:text-2xl md:text-3xl text-blue-200 mb-6">
+              Waiting for auction to start...
+            </p>
                 <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-lg p-6">
-                  <p className="text-base sm:text-lg text-purple-200">
-                    The scheduled time has arrived. The auction will begin shortly.
-                  </p>
+              <p className="text-base sm:text-lg text-purple-200">
+                The scheduled time has arrived. The auction will begin shortly.
+              </p>
                 </div>
               </div>
             </div>
+            </div>
           </div>
-        </div>
         </div>
       </div>
     )
