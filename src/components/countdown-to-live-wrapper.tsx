@@ -274,16 +274,28 @@ export function CountdownToLiveWrapper({
                     />
                   </div>
                   {/* Official Tech Partner Badge */}
-                  <div className="mt-4 flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
-                    <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
-                    <div className="h-4 sm:h-5 w-px bg-white/50"></div>
-                    <Image 
-                      src="/squady-logo.svg" 
-                      alt="Squady" 
-                      width={80} 
-                      height={24} 
-                      className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
-                    />
+                  <div className="mt-4 flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                      <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
+                      <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+                      <Image 
+                        src="/squady-logo.svg" 
+                        alt="Squady" 
+                        width={80} 
+                        height={24} 
+                        className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                      />
+                    </div>
+                    {/* Instagram Follow Link */}
+                    <a
+                      href="https://www.instagram.com/squady.auction/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm font-medium group"
+                    >
+                      <Instagram className="h-4 w-4 text-pink-300 group-hover:text-pink-200 transition-colors" />
+                      <span>Follow Squady on Instagram</span>
+                    </a>
                   </div>
                 </div>
               )}
@@ -614,16 +626,28 @@ export function CountdownToLiveWrapper({
                   />
                 </div>
                 {/* Official Tech Partner Badge */}
-                <div className="mt-4 flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
-                  <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
-                  <div className="h-4 sm:h-5 w-px bg-white/50"></div>
-                  <Image 
-                    src="/squady-logo.svg" 
-                    alt="Squady" 
-                    width={80} 
-                    height={24} 
-                    className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
-                  />
+                <div className="mt-4 flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                    <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
+                    <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+                    <Image 
+                      src="/squady-logo.svg" 
+                      alt="Squady" 
+                      width={80} 
+                      height={24} 
+                      className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                    />
+                  </div>
+                  {/* Instagram Follow Link */}
+                  <a
+                    href="https://www.instagram.com/squady.auction/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm font-medium group"
+                  >
+                    <Instagram className="h-4 w-4 text-pink-300 group-hover:text-pink-200 transition-colors" />
+                    <span>Follow Squady on Instagram</span>
+                  </a>
                 </div>
               </div>
             )}
