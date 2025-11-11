@@ -15,13 +15,13 @@ export default function Home() {
             <div className="flex items-center flex-shrink-0">
               <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
             </div>
-            <div className="flex items-center gap-1 sm:gap-3">
+            <div className="flex items-center gap-0.5 sm:gap-3">
               {/* Instagram Icon - Always visible */}
               <a
                 href="https://www.instagram.com/squady.auction/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-1.5 sm:p-2"
+                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-1 sm:p-2"
                 aria-label="Follow us on Instagram"
               >
                 <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -31,13 +31,13 @@ export default function Home() {
                 <span className="hidden md:inline">Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
-              <Link href="/tutorial" className="hidden sm:block">
-                <Button variant="ghost" size="sm" className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9">
+              <Link href="/tutorial">
+                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
                   Tutorial
                 </Button>
               </Link>
               <Link href="/register">
-                <Button variant="ghost" size="sm" className="text-[10px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-8 sm:h-9 px-2 sm:px-3">
+                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
                   <span className="hidden sm:inline">Live Auctions</span>
                   <span className="sm:hidden">Auctions</span>
                 </Button>
@@ -48,7 +48,7 @@ export default function Home() {
                 </Button>
               </Link>
               <Link href="/signup">
-                <Button size="sm" className="px-2 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700 h-8 sm:h-9">
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700 h-7 sm:h-9 px-1.5 sm:px-4">
                   <span className="hidden sm:inline text-xs sm:text-sm">Get Started</span>
                   <LogIn className="h-4 w-4 sm:hidden" />
                 </Button>

@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowRight, ArrowLeft, BookOpen, Play, Users, Settings, Globe, Zap, ChevronRight, Instagram } from 'lucide-react'
+import { ArrowRight, ArrowLeft, BookOpen, Play, Users, Settings, Globe, Zap, ChevronRight, Instagram, LogIn } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type TutorialStep = {
@@ -385,35 +385,36 @@ export default function TutorialPage() {
             <Link href="/" className="flex items-center flex-shrink-0">
               <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
             </Link>
-            <div className="flex items-center gap-1.5 sm:gap-3">
+            <div className="flex items-center gap-0.5 sm:gap-3">
               {/* Instagram Icon - Always visible */}
               <a
                 href="https://www.instagram.com/squady.auction/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-2"
+                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-1 sm:p-2"
                 aria-label="Follow us on Instagram"
               >
-                <Instagram className="h-5 w-5" />
+                <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
               </a>
               <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 animate-pulse whitespace-nowrap">
                 <span className="hidden md:inline">Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
               <Link href="/register">
-                <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9 text-xs sm:text-sm">
-                  Live Auctions
+                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
+                  <span className="hidden sm:inline">Live Auctions</span>
+                  <span className="sm:hidden">Auctions</span>
                 </Button>
               </Link>
               <Link href="/signin" className="hidden md:block">
-                <Button variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9 text-xs sm:text-sm">
+                <Button variant="ghost" size="sm" className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9">
                   Sign In
                 </Button>
               </Link>
               <Link href="/signup">
-                <Button size="sm" className="px-3 sm:px-4 bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs sm:text-sm">
-                  <span className="hidden sm:inline">Get Started</span>
-                  <span className="sm:hidden">Start</span>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-7 sm:h-9 px-1.5 sm:px-4">
+                  <span className="hidden sm:inline text-xs sm:text-sm">Get Started</span>
+                  <LogIn className="h-4 w-4 sm:hidden" />
                 </Button>
               </Link>
             </div>
