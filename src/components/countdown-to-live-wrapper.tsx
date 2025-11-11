@@ -533,18 +533,11 @@ export function CountdownToLiveWrapper({
                                   href={card.cricherosLink}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex-shrink-0 p-1.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 hover:text-green-300 rounded-full transition-colors duration-200 border border-green-500/30"
+                                  className="flex-shrink-0 px-2 py-0.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 hover:text-green-300 rounded transition-colors duration-200 border border-green-500/30 text-[9px] sm:text-[10px] font-semibold"
                                   onClick={(e) => e.stopPropagation()}
                                   title="View Cricheros Profile"
                                 >
-                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0.5">
-                                    {/* Cricket Bat */}
-                                    <path d="M13 2L11 2L11 14L9 16L9 22L15 22L15 16L13 14L13 2Z" fill="currentColor" opacity="0.9"/>
-                                    {/* Cricket Ball */}
-                                    <circle cx="19" cy="7" r="3" fill="currentColor"/>
-                                    <path d="M17.5 6C17.5 5.5 18 5 19 5C20 5 20.5 5.5 20.5 6" stroke="currentColor" strokeWidth="0.5" fill="none"/>
-                                    <path d="M17.5 8C17.5 8.5 18 9 19 9C20 9 20.5 8.5 20.5 8" stroke="currentColor" strokeWidth="0.5" fill="none"/>
-                                  </svg>
+                                  Cricheros
                                 </a>
                             )}
                           </div>
