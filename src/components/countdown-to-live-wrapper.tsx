@@ -537,8 +537,13 @@ export function CountdownToLiveWrapper({
                                   onClick={(e) => e.stopPropagation()}
                                   title="View Cricheros Profile"
                                 >
-                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0.5">
+                                    {/* Cricket Bat */}
+                                    <path d="M13 2L11 2L11 14L9 16L9 22L15 22L15 16L13 14L13 2Z" fill="currentColor" opacity="0.9"/>
+                                    {/* Cricket Ball */}
+                                    <circle cx="19" cy="7" r="3" fill="currentColor"/>
+                                    <path d="M17.5 6C17.5 5.5 18 5 19 5C20 5 20.5 5.5 20.5 6" stroke="currentColor" strokeWidth="0.5" fill="none"/>
+                                    <path d="M17.5 8C17.5 8.5 18 9 19 9C20 9 20.5 8.5 20.5 8" stroke="currentColor" strokeWidth="0.5" fill="none"/>
                                   </svg>
                                 </a>
                             )}
