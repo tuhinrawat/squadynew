@@ -261,10 +261,10 @@ export function CountdownToLiveWrapper({
         <div className="flex-1 flex items-center justify-center pt-4 sm:pt-8 pb-0">
           <div className="text-center px-3 sm:px-4 w-full max-w-6xl">
             {/* Auction Logo & Name */}
-            <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-3">
+            <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-4 sm:space-y-6">
               {/* Auction Logo - Large centered display */}
               {auction.image && (
-                <div className="flex flex-col items-center mb-4 sm:mb-6">
+                <div className="flex flex-col items-center">
                   <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
                     <Image 
                       src={auction.image} 
@@ -273,41 +273,48 @@ export function CountdownToLiveWrapper({
                       className="object-contain p-2"
                     />
                   </div>
-                  {/* Official Tech Partner Badge */}
-                  <div className="mt-4 flex flex-col items-center gap-3">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
-                      <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
-                      <div className="h-4 sm:h-5 w-px bg-white/50"></div>
-                      <Image 
-                        src="/squady-logo.svg" 
-                        alt="Squady" 
-                        width={80} 
-                        height={24} 
-                        className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
-                      />
-                    </div>
-                    {/* Instagram Follow Link */}
-                    <a
-                      href="https://www.instagram.com/squady.auction/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm font-medium group"
-                    >
-                      <Instagram className="h-4 w-4 text-pink-300 group-hover:text-pink-200 transition-colors" />
-                      <span>Follow Squady on Instagram</span>
-                    </a>
-                  </div>
                 </div>
               )}
-              <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-2 sm:mb-3 md:mb-4 drop-shadow-lg px-2 break-words">
+              
+              {/* Auction Name - Bigger and prominent */}
+              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-4 sm:mb-6 drop-shadow-lg px-2 break-words">
                 {auction.name}
               </h1>
+              
+              {/* Official Tech Partner Badge */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                  <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
+                  <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+                  <Image 
+                    src="/squady-logo.svg" 
+                    alt="Squady" 
+                    width={80} 
+                    height={24} 
+                    className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                  />
+                </div>
+                {/* Instagram Follow Link */}
+                <a
+                  href="https://www.instagram.com/squady.auction/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm font-medium group"
+                >
+                  <Instagram className="h-4 w-4 text-pink-300 group-hover:text-pink-200 transition-colors" />
+                  <span>Follow Squady on Instagram</span>
+                </a>
+              </div>
+              
+              {/* Auction Description */}
               {auction.description && (
-                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-white/80 mb-3 sm:mb-4 px-4 max-w-3xl mx-auto">
+                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-white/80 px-4 max-w-3xl mx-auto">
                   {auction.description}
                 </p>
               )}
-              <div className="flex justify-center mt-4">
+              
+              {/* Know Your Players Button */}
+              <div className="flex justify-center mt-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -614,58 +621,69 @@ export function CountdownToLiveWrapper({
 
         <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
           <div className="text-center px-4 max-w-2xl">
-            {/* Auction Logo */}
-            {auctionData.image && (
-              <div className="flex flex-col items-center mb-6">
-                <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
-                  <Image 
-                    src={auctionData.image} 
-                    alt={auctionData.name} 
-                    fill
-                    className="object-contain p-2"
-                  />
-                </div>
-                {/* Official Tech Partner Badge */}
-                <div className="mt-4 flex flex-col items-center gap-3">
-                  <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
-                    <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
-                    <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+            <div className="space-y-4 sm:space-y-6">
+              {/* Auction Logo */}
+              {auctionData.image && (
+                <div className="flex flex-col items-center">
+                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
                     <Image 
-                      src="/squady-logo.svg" 
-                      alt="Squady" 
-                      width={80} 
-                      height={24} 
-                      className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                      src={auctionData.image} 
+                      alt={auctionData.name} 
+                      fill
+                      className="object-contain p-2"
                     />
                   </div>
-                  {/* Instagram Follow Link */}
-                  <a
-                    href="https://www.instagram.com/squady.auction/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm font-medium group"
-                  >
-                    <Instagram className="h-4 w-4 text-pink-300 group-hover:text-pink-200 transition-colors" />
-                    <span>Follow Squady on Instagram</span>
-                  </a>
+                </div>
+              )}
+              
+              {/* Auction Name - Bigger and prominent */}
+              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-4 sm:mb-6 drop-shadow-lg px-2 break-words">
+                {auction.name}
+              </h1>
+              
+              {/* Official Tech Partner Badge */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center gap-2 px-4 py-2 bg-white/20 backdrop-blur-sm rounded-lg border border-white/30">
+                  <span className="text-white text-xs sm:text-sm font-semibold">Official Tech Partner</span>
+                  <div className="h-4 sm:h-5 w-px bg-white/50"></div>
+                  <Image 
+                    src="/squady-logo.svg" 
+                    alt="Squady" 
+                    width={80} 
+                    height={24} 
+                    className="h-4 sm:h-5 w-auto brightness-0 invert opacity-100"
+                  />
+                </div>
+                {/* Instagram Follow Link */}
+                <a
+                  href="https://www.instagram.com/squady.auction/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-white/90 hover:text-white transition-colors text-xs sm:text-sm font-medium group"
+                >
+                  <Instagram className="h-4 w-4 text-pink-300 group-hover:text-pink-200 transition-colors" />
+                  <span>Follow Squady on Instagram</span>
+                </a>
+              </div>
+              
+              {/* Auction Description */}
+              {auctionData.description && (
+                <p className="text-sm sm:text-base md:text-lg text-white/80 px-4 max-w-2xl mx-auto">
+                  {auctionData.description}
+                </p>
+              )}
+              
+              {/* Waiting Message */}
+              <div className="mt-8">
+                <p className="text-xl sm:text-2xl md:text-3xl text-blue-200 mb-6">
+                  Waiting for auction to start...
+                </p>
+                <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-6">
+                  <p className="text-base sm:text-lg text-purple-200">
+                    The scheduled time has arrived. The auction will begin shortly.
+                  </p>
                 </div>
               </div>
-            )}
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
-              {auction.name}
-            </h1>
-            {auctionData.description && (
-              <p className="text-sm sm:text-base md:text-lg text-white/80 mb-4 px-4 max-w-2xl mx-auto">
-                {auctionData.description}
-              </p>
-            )}
-            <p className="text-xl sm:text-2xl md:text-3xl text-blue-200 mb-6">
-              Waiting for auction to start...
-            </p>
-            <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-lg p-6 mt-8">
-              <p className="text-base sm:text-lg text-purple-200">
-                The scheduled time has arrived. The auction will begin shortly.
-              </p>
             </div>
           </div>
         </div>
