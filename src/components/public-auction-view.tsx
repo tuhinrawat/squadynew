@@ -825,7 +825,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                               <img 
                                 src={proxyImageUrl}
                                 alt={playerName}
-                                className="rounded-full object-cover w-full h-full"
+                                className="rounded-full object-contain w-full h-full p-2"
                                 onError={(e) => {
                                   setIsImageLoading(false)
                                   logger.error('Image failed to load, showing initial')
