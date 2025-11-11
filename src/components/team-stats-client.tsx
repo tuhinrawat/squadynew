@@ -228,7 +228,21 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
         playerData?.Batting || playerData?.batting,
         playerData?.Bowling || playerData?.bowling
       ].filter(Boolean).join(' • ')
-      const cricherosLink = playerData?.['Cricheros Profile'] || playerData?.['cricheros profile'] || playerData?.['Cricheros Link'] || playerData?.['cricheros_profile']
+      const cricherosLink = (() => {
+        const link = playerData?.['Cricheroes Profile link'] || 
+                     playerData?.[' Cricheroes Profile link'] ||
+                     playerData?.['cricheroes profile link'] ||
+                     playerData?.['Cricheros Profile'] || 
+                     playerData?.['cricheros profile']
+        
+        if (link && typeof link === 'string') {
+          const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
+          if (urlMatch && urlMatch[1]) {
+            return urlMatch[1].trim()
+          }
+        }
+        return undefined
+      })()
       const isBidder = player.status === 'RETIRED'
       const statusLabel = (() => {
         if (player.status === 'SOLD') {
@@ -1151,12 +1165,28 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
 
                                 {/* Player Info */}
                                 <div className="p-3 sm:p-4 space-y-2">
-                                  {/* Name and Specialty */}
+                                  {/* Name with Cricheros Icon */}
                                   <div>
-                                    <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2">
-                                    {card.name}
-                                  </h4>
-                                  {card.specialty && (
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="text-white font-black text-sm sm:text-lg line-clamp-2 flex-1">
+                                        {card.name}
+                                      </h4>
+                                      {card.cricherosLink && (
+                                        <a
+                                          href={card.cricherosLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex-shrink-0 p-1.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 hover:text-green-300 rounded-full transition-colors duration-200 border border-green-500/30"
+                                          onClick={(e) => e.stopPropagation()}
+                                          title="View Cricheros Profile"
+                                        >
+                                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                                          </svg>
+                                        </a>
+                                      )}
+                                    </div>
+                                    {card.specialty && (
                                       <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
                                     )}
                                 </div>
@@ -1182,22 +1212,6 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                     </div>
                                   )}
                                 </div>
-
-                                {/* Cricheros Link */}
-                                {card.cricherosLink && (
-                                  <a
-                                    href={card.cricherosLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-xs font-semibold rounded-lg transition-colors duration-200 border border-white/30"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                    </svg>
-                                    <span>View Profile</span>
-                                  </a>
-                                )}
                               </div>
                             </div>
                           ))
