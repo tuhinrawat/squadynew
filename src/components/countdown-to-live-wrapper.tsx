@@ -7,7 +7,7 @@ import { ProfessioPromoButton } from './professio-promo-button'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Eye, ExternalLink } from 'lucide-react'
+import { Eye, ExternalLink, Instagram } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -215,7 +215,7 @@ export function CountdownToLiveWrapper({
   if (showCountdown && auctionData.status === 'DRAFT') {
     return (
       <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
-        {/* Header with Squady Logo and Professio Branding */}
+        {/* Header with Squady Logo, Instagram and Professio Branding */}
         <header className="w-full bg-black/20 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
@@ -224,22 +224,35 @@ export function CountdownToLiveWrapper({
                 <Image 
                   src="/squady-logo.svg" 
                   alt="Squady" 
-                  width={120} 
-                  height={40} 
-                  className="h-6 sm:h-8 w-auto brightness-0 invert"
+                  width={100} 
+                  height={33} 
+                  className="h-7 sm:h-8 w-auto brightness-0 invert"
                 />
               </Link>
               
-              {/* Professio Branding - Responsive */}
-              <a 
-                href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="inline-flex items-center gap-1 px-2 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-[9px] sm:text-xs md:text-sm font-semibold hover:bg-white/20 transition-colors shadow-sm"
-              >
-                <span className="text-[9px] sm:text-xs md:text-sm">Powered by</span>
-                <span className="text-[9px] sm:text-xs md:text-sm font-bold">Professio AI</span>
-              </a>
+              {/* Instagram & Professio Branding */}
+              <div className="flex items-center gap-2">
+                {/* Instagram Icon - Always visible */}
+                <a
+                  href="https://www.instagram.com/squady.auction/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-pink-300 hover:text-pink-200 transition-colors p-2"
+                  aria-label="Follow us on Instagram"
+                >
+                  <Instagram className="h-5 w-5" />
+                </a>
+                {/* Professio Branding - Responsive */}
+                <a 
+                  href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-1 sm:px-3 sm:py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-[9px] sm:text-xs font-semibold hover:bg-white/20 transition-colors shadow-sm whitespace-nowrap"
+                >
+                  <span className="text-[9px] sm:text-xs">Powered by</span>
+                  <span className="text-[9px] sm:text-xs font-bold">Professio AI</span>
+                </a>
+              </div>
             </div>
           </div>
         </header>

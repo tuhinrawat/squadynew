@@ -5,7 +5,7 @@ import { Auction, Player, Bidder, User } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye, ExternalLink, Instagram } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ActivityLog } from '@/components/activity-log'
 import Link from 'next/link'
@@ -325,14 +325,26 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       <div className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            {/* Top row on mobile: Back button and view toggle */}
+            {/* Top row on mobile: Back button, Instagram and view toggle */}
             <div className="flex items-center justify-between gap-2">
-              <Link href={`/auction/${auction.id}`}>
-                <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 px-2 sm:px-3">
-                  <ArrowLeft className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">{selectedTeam ? 'Back to Teams' : 'Back to Auction'}</span>
-                </Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link href={`/auction/${auction.id}`}>
+                  <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 px-2 sm:px-3 h-9">
+                    <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">{selectedTeam ? 'Back to Teams' : 'Back to Auction'}</span>
+                  </Button>
+                </Link>
+                {/* Instagram Icon - Always visible */}
+                <a
+                  href="https://www.instagram.com/squady.auction/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-pink-300 hover:text-pink-200 transition-colors p-2"
+                  aria-label="Follow us on Instagram"
+                >
+                  <Instagram className="h-5 w-5" />
+                </a>
+              </div>
 
               {!selectedTeam && (
                 <div className="flex items-center gap-1 sm:hidden">
@@ -340,7 +352,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     variant={viewMode === 'grid' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('grid')}
-                    className={`${viewMode === 'grid' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} px-2`}
+                    className={`${viewMode === 'grid' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} px-2 h-9`}
                   >
                     <Grid3x3 className="h-4 w-4" />
                   </Button>
@@ -348,7 +360,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     variant={viewMode === 'list' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('list')}
-                    className={`${viewMode === 'list' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} px-2`}
+                    className={`${viewMode === 'list' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} px-2 h-9`}
                   >
                     <List className="h-4 w-4" />
                   </Button>

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ResultsView } from '@/components/results-view'
-import { ChevronRight, Home } from 'lucide-react'
+import { ChevronRight, Home, Instagram } from 'lucide-react'
 import { PreAuctionBanner } from '@/components/pre-auction-banner'
 import { CountdownToLiveWrapper } from '@/components/countdown-to-live-wrapper'
 import { PublicHeaderWithChat } from '@/components/public-header-with-chat'
@@ -431,25 +431,35 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       )}
       {/* Header with Logo and User Info */}
       <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${auction.isPublished && auction.status !== 'LIVE' && auction.scheduledStartDate ? 'mt-[88px]' : ''}`}>
-        <div className="max-w-full mx-auto px-4 sm:px-6">
-          <div className="flex justify-between items-center h-16">
+        <div className="max-w-full mx-auto px-3 sm:px-6">
+          <div className="flex justify-between items-center h-14 sm:h-16">
             {/* Logo */}
-            <Link href={homePath} className="flex items-center">
-              <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
+            <Link href={homePath} className="flex items-center flex-shrink-0">
+              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
             </Link>
             
             {/* User Info */}
-            <div className="flex items-center gap-4">
-              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30">
-                <span className="hidden sm:inline">Powered by</span>
+            <div className="flex items-center gap-1.5 sm:gap-3">
+              {/* Instagram Icon - Always visible */}
+              <a
+                href="https://www.instagram.com/squady.auction/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-2"
+                aria-label="Follow us on Instagram"
+              >
+                <Instagram className="h-5 w-5" />
+              </a>
+              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 whitespace-nowrap">
+                <span>Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
-              <div className="hidden sm:flex items-center gap-2 text-sm">
+              <div className="hidden lg:flex items-center gap-2 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">Welcome,</span>
                 <span className="font-semibold text-gray-900 dark:text-gray-100">{session?.user?.name || 'User'}</span>
               </div>
               <form action="/api/auth/signout" method="post">
-                <Button type="submit" variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                <Button type="submit" variant="ghost" size="sm" className="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 h-9">
                   Logout
                 </Button>
               </form>
@@ -497,10 +507,19 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
-              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-6 w-auto" />
-              <span className="text-sm text-gray-400">© 2024 Squady. All rights reserved.</span>
+              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-6 w-auto brightness-0 invert" />
+              <span className="text-sm text-gray-400">© 2025 Squady. All rights reserved.</span>
             </div>
-            <div className="flex items-center gap-6 text-sm text-gray-400">
+            <div className="flex items-center gap-4 sm:gap-6 text-sm text-gray-400">
+              <a 
+                href="https://www.instagram.com/squady.auction/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-pink-400 hover:text-pink-300 transition-colors"
+                aria-label="Follow us on Instagram"
+              >
+                <Instagram className="h-5 w-5" />
+              </a>
               <span>Status: {auction.status}</span>
               {session?.user?.role === 'SUPER_ADMIN' && (
                 <span>Super Admin Mode</span>
