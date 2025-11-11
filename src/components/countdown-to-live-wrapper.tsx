@@ -7,10 +7,12 @@ import { ProfessioPromoButton } from './professio-promo-button'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Eye, ExternalLink, Instagram, LogIn } from 'lucide-react'
+import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface CountdownToLiveWrapperProps {
   auction: {
@@ -47,6 +49,7 @@ export function CountdownToLiveWrapper({
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
 
@@ -122,30 +125,41 @@ export function CountdownToLiveWrapper({
     }).sort((a, b) => a.name.localeCompare(b.name))
   }, [auction.players])
 
-  // Filter players based on selected filter
+  // Filter players based on selected filter and search query
   const filteredKnowYourPlayersCards = useMemo(() => {
-    if (playerFilter === 'all') {
-      return knowYourPlayersCards
+    let filtered = knowYourPlayersCards
+    
+    // Apply role/type filter
+    if (playerFilter !== 'all') {
+      filtered = filtered.filter(card => {
+        const roleStr = (card.role || '').toLowerCase()
+        const specialtyStr = (card.specialty || '').toLowerCase()
+        
+        switch (playerFilter) {
+          case 'batsmen':
+            return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+          case 'bowlers':
+            return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+          case 'all-rounders':
+            return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+          case 'bidders':
+            return card.isBidder
+          default:
+            return true
+        }
+      })
     }
     
-    return knowYourPlayersCards.filter(card => {
-      const roleStr = (card.role || '').toLowerCase()
-      const specialtyStr = (card.specialty || '').toLowerCase()
-      
-      switch (playerFilter) {
-        case 'batsmen':
-          return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
-        case 'bowlers':
-          return roleStr.includes('bowler') || specialtyStr.includes('bowler')
-        case 'all-rounders':
-          return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
-        case 'bidders':
-          return card.isBidder
-        default:
-          return true
-      }
-    })
-  }, [knowYourPlayersCards, playerFilter])
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter(card => 
+        card.name.toLowerCase().includes(query)
+      )
+    }
+    
+    return filtered
+  }, [knowYourPlayersCards, playerFilter, searchQuery])
 
   const scrollToKnowPlayers = useCallback(() => {
     knowPlayersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -386,80 +400,129 @@ export function CountdownToLiveWrapper({
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {/* Filter Buttons */}
-              <div className="mb-4 sm:mb-6 flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant={playerFilter === 'all' ? 'default' : 'outline'}
-                  onClick={() => setPlayerFilter('all')}
-                  className={`${
-                    playerFilter === 'all'
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
-                >
-                  All ({knowYourPlayersCards.length})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={playerFilter === 'batsmen' ? 'default' : 'outline'}
-                  onClick={() => setPlayerFilter('batsmen')}
-                  className={`${
-                    playerFilter === 'batsmen'
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
-                >
-                  Batsmen ({knowYourPlayersCards.filter(card => {
-                    const roleStr = (card.role || '').toLowerCase()
-                    const specialtyStr = (card.specialty || '').toLowerCase()
-                    return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
-                  }).length})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={playerFilter === 'bowlers' ? 'default' : 'outline'}
-                  onClick={() => setPlayerFilter('bowlers')}
-                  className={`${
-                    playerFilter === 'bowlers'
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
-                >
-                  Bowlers ({knowYourPlayersCards.filter(card => {
-                    const roleStr = (card.role || '').toLowerCase()
-                    const specialtyStr = (card.specialty || '').toLowerCase()
-                    return roleStr.includes('bowler') || specialtyStr.includes('bowler')
-                  }).length})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={playerFilter === 'all-rounders' ? 'default' : 'outline'}
-                  onClick={() => setPlayerFilter('all-rounders')}
-                  className={`${
-                    playerFilter === 'all-rounders'
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
-                >
-                  All Rounders ({knowYourPlayersCards.filter(card => {
-                    const roleStr = (card.role || '').toLowerCase()
-                    const specialtyStr = (card.specialty || '').toLowerCase()
-                    return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
-                  }).length})
-                </Button>
-                <Button
-                  size="sm"
-                  variant={playerFilter === 'bidders' ? 'default' : 'outline'}
-                  onClick={() => setPlayerFilter('bidders')}
-                  className={`${
-                    playerFilter === 'bidders'
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
-                >
-                  Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})
-                </Button>
+              {/* Search and Filter Section */}
+              <div className="mb-4 sm:mb-6 space-y-3">
+                {/* Search Input */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search players by name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
+                  />
+                </div>
+                
+                {/* Mobile Dropdown Filter */}
+                <div className="sm:hidden">
+                  <Select value={playerFilter} onValueChange={(value: any) => setPlayerFilter(value)}>
+                    <SelectTrigger className="w-full bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                      <SelectValue placeholder="Filter by role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All ({knowYourPlayersCards.length})</SelectItem>
+                      <SelectItem value="batsmen">
+                        Batsmen ({knowYourPlayersCards.filter(card => {
+                          const roleStr = (card.role || '').toLowerCase()
+                          const specialtyStr = (card.specialty || '').toLowerCase()
+                          return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+                        }).length})
+                      </SelectItem>
+                      <SelectItem value="bowlers">
+                        Bowlers ({knowYourPlayersCards.filter(card => {
+                          const roleStr = (card.role || '').toLowerCase()
+                          const specialtyStr = (card.specialty || '').toLowerCase()
+                          return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+                        }).length})
+                      </SelectItem>
+                      <SelectItem value="all-rounders">
+                        All Rounders ({knowYourPlayersCards.filter(card => {
+                          const roleStr = (card.role || '').toLowerCase()
+                          const specialtyStr = (card.specialty || '').toLowerCase()
+                          return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+                        }).length})
+                      </SelectItem>
+                      <SelectItem value="bidders">Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {/* Desktop Filter Buttons */}
+                <div className="hidden sm:flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={playerFilter === 'all' ? 'default' : 'outline'}
+                    onClick={() => setPlayerFilter('all')}
+                    className={`${
+                      playerFilter === 'all'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                  >
+                    All ({knowYourPlayersCards.length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playerFilter === 'batsmen' ? 'default' : 'outline'}
+                    onClick={() => setPlayerFilter('batsmen')}
+                    className={`${
+                      playerFilter === 'batsmen'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                  >
+                    Batsmen ({knowYourPlayersCards.filter(card => {
+                      const roleStr = (card.role || '').toLowerCase()
+                      const specialtyStr = (card.specialty || '').toLowerCase()
+                      return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
+                    }).length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playerFilter === 'bowlers' ? 'default' : 'outline'}
+                    onClick={() => setPlayerFilter('bowlers')}
+                    className={`${
+                      playerFilter === 'bowlers'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                  >
+                    Bowlers ({knowYourPlayersCards.filter(card => {
+                      const roleStr = (card.role || '').toLowerCase()
+                      const specialtyStr = (card.specialty || '').toLowerCase()
+                      return roleStr.includes('bowler') || specialtyStr.includes('bowler')
+                    }).length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playerFilter === 'all-rounders' ? 'default' : 'outline'}
+                    onClick={() => setPlayerFilter('all-rounders')}
+                    className={`${
+                      playerFilter === 'all-rounders'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
+                  >
+                    All Rounders ({knowYourPlayersCards.filter(card => {
+                      const roleStr = (card.role || '').toLowerCase()
+                      const specialtyStr = (card.specialty || '').toLowerCase()
+                      return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
+                    }).length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playerFilter === 'bidders' ? 'default' : 'outline'}
+                    onClick={() => setPlayerFilter('bidders')}
+                    className={`${
+                      playerFilter === 'bidders'
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                  >
+                    Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})
+                  </Button>
+                </div>
               </div>
 
               {filteredKnowYourPlayersCards.length === 0 ? (
