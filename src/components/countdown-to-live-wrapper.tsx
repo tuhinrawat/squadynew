@@ -185,31 +185,19 @@ export function CountdownToLiveWrapper({
   if (showCountdown && auctionData.status === 'DRAFT') {
     return (
       <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
-        {/* Header with Auction/Squady Logo and Professio Branding */}
+        {/* Header with Squady Logo and Professio Branding */}
         <header className="w-full bg-black/20 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
-              {/* Auction Logo or Squady Logo */}
+              {/* Squady Logo */}
               <Link href="/" className="flex items-center flex-shrink-0">
-                {auction.image ? (
-                  <div className="relative h-6 sm:h-8 w-auto">
-                    <Image 
-                      src={auction.image} 
-                      alt={auction.name} 
-                      width={120} 
-                      height={40} 
-                      className="h-6 sm:h-8 w-auto object-contain brightness-0 invert"
-                    />
-                  </div>
-                ) : (
-                  <Image 
-                    src="/squady-logo.svg" 
-                    alt="Squady" 
-                    width={120} 
-                    height={40} 
-                    className="h-6 sm:h-8 w-auto brightness-0 invert"
-                  />
-                )}
+                <Image 
+                  src="/squady-logo.svg" 
+                  alt="Squady" 
+                  width={120} 
+                  height={40} 
+                  className="h-6 sm:h-8 w-auto brightness-0 invert"
+                />
               </Link>
               
               {/* Professio Branding - Responsive */}
@@ -458,27 +446,15 @@ export function CountdownToLiveWrapper({
         <header className="w-full bg-black/20 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
-              {/* Auction Logo or Squady Logo */}
+              {/* Squady Logo */}
               <Link href="/" className="flex items-center flex-shrink-0">
-                {auctionData.image ? (
-                  <div className="relative h-6 sm:h-8 w-auto">
-                    <Image 
-                      src={auctionData.image} 
-                      alt={auctionData.name} 
-                      width={120} 
-                      height={40} 
-                      className="h-6 sm:h-8 w-auto object-contain brightness-0 invert"
-                    />
-                  </div>
-                ) : (
-                  <Image 
-                    src="/squady-logo.svg" 
-                    alt="Squady" 
-                    width={120} 
-                    height={40} 
-                    className="h-6 sm:h-8 w-auto brightness-0 invert"
-                  />
-                )}
+                <Image 
+                  src="/squady-logo.svg" 
+                  alt="Squady" 
+                  width={120} 
+                  height={40} 
+                  className="h-6 sm:h-8 w-auto brightness-0 invert"
+                />
               </Link>
               <div className="flex items-center gap-2">
                 <Button
