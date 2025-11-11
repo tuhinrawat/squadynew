@@ -1168,19 +1168,13 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                       <p className="text-white font-black text-base sm:text-lg break-words">₹{card.purchasedPrice.toLocaleString('en-IN')}</p>
                                     </div>
                                   ) : (
-                                    <div className="bg-white/5 border border-white/10 rounded-lg p-2 text-center">
-                                      <p className="text-white/60 text-[9px] sm:text-[10px] font-semibold">STATUS</p>
-                                      <p className="text-white text-xs sm:text-sm font-bold">Available</p>
+                                    <div className="bg-white/5 rounded-lg p-2 border border-white/10">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-white/60 text-[9px] sm:text-[10px]">Base Price</span>
+                                        <span className="text-white font-bold text-xs sm:text-sm">₹{card.basePrice.toLocaleString('en-IN')}</span>
+                                      </div>
                                     </div>
                                   )}
-                                  
-                                  {/* Base Price */}
-                                  <div className="bg-white/5 rounded-lg p-1.5 border border-white/10">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-white/60 text-[9px] sm:text-[10px]">Base Price</span>
-                                      <span className="text-white font-bold text-[10px] sm:text-xs">₹{card.basePrice.toLocaleString('en-IN')}</span>
-                                </div>
-                                  </div>
                                 </div>
 
                                 {/* Cricheros Link */}
