@@ -208,12 +208,12 @@ export function FullScreenCountdown({ scheduledStartDate, auctionName, onCountdo
             initial={{
               left: `${anim.startX}%`,
               top: `${anim.startY}%`,
-              opacity: 0.3, // 70% transparency (30% visible)
+              opacity: 0.08, // Much less visible (92% transparency)
             }}
             animate={{
               left: [`${anim.startX}%`, `${anim.endX}%`, `${anim.startX}%`],
               top: [`${anim.startY}%`, `${anim.endY}%`, `${anim.startY}%`],
-              opacity: [0.3, 0.25, 0.3], // Slight opacity variation
+              opacity: [0.08, 0.05, 0.08], // Slight opacity variation
             }}
             transition={{
               duration: anim.duration,

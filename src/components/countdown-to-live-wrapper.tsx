@@ -214,7 +214,12 @@ export function CountdownToLiveWrapper({
   // If countdown is still showing
   if (showCountdown && auctionData.status === 'DRAFT') {
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
+      <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col relative">
+        {/* Dark Overlay for more opacity */}
+        <div className="absolute inset-0 bg-black/50 z-0"></div>
+        
+        {/* Content wrapper with higher z-index */}
+        <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header with Squady Logo, Instagram and Professio Branding */}
         <header className="w-full bg-black/70 backdrop-blur-md border-b border-white/40">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
@@ -574,6 +579,7 @@ export function CountdownToLiveWrapper({
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
     )
   }
@@ -581,7 +587,12 @@ export function CountdownToLiveWrapper({
   // If countdown reached zero but auction not live yet
   if (!showCountdown && (auctionData.status === 'DRAFT' || auctionData.status === 'PAUSED')) {
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
+      <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col relative">
+        {/* Dark Overlay for more opacity */}
+        <div className="absolute inset-0 bg-black/50 z-0"></div>
+        
+        {/* Content wrapper with higher z-index */}
+        <div className="relative z-10 flex flex-col min-h-screen">
         <header className="w-full bg-black/70 backdrop-blur-md border-b border-white/40">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
@@ -686,6 +697,7 @@ export function CountdownToLiveWrapper({
               </div>
             </div>
           </div>
+        </div>
         </div>
       </div>
     )
