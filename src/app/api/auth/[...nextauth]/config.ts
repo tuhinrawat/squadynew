@@ -25,7 +25,6 @@ export const authOptions: NextAuthOptions = {
           })
 
           if (!user) {
-            console.log("❌ User not found:", credentials.email)
             return null
           }
 
@@ -35,11 +34,9 @@ export const authOptions: NextAuthOptions = {
           )
 
           if (!isPasswordValid) {
-            console.log("❌ Invalid password")
             return null
           }
 
-          console.log("✅ Authentication successful for:", user.email)
           return {
             id: user.id,
             email: user.email,
@@ -47,7 +44,7 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
           }
         } catch (error) {
-          console.error("❌ Authentication error:", error)
+          console.error("Authentication error:", error)
           return null
         }
       }
