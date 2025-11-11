@@ -535,9 +535,9 @@ export function CountdownToLiveWrapper({
                                   rel="noopener noreferrer"
                                   className="flex-shrink-0 px-2 py-0.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 hover:text-green-300 rounded transition-colors duration-200 border border-green-500/30 text-[9px] sm:text-[10px] font-semibold"
                                   onClick={(e) => e.stopPropagation()}
-                                  title="View Cricheros Profile"
+                                  title="View Cricheroes Profile"
                                 >
-                                  Cricheros
+                                  Cricheroes.com
                                 </a>
                             )}
                           </div>

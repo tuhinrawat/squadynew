@@ -110,7 +110,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							</div>
 						)}
 						
-					{/* Cricheros Profile Link - Mobile */}
+					{/* Cricheroes Profile Link - Mobile */}
 					{profileLink && (
 						<a 
 							href={profileLink} 
@@ -118,7 +118,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							rel="noopener noreferrer"
 							className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] sm:text-sm font-semibold rounded-lg transition-colors duration-200 border border-white/30 mt-1 sm:mt-2"
 						>
-							Cricheros
+							Cricheroes.com
 						</a>
 					)}
 					</div>
@@ -139,7 +139,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							</div>
 						)}
 						
-					{/* Cricheros Profile Link - Desktop */}
+					{/* Cricheroes Profile Link - Desktop */}
 					{profileLink && (
 						<a 
 							href={profileLink} 
@@ -147,7 +147,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							rel="noopener noreferrer"
 							className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors duration-200 border border-white/30 mt-2"
 						>
-							Cricheros
+							Cricheroes.com
 						</a>
 					)}
 					</div>
