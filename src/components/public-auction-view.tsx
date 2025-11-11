@@ -704,8 +704,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     imageUrl={(() => {
                       const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo'] || playerData['PROFILE PHOTO'] || playerData['profile_photo']
                       console.log('Profile Photo Link for', playerName, ':', profilePhotoLink)
+                      console.log('All available fields for', playerName, ':', Object.keys(playerData))
                       if (!profilePhotoLink) {
                         console.log('No profile photo link found for', playerName)
+                        console.log('PlayerData:', playerData)
                         return undefined
                       }
                       // Try to extract Google Drive ID from various formats

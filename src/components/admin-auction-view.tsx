@@ -1579,9 +1579,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                                           playerData['ProfilePhoto']
                   
                   console.log('Admin - Profile Photo Link for', playerName, ':', profilePhotoLink)
+                  console.log('Admin - All available fields for', playerName, ':', Object.keys(playerData))
                   
                   if (!profilePhotoLink || profilePhotoLink === '') {
                     console.log('Admin - No profile photo link found for', playerName)
+                    console.log('Admin - PlayerData:', playerData)
                     return undefined
                   }
                   
