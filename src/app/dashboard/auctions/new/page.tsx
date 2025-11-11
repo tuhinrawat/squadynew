@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { CustomField, FormBuilder } from '@/components/form-builder'
+import { Upload, X, Image as ImageIcon } from 'lucide-react'
+import Image from 'next/image'
 
 export default function NewAuction() {
   const [formData, setFormData] = useState({
@@ -30,8 +32,56 @@ export default function NewAuction() {
   })
   const [customFields, setCustomFields] = useState<CustomField[]>([]) // Add custom fields state
   const [isLoading, setIsLoading] = useState(false)
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const router = useRouter()
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setErrors({ ...errors, image: 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed' })
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors({ ...errors, image: 'File too large. Maximum size is 5MB' })
+      return
+    }
+
+    setIsUploadingImage(true)
+    setErrors({ ...errors, image: '' })
+
+    try {
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', file)
+
+      const response = await fetch('/api/upload-auction-image', {
+        method: 'POST',
+        body: uploadFormData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to upload image')
+      }
+
+      const data = await response.json()
+      setFormData({ ...formData, image: data.imageUrl })
+    } catch (error) {
+      setErrors({ ...errors, image: error instanceof Error ? error.message : 'Failed to upload image' })
+    } finally {
+      setIsUploadingImage(false)
+    }
+  }
+
+  const removeImage = () => {
+    setFormData({ ...formData, image: '' })
+  }
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -204,17 +254,78 @@ export default function NewAuction() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="image">Cover Image URL</Label>
-              <Input
-                id="image"
-                name="image"
-                value={formData.image}
-                onChange={handleChange}
-                placeholder="https://example.com/image.jpg (optional)"
-                type="url"
-              />
+              <Label htmlFor="image">Auction Logo</Label>
+              
+              {!formData.image ? (
+                <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+                  <input
+                    id="image"
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                    disabled={isUploadingImage}
+                  />
+                  <label
+                    htmlFor="image"
+                    className="cursor-pointer flex flex-col items-center gap-2"
+                  >
+                    {isUploadingImage ? (
+                      <>
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-gray-100"></div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Uploading...</p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-12 w-12 text-gray-400" />
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">Click to upload</span> or drag and drop
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          PNG, JPG, GIF or WebP (max 5MB)
+                        </p>
+                      </>
+                    )}
+                  </label>
+                </div>
+              ) : (
+                <div className="relative border-2 border-gray-300 dark:border-gray-600 rounded-lg p-4">
+                  <div className="flex items-start gap-4">
+                    <div className="relative w-32 h-32 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                      <Image
+                        src={formData.image}
+                        alt="Auction logo"
+                        fill
+                        className="object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        Auction Logo
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        This logo will appear on the timer page and in social media previews
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={removeImage}
+                      className="flex-shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {errors.image && (
+                <p className="text-sm text-red-600 dark:text-red-400">{errors.image}</p>
+              )}
+              
               <p className="text-xs text-muted-foreground">
-                Add a cover image for your auction. This will appear in URL previews when shared on social media.
+                Upload a logo for your auction. This will be displayed on the countdown timer page.
               </p>
             </div>
 

@@ -185,19 +185,31 @@ export function CountdownToLiveWrapper({
   if (showCountdown && auctionData.status === 'DRAFT') {
     return (
       <div className="min-h-screen w-full bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex flex-col">
-        {/* Header with Squady Logo and Professio Branding */}
+        {/* Header with Auction/Squady Logo and Professio Branding */}
         <header className="w-full bg-black/20 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
-              {/* Squady Logo */}
+              {/* Auction Logo or Squady Logo */}
               <Link href="/" className="flex items-center flex-shrink-0">
-                <Image 
-                  src="/squady-logo.svg" 
-                  alt="Squady" 
-                  width={120} 
-                  height={40} 
-                  className="h-6 sm:h-8 w-auto brightness-0 invert"
-                />
+                {auction.image ? (
+                  <div className="relative h-6 sm:h-8 w-auto">
+                    <Image 
+                      src={auction.image} 
+                      alt={auction.name} 
+                      width={120} 
+                      height={40} 
+                      className="h-6 sm:h-8 w-auto object-contain brightness-0 invert"
+                    />
+                  </div>
+                ) : (
+                  <Image 
+                    src="/squady-logo.svg" 
+                    alt="Squady" 
+                    width={120} 
+                    height={40} 
+                    className="h-6 sm:h-8 w-auto brightness-0 invert"
+                  />
+                )}
               </Link>
               
               {/* Professio Branding - Responsive */}
@@ -217,8 +229,21 @@ export function CountdownToLiveWrapper({
         {/* Centered Countdown Content */}
         <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
           <div className="text-center px-3 sm:px-4 w-full max-w-6xl">
-            {/* Auction Name */}
+            {/* Auction Logo & Name */}
             <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-3">
+              {/* Auction Logo - Large centered display */}
+              {auction.image && (
+                <div className="flex justify-center mb-4 sm:mb-6">
+                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
+                    <Image 
+                      src={auction.image} 
+                      alt={auction.name} 
+                      fill
+                      className="object-contain p-2"
+                    />
+                  </div>
+                </div>
+              )}
               <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-2 sm:mb-3 md:mb-4 drop-shadow-lg px-2 break-words">
                 {auction.name}
               </h1>
@@ -416,14 +441,27 @@ export function CountdownToLiveWrapper({
         <header className="w-full bg-black/20 backdrop-blur-sm border-b border-white/10">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-2">
+              {/* Auction Logo or Squady Logo */}
               <Link href="/" className="flex items-center flex-shrink-0">
-                <Image 
-                  src="/squady-logo.svg" 
-                  alt="Squady" 
-                  width={120} 
-                  height={40} 
-                  className="h-6 sm:h-8 w-auto brightness-0 invert"
-                />
+                {auctionData.image ? (
+                  <div className="relative h-6 sm:h-8 w-auto">
+                    <Image 
+                      src={auctionData.image} 
+                      alt={auctionData.name} 
+                      width={120} 
+                      height={40} 
+                      className="h-6 sm:h-8 w-auto object-contain brightness-0 invert"
+                    />
+                  </div>
+                ) : (
+                  <Image 
+                    src="/squady-logo.svg" 
+                    alt="Squady" 
+                    width={120} 
+                    height={40} 
+                    className="h-6 sm:h-8 w-auto brightness-0 invert"
+                  />
+                )}
               </Link>
               <div className="flex items-center gap-2">
                 <Button
@@ -451,6 +489,19 @@ export function CountdownToLiveWrapper({
 
         <div className="flex-1 flex items-center justify-center py-4 sm:py-8">
           <div className="text-center px-4 max-w-2xl">
+            {/* Auction Logo */}
+            {auctionData.image && (
+              <div className="flex justify-center mb-6">
+                <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 bg-white/10 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/20 shadow-2xl">
+                  <Image 
+                    src={auctionData.image} 
+                    alt={auctionData.name} 
+                    fill
+                    className="object-contain p-2"
+                  />
+                </div>
+              </div>
+            )}
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
               {auction.name}
             </h1>

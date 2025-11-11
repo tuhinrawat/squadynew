@@ -1,0 +1,7 @@
+# Ignore uploaded auction images but keep the directory
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+!.gitkeep
