@@ -160,19 +160,15 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     ? `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auction.slug}`
     : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auction.id}`
 
-  const statusBadge = auction.status === 'LIVE' ? '🔴 LIVE' : 
-                     auction.status === 'PAUSED' ? '⏸️ PAUSED' : 
-                     auction.status === 'COMPLETED' ? '✅ COMPLETED' : '📋 DRAFT'
-
-  // Always use Squady logo for social sharing with absolute URL
+  // Use Squady logo for social sharing with absolute URL (use PNG for better compatibility)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'
-  const imageUrl = `${siteUrl}/squady-logo.svg`
+  const imageUrl = `${siteUrl}/opengraph-image.png`
 
   return {
     title,
     description,
     openGraph: {
-      title: `${statusBadge} ${auction.name}`,
+      title: auction.name,
       description,
       url,
       siteName: 'Squady',
@@ -189,7 +185,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${statusBadge} ${auction.name}`,
+      title: auction.name,
       description,
       images: [imageUrl],
     },
