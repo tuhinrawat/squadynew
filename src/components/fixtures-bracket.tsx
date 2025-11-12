@@ -116,23 +116,37 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
   return (
     <div className="relative">
       {/* Team Filter */}
-      <div className="mb-6 flex items-center gap-3">
-        <Filter className="h-4 w-4 text-white/60" />
+      <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex items-center gap-2 text-white/80 text-sm font-medium">
+          <Filter className="h-4 w-4" />
+          <span>Filter by Team:</span>
+        </div>
         <Select value={selectedTeam} onValueChange={setSelectedTeam}>
-          <SelectTrigger className="w-full sm:w-64 bg-white/10 border-white/20 text-white">
-            <SelectValue placeholder="Filter by team" />
+          <SelectTrigger className="w-full sm:w-80 bg-white/10 border-white/20 text-white hover:bg-white/20 transition-colors">
+            <SelectValue placeholder="Select a team">
+              {selectedTeam === 'all' ? (
+                'All Teams'
+              ) : (
+                (() => {
+                  const team = allTeams.find(t => t.id === selectedTeam)
+                  return team ? (team.teamName ? `${team.teamName} (${team.bidderName})` : team.bidderName) : 'Select a team'
+                })()
+              )}
+            </SelectValue>
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Teams</SelectItem>
+          <SelectContent className="bg-slate-900 border-slate-700">
+            <SelectItem value="all" className="text-white hover:bg-white/10">
+              All Teams
+            </SelectItem>
             {allTeams.map(team => (
-              <SelectItem key={team.id} value={team.id}>
+              <SelectItem key={team.id} value={team.id} className="text-white hover:bg-white/10">
                 {team.teamName ? `${team.teamName} (${team.bidderName})` : team.bidderName}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {selectedTeam !== 'all' && (
-          <span className="text-xs text-white/60">
+          <span className="text-xs text-white/60 bg-white/10 px-2 py-1 rounded-md">
             {fixtures.filter(f => isTeamInFixture(f)).length} match{fixtures.filter(f => isTeamInFixture(f)).length !== 1 ? 'es' : ''}
           </span>
         )}
@@ -212,36 +226,13 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
                 {dateGroup.fixtures
                   .filter(f => isTeamInFixture(f))
                   .map((fixture, index) => (
-                    <div key={fixture.id} className="relative">
+                    <div key={fixture.id}>
                       <FixtureCard 
                         fixture={fixture} 
                         index={index}
                         isHighlighted={selectedTeam !== 'all' && isTeamInFixture(fixture)}
                         selectedTeamId={selectedTeam}
                       />
-                    
-                    {/* Connecting Line to Next Column */}
-                    {groupIndex < fixturesByDate.length - 1 && (
-                      <svg
-                        className="absolute left-full top-1/2 -translate-y-1/2 pointer-events-none"
-                        width="32"
-                        height="2"
-                        style={{ zIndex: -1 }}
-                      >
-                        <motion.line
-                          x1="0"
-                          y1="1"
-                          x2="32"
-                          y2="1"
-                          stroke="rgba(59, 130, 246, 0.5)"
-                          strokeWidth="2"
-                          strokeDasharray="5,5"
-                          initial={{ pathLength: 0 }}
-                          animate={{ pathLength: 1 }}
-                          transition={{ duration: 0.8, delay: groupIndex * 0.2 + index * 0.1 }}
-                        />
-                      </svg>
-                    )}
                   </div>
                 ))}
               </div>
