@@ -41,17 +41,28 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
 
   // Get all unique teams
   const allTeams = useMemo(() => {
-    const teamsSet = new Set<string>()
+    const teamsMap = new Map<string, { id: string; teamName: string | null; bidderName: string }>()
     fixtures.forEach(fixture => {
-      const team1Name = fixture.team1.teamName || fixture.team1.user.name
-      const team2Name = fixture.team2.teamName || fixture.team2.user.name
-      teamsSet.add(`${fixture.team1.id}:${team1Name}`)
-      teamsSet.add(`${fixture.team2.id}:${team2Name}`)
+      if (!teamsMap.has(fixture.team1.id)) {
+        teamsMap.set(fixture.team1.id, {
+          id: fixture.team1.id,
+          teamName: fixture.team1.teamName,
+          bidderName: fixture.team1.user.name
+        })
+      }
+      if (!teamsMap.has(fixture.team2.id)) {
+        teamsMap.set(fixture.team2.id, {
+          id: fixture.team2.id,
+          teamName: fixture.team2.teamName,
+          bidderName: fixture.team2.user.name
+        })
+      }
     })
-    return Array.from(teamsSet).map(item => {
-      const [id, name] = item.split(':')
-      return { id, name }
-    }).sort((a, b) => a.name.localeCompare(b.name))
+    return Array.from(teamsMap.values()).sort((a, b) => {
+      const aName = a.teamName || a.bidderName
+      const bName = b.teamName || b.bidderName
+      return aName.localeCompare(bName)
+    })
   }, [fixtures])
 
   // Check if a fixture involves the selected team
@@ -115,7 +126,7 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
             <SelectItem value="all">All Teams</SelectItem>
             {allTeams.map(team => (
               <SelectItem key={team.id} value={team.id}>
-                {team.name}
+                {team.teamName ? `${team.teamName} (${team.bidderName})` : team.bidderName}
               </SelectItem>
             ))}
           </SelectContent>
@@ -334,8 +345,10 @@ function FixtureCard({
 }
 
 function TeamCard({ team, isHighlighted = false }: { team: Bidder; isHighlighted?: boolean }) {
-  const teamName = team.teamName || team.user.name
-  const initials = teamName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const teamName = team.teamName
+  const bidderName = team.user.name
+  const displayName = teamName || bidderName
+  const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   const profilePhoto = team.logoUrl || team.user.profilePhoto
 
   return (
@@ -348,7 +361,7 @@ function TeamCard({ team, isHighlighted = false }: { team: Bidder; isHighlighted
           <div className="w-7 h-7 rounded-full overflow-hidden border border-white/30">
             <Image
               src={profilePhoto}
-              alt={teamName}
+              alt={displayName}
               width={28}
               height={28}
               className="w-full h-full object-contain"
@@ -361,9 +374,16 @@ function TeamCard({ team, isHighlighted = false }: { team: Bidder; isHighlighted
         )}
       </div>
 
-      {/* Team Name Only - COMPACT */}
+      {/* Team Name + Bidder Name - COMPACT */}
       <div className="flex-1 min-w-0">
-        <h5 className="font-semibold text-white text-xs truncate">{teamName}</h5>
+        {teamName ? (
+          <>
+            <h5 className="font-bold text-white text-xs truncate leading-tight">{teamName}</h5>
+            <p className="text-[10px] text-white/60 truncate leading-tight">{bidderName}</p>
+          </>
+        ) : (
+          <h5 className="font-semibold text-white text-xs truncate">{bidderName}</h5>
+        )}
       </div>
     </div>
   )
