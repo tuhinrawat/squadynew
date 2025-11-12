@@ -471,7 +471,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const unsoldPlayers = players.filter(p => p.status === 'UNSOLD').length
     const availablePlayers = players.filter(p => p.status === 'AVAILABLE').length
     
-    // Icon players phase
+    // Bidder Choice players phase
     const iconPlayers = players.filter(p => (p as any).isIcon === true)
     const soldIconPlayers = iconPlayers.filter(p => p.status === 'SOLD').length
     const unsoldIconPlayers = iconPlayers.filter(p => p.status === 'UNSOLD').length

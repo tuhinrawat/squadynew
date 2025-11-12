@@ -1171,7 +1171,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     const unsoldPlayers = players.filter(p => p.status === 'UNSOLD').length
     const availablePlayers = players.filter(p => p.status === 'AVAILABLE').length
     
-    // Icon players phase
+    // Bidder Choice players phase
     const iconPlayers = players.filter(p => (p as any).isIcon === true)
     const soldIconPlayers = iconPlayers.filter(p => p.status === 'SOLD').length
     const unsoldIconPlayers = iconPlayers.filter(p => p.status === 'UNSOLD').length
@@ -1664,7 +1664,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                             <CardTitle className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-gray-100 text-center">{playerName}</CardTitle>
                             {currentPlayer?.data && (currentPlayer.data as { isIcon?: boolean }).isIcon && (
                               <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg px-3 py-1 text-sm font-bold">
-                                ⭐ ICON PLAYER
+                                ⭐ BIDDER CHOICE
                               </Badge>
                             )}
                           </div>
@@ -1728,7 +1728,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           <CardTitle className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-gray-100 text-center">{playerName}</CardTitle>
                           {currentPlayer?.data && (currentPlayer.data as { isIcon?: boolean }).isIcon && (
                             <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg px-3 py-1 text-sm font-bold">
-                              ⭐ ICON PLAYER
+                              ⭐ BIDDER CHOICE
                             </Badge>
                           )}
                         </div>

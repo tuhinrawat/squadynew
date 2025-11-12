@@ -30,14 +30,14 @@ export async function POST(
 
     const rules = auction.rules as any
     
-    // Validate icon players
+    // Validate Bidder Choice players
     if (rules?.iconPlayerCount) {
       const iconPlayersCount = auction.players.filter(p => (p as any).isIcon).length
       const requiredIconCount = rules.iconPlayerCount
       
       if (iconPlayersCount !== requiredIconCount) {
         return NextResponse.json({ 
-          error: `Please mark exactly ${requiredIconCount} players as icon players. Currently marked: ${iconPlayersCount}` 
+          error: `Please mark exactly ${requiredIconCount} players as Bidder Choice. Currently marked: ${iconPlayersCount}` 
         }, { status: 400 })
       }
     }

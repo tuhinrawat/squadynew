@@ -262,7 +262,7 @@ export async function POST(
       // Factor 3: Icon status (high weight)
       if (p.isIcon) {
         brillianceScore += 30
-        factors.push('Icon Player')
+        factors.push('Bidder Choice')
       }
       
       // Factor 4: Base price (higher base price = more valuable)

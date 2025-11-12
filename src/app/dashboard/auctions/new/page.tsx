@@ -103,7 +103,7 @@ export default function NewAuction() {
     }
 
     if (formData.iconPlayerCount < 0) {
-      newErrors.iconPlayerCount = 'Icon player count cannot be negative'
+      newErrors.iconPlayerCount = 'Bidder Choice count cannot be negative'
     }
 
     if (formData.mandatoryTeamSize < 1) {
@@ -414,7 +414,7 @@ export default function NewAuction() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="iconPlayerCount">Icon Players Count</Label>
+                <Label htmlFor="iconPlayerCount">Bidder Choice Count</Label>
                 <Input
                   id="iconPlayerCount"
                   name="iconPlayerCount"
@@ -427,7 +427,7 @@ export default function NewAuction() {
                 {errors.iconPlayerCount && (
                   <p className="text-sm text-red-600">{errors.iconPlayerCount}</p>
                 )}
-                <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order). Set to 0 to skip icon players.</p>
+                <p className="text-xs text-gray-500">Number of Bidder Choice players to be auctioned first (in random order). Set to 0 to skip Bidder Choice phase.</p>
               </div>
 
               <div className="space-y-2">

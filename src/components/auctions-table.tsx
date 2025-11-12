@@ -717,7 +717,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
               {/* Auction Rules */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-iconPlayerCount">Icon Players Count</Label>
+                  <Label htmlFor="edit-iconPlayerCount">Bidder Choice Count</Label>
                   <Input 
                     id="edit-iconPlayerCount"
                     type="number"
@@ -728,7 +728,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     }}
                     min="0"
                   />
-                  <p className="text-xs text-gray-500">Number of icon players to be auctioned first (in random order). Set to 0 to skip icon players.</p>
+                  <p className="text-xs text-gray-500">Number of Bidder Choice players to be auctioned first (in random order). Set to 0 to skip Bidder Choice phase.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-mandatoryTeamSize">Mandatory Team Size *</Label>

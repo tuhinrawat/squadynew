@@ -80,7 +80,7 @@ const tutorialSteps: TutorialStep[] = [
           <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100 mb-4">⚙️ Advanced Settings</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="font-semibold text-sm mb-2">Icon Players</p>
+              <p className="font-semibold text-sm mb-2">Bidder Choice</p>
               <p className="text-gray-600 dark:text-gray-400">10 max</p>
             </div>
             <div>
@@ -142,10 +142,10 @@ const tutorialSteps: TutorialStep[] = [
           </Card>
           <Card className="border-green-200 dark:border-green-800">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Icon Players</CardTitle>
+              <CardTitle className="text-base">Bidder Choice</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-green-600">⭐ Mark as Icon</p>
+              <p className="text-2xl font-bold text-green-600">⭐ Mark as Bidder Choice</p>
               <p className="text-sm text-gray-600 dark:text-gray-400">Prioritize key players</p>
             </CardContent>
           </Card>
