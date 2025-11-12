@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -287,7 +288,20 @@ export default function BidderManagement() {
                   {bidders.map((bidder) => (
                     <TableRow key={bidder.id}>
                       <TableCell className="font-medium">
-                        {bidder.teamName || '-'}
+                        <div className="flex items-center gap-2">
+                          {bidder.logoUrl && (
+                            <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700">
+                              <Image
+                                src={bidder.logoUrl}
+                                alt={bidder.teamName || 'Team logo'}
+                                fill
+                                className="object-cover"
+                                sizes="32px"
+                              />
+                            </div>
+                          )}
+                          <span>{bidder.teamName || '-'}</span>
+                        </div>
                       </TableCell>
                       <TableCell>{bidder.user.name}</TableCell>
                       <TableCell>{bidder.username}</TableCell>
