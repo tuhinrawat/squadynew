@@ -22,7 +22,6 @@ enum AuctionStatus {
   MOCK_RUN
   PAUSED
   COMPLETED
-  MOCK_RUN
 }
 
 enum FieldType {
