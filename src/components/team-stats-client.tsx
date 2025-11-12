@@ -119,17 +119,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     const fetchFixtures = async () => {
       try {
         setFixturesLoading(true)
-        console.log('Fetching fixtures for auction:', auction.id)
         const response = await fetch(`/api/auctions/${auction.id}/fixtures`)
-        console.log('Fixtures response status:', response.status)
         if (response.ok) {
           const data = await response.json()
-          console.log('Fixtures data:', data)
-          console.log('Number of fixtures:', data.fixtures?.length || 0)
           setFixtures(data.fixtures || [])
         } else {
-          const errorText = await response.text()
-          console.error('Failed to fetch fixtures, status:', response.status, 'error:', errorText)
           setFixtures([])
         }
       } catch (error) {
@@ -378,13 +372,6 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     }
   }
 
-  console.log('=== TEAM STATS RENDER ===')
-  console.log('Current activeTab:', activeTab)
-  console.log('selectedTeam:', selectedTeam)
-  console.log('fixtures count:', fixtures.length)
-  console.log('fixturesLoading:', fixturesLoading)
-  console.log('========================')
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       {/* Header */}
@@ -509,11 +496,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               </Button>
               <Button
                 variant={activeTab === 'fixtures' ? 'default' : 'ghost'}
-                onClick={() => {
-                  console.log('FIXTURES BUTTON CLICKED - Setting activeTab to fixtures')
-                  setActiveTab('fixtures')
-                  console.log('activeTab after setState:', 'fixtures')
-                }}
+                onClick={() => setActiveTab('fixtures')}
                 className={`${activeTab === 'fixtures' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4`}
               >
                 <Calendar className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -1334,42 +1317,22 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
             )}
 
             {/* Fixtures Tab */}
-            {activeTab === 'fixtures' && (() => {
-              console.log('RENDERING FIXTURES TAB - activeTab:', activeTab, 'fixturesLoading:', fixturesLoading, 'fixtures.length:', fixtures.length)
-              return (
-                <Card className="bg-white/10 backdrop-blur-md border-white/20">
-                  <CardContent className="p-3 sm:p-6">
-                    <h3 className="text-white text-sm sm:text-base font-semibold mb-4">
-                      Match Fixtures {fixturesLoading && '(Loading...)'}
-                    </h3>
-                    <div className="text-white text-xs mb-2 p-2 bg-red-500/50">
-                      Debug: activeTab = {activeTab}, fixturesLoading = {String(fixturesLoading)}, fixtures.length = {fixtures.length}
+            {activeTab === 'fixtures' && (
+              <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                <CardContent className="p-3 sm:p-6">
+                  <h3 className="text-white text-sm sm:text-base font-semibold mb-4">
+                    Match Fixtures
+                  </h3>
+                  {fixturesLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
                     </div>
-                    {fixturesLoading ? (
-                      <div className="flex items-center justify-center py-20">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="text-white/60 text-xs mb-4">
-                          Found {fixtures.length} fixture{fixtures.length !== 1 ? 's' : ''}
-                        </div>
-                        {fixtures.length > 0 ? (
-                          <div>
-                            <div className="text-yellow-400 mb-4">About to render FixturesBracket with {fixtures.length} fixtures</div>
-                            <FixturesBracket fixtures={fixtures} />
-                          </div>
-                        ) : (
-                          <div className="text-white/80 text-center py-10">
-                            No fixtures to display
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })()}
+                  ) : (
+                    <FixturesBracket fixtures={fixtures} />
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </>
         ) : (
           /* Team Detail View */

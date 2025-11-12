@@ -35,8 +35,6 @@ interface FixturesBracketProps {
 }
 
 export function FixturesBracket({ fixtures }: FixturesBracketProps) {
-  console.log('FixturesBracket received fixtures:', fixtures)
-  
   // Group fixtures by date
   const fixturesByDate = useMemo(() => {
     const grouped: { [key: string]: Fixture[] } = {}
