@@ -1180,11 +1180,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     // Check if current player is icon
     const currentPlayerIsIcon = (currentPlayer as any)?.isIcon === true
     
-    // Phase 1: Icon Players Auction (if icon players exist and current is icon or icon players not finished)
+    // Phase 1: Bidder Choice Auction (if Bidder Choice players exist and current is Bidder Choice or Bidder Choice players not finished)
     if (iconPlayers.length > 0 && (currentPlayerIsIcon || availableIconPlayers > 0)) {
       return {
-        type: 'ICON_PLAYERS',
-        message: '⭐ Icon Players Auction Going On',
+        type: 'BIDDER_CHOICE',
+        message: '⭐ Bidder Choice Auction Going On',
         color: 'from-purple-600 to-pink-600'
       }
     }
