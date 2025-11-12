@@ -19,7 +19,8 @@ export async function GET(
             user: {
               select: {
                 name: true,
-                email: true
+                email: true,
+                profilePhoto: true
               }
             }
           }
@@ -29,7 +30,8 @@ export async function GET(
             user: {
               select: {
                 name: true,
-                email: true
+                email: true,
+                profilePhoto: true
               }
             }
           }
@@ -123,7 +125,8 @@ export async function POST(
             user: {
               select: {
                 name: true,
-                email: true
+                email: true,
+                profilePhoto: true
               }
             }
           }
@@ -133,7 +136,8 @@ export async function POST(
             user: {
               select: {
                 name: true,
-                email: true
+                email: true,
+                profilePhoto: true
               }
             }
           }

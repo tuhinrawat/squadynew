@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { Calendar, MapPin, Trophy, Clock } from 'lucide-react'
+import { Calendar, MapPin, Trophy, Clock, Filter } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import Image from 'next/image'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface Bidder {
   id: string
@@ -14,6 +15,7 @@ interface Bidder {
   user: {
     name: string
     email: string
+    profilePhoto: string | null
   }
 }
 
@@ -35,6 +37,29 @@ interface FixturesBracketProps {
 }
 
 export function FixturesBracket({ fixtures }: FixturesBracketProps) {
+  const [selectedTeam, setSelectedTeam] = useState<string>('all')
+
+  // Get all unique teams
+  const allTeams = useMemo(() => {
+    const teamsSet = new Set<string>()
+    fixtures.forEach(fixture => {
+      const team1Name = fixture.team1.teamName || fixture.team1.user.name
+      const team2Name = fixture.team2.teamName || fixture.team2.user.name
+      teamsSet.add(`${fixture.team1.id}:${team1Name}`)
+      teamsSet.add(`${fixture.team2.id}:${team2Name}`)
+    })
+    return Array.from(teamsSet).map(item => {
+      const [id, name] = item.split(':')
+      return { id, name }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  }, [fixtures])
+
+  // Check if a fixture involves the selected team
+  const isTeamInFixture = (fixture: Fixture) => {
+    if (selectedTeam === 'all') return true
+    return fixture.team1.id === selectedTeam || fixture.team2.id === selectedTeam
+  }
+
   // Group fixtures by date
   const fixturesByDate = useMemo(() => {
     const grouped: { [key: string]: Fixture[] } = {}
@@ -79,6 +104,28 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
 
   return (
     <div className="relative">
+      {/* Team Filter */}
+      <div className="mb-6 flex items-center gap-3">
+        <Filter className="h-4 w-4 text-white/60" />
+        <Select value={selectedTeam} onValueChange={setSelectedTeam}>
+          <SelectTrigger className="w-full sm:w-64 bg-white/10 border-white/20 text-white">
+            <SelectValue placeholder="Filter by team" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Teams</SelectItem>
+            {allTeams.map(team => (
+              <SelectItem key={team.id} value={team.id}>
+                {team.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selectedTeam !== 'all' && (
+          <span className="text-xs text-white/60">
+            {fixtures.filter(f => isTeamInFixture(f)).length} match{fixtures.filter(f => isTeamInFixture(f)).length !== 1 ? 'es' : ''}
+          </span>
+        )}
+      </div>
       {/* Mobile View - Vertical Stack */}
       <div className="block md:hidden space-y-6">
         {fixturesByDate.map((dateGroup, groupIndex) => (
@@ -100,16 +147,24 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
             </div>
 
             {/* Fixtures for this date */}
-            {dateGroup.fixtures.map((fixture, index) => (
-              <FixtureCard key={fixture.id} fixture={fixture} index={index} />
-            ))}
+            {dateGroup.fixtures
+              .filter(f => isTeamInFixture(f))
+              .map((fixture, index) => (
+                <FixtureCard 
+                  key={fixture.id} 
+                  fixture={fixture} 
+                  index={index}
+                  isHighlighted={selectedTeam !== 'all' && isTeamInFixture(fixture)}
+                  selectedTeamId={selectedTeam}
+                />
+              ))}
           </motion.div>
         ))}
       </div>
 
-      {/* Desktop View - Bracket Style */}
+      {/* Desktop View - Bracket Style / Tree View */}
       <div className="hidden md:block">
-        <div className="flex gap-8 overflow-x-auto pb-6">
+        <div className="flex gap-4 overflow-x-auto pb-6">
           {fixturesByDate.map((dateGroup, groupIndex) => (
             <motion.div
               key={dateGroup.date}
@@ -117,7 +172,7 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: groupIndex * 0.15 }}
               className="flex-shrink-0"
-              style={{ minWidth: '380px' }}
+              style={{ minWidth: '280px' }}
             >
               {/* Date Column Header */}
               <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-4 mb-6 z-10">
@@ -142,10 +197,17 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
               </div>
 
               {/* Fixtures */}
-              <div className="space-y-6 relative">
-                {dateGroup.fixtures.map((fixture, index) => (
-                  <div key={fixture.id} className="relative">
-                    <FixtureCard fixture={fixture} index={index} />
+              <div className="space-y-3 relative">
+                {dateGroup.fixtures
+                  .filter(f => isTeamInFixture(f))
+                  .map((fixture, index) => (
+                    <div key={fixture.id} className="relative">
+                      <FixtureCard 
+                        fixture={fixture} 
+                        index={index}
+                        isHighlighted={selectedTeam !== 'all' && isTeamInFixture(fixture)}
+                        selectedTeamId={selectedTeam}
+                      />
                     
                     {/* Connecting Line to Next Column */}
                     {groupIndex < fixturesByDate.length - 1 && (
@@ -180,7 +242,17 @@ export function FixturesBracket({ fixtures }: FixturesBracketProps) {
   )
 }
 
-function FixtureCard({ fixture, index }: { fixture: Fixture; index: number }) {
+function FixtureCard({ 
+  fixture, 
+  index, 
+  isHighlighted = false,
+  selectedTeamId
+}: { 
+  fixture: Fixture; 
+  index: number;
+  isHighlighted?: boolean;
+  selectedTeamId?: string;
+}) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'SCHEDULED':
@@ -194,63 +266,65 @@ function FixtureCard({ fixture, index }: { fixture: Fixture; index: number }) {
     }
   }
 
+  const opacity = selectedTeamId !== 'all' && !isHighlighted ? 'opacity-40' : 'opacity-100'
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: index * 0.1 }}
-      className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 overflow-hidden hover:shadow-xl transition-all duration-300 hover:border-white/40"
+      className={`bg-white/10 backdrop-blur-md rounded-lg border border-white/20 overflow-hidden hover:shadow-xl transition-all duration-300 hover:border-white/40 ${opacity}`}
     >
-      {/* Match Header */}
-      <div className="bg-gradient-to-r from-purple-600/30 to-blue-600/30 p-3 border-b border-white/20">
-        <div className="flex items-center justify-between">
-          <h4 className="font-bold text-white text-sm">{fixture.matchName}</h4>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusColor(fixture.status)}`}>
+      {/* Match Header - COMPACT */}
+      <div className="bg-gradient-to-r from-purple-600/30 to-blue-600/30 p-2 border-b border-white/20">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="font-bold text-white text-xs truncate">{fixture.matchName}</h4>
+          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold border flex-shrink-0 ${getStatusColor(fixture.status)}`}>
             {fixture.status}
           </span>
         </div>
         {fixture.matchDate && (
-          <div className="flex items-center gap-1 text-xs text-white/70 mt-1">
-            <Clock className="h-3 w-3" />
+          <div className="flex items-center gap-1 text-[10px] text-white/70 mt-0.5">
+            <Clock className="h-2.5 w-2.5" />
             {format(parseISO(fixture.matchDate), 'h:mm a')}
           </div>
         )}
       </div>
 
-      {/* Teams */}
-      <div className="p-4 space-y-3">
+      {/* Teams - COMPACT */}
+      <div className="p-2 space-y-2">
         {/* Team 1 */}
-        <TeamCard team={fixture.team1} />
+        <TeamCard team={fixture.team1} isHighlighted={selectedTeamId === fixture.team1.id} />
 
-        {/* VS Divider */}
-        <div className="relative py-2">
+        {/* VS Divider - COMPACT */}
+        <div className="relative py-1">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-white/20"></div>
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+            <span className="bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
               VS
             </span>
           </div>
         </div>
 
         {/* Team 2 */}
-        <TeamCard team={fixture.team2} />
+        <TeamCard team={fixture.team2} isHighlighted={selectedTeamId === fixture.team2.id} />
       </div>
 
-      {/* Match Details */}
+      {/* Match Details - COMPACT */}
       {(fixture.venue || fixture.result) && (
-        <div className="px-4 pb-4 space-y-2">
+        <div className="px-2 pb-2 space-y-1">
           {fixture.venue && (
-            <div className="flex items-center gap-2 text-xs text-white/60">
-              <MapPin className="h-3 w-3" />
-              <span>{fixture.venue}</span>
+            <div className="flex items-center gap-1.5 text-[10px] text-white/60">
+              <MapPin className="h-2.5 w-2.5 flex-shrink-0" />
+              <span className="truncate">{fixture.venue}</span>
             </div>
           )}
           {fixture.result && (
-            <div className="flex items-center gap-2 text-xs">
-              <Trophy className="h-3 w-3 text-yellow-400" />
-              <span className="text-white font-semibold">{fixture.result}</span>
+            <div className="flex items-center gap-1.5 text-[10px]">
+              <Trophy className="h-2.5 w-2.5 text-yellow-400 flex-shrink-0" />
+              <span className="text-white font-semibold truncate">{fixture.result}</span>
             </div>
           )}
         </div>
@@ -259,35 +333,37 @@ function FixtureCard({ fixture, index }: { fixture: Fixture; index: number }) {
   )
 }
 
-function TeamCard({ team }: { team: Bidder }) {
+function TeamCard({ team, isHighlighted = false }: { team: Bidder; isHighlighted?: boolean }) {
   const teamName = team.teamName || team.user.name
   const initials = teamName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const profilePhoto = team.logoUrl || team.user.profilePhoto
 
   return (
-    <div className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
-      {/* Team Logo */}
+    <div className={`flex items-center gap-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-all ${
+      isHighlighted ? 'ring-2 ring-yellow-400/60 bg-yellow-500/10' : ''
+    }`}>
+      {/* Team Logo - COMPACT */}
       <div className="flex-shrink-0">
-        {team.logoUrl ? (
-          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white/30">
+        {profilePhoto ? (
+          <div className="w-7 h-7 rounded-full overflow-hidden border border-white/30">
             <Image
-              src={team.logoUrl}
+              src={profilePhoto}
               alt={teamName}
-              width={40}
-              height={40}
+              width={28}
+              height={28}
               className="w-full h-full object-contain"
             />
           </div>
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center border-2 border-white/30">
-            <span className="text-white font-bold text-sm">{initials}</span>
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center border border-white/30">
+            <span className="text-white font-bold text-[10px]">{initials}</span>
           </div>
         )}
       </div>
 
-      {/* Team Info */}
+      {/* Team Name Only - COMPACT */}
       <div className="flex-1 min-w-0">
-        <h5 className="font-bold text-white text-sm truncate">{teamName}</h5>
-        <p className="text-xs text-white/60 truncate">{team.username}</p>
+        <h5 className="font-semibold text-white text-xs truncate">{teamName}</h5>
       </div>
     </div>
   )

@@ -91,7 +91,8 @@ export async function PUT(
             user: {
               select: {
                 name: true,
-                email: true
+                email: true,
+                profilePhoto: true
               }
             }
           }
@@ -101,7 +102,8 @@ export async function PUT(
             user: {
               select: {
                 name: true,
-                email: true
+                email: true,
+                profilePhoto: true
               }
             }
           }
