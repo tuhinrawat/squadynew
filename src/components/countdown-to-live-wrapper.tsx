@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { FullScreenCountdown } from './full-screen-countdown'
 import { PublicAuctionView } from './public-auction-view'
 import { ProfessioPromoButton } from './professio-promo-button'
+import FloatingPromoChip from './floating-promo-chip'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -873,12 +874,15 @@ export function CountdownToLiveWrapper({
               <p className="text-base sm:text-lg text-purple-200">
                 The scheduled time has arrived. The auction will begin shortly.
               </p>
-                </div>
-              </div>
-            </div>
             </div>
           </div>
         </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Floating Professio AI Button */}
+        <FloatingPromoChip variant="purple" sessionKey="timer_professio_promo" />
       </div>
     )
   }
@@ -968,6 +972,9 @@ export function CountdownToLiveWrapper({
         bidHistory={bidHistory}
         bidders={bidders}
       />
+      
+      {/* Floating Professio AI Button */}
+      <FloatingPromoChip variant="purple" sessionKey="live_auction_professio_promo" />
     </div>
   )
 }

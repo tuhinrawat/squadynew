@@ -37,15 +37,15 @@ export default function FloatingPromoChip({ variant = 'purple', sessionKey = 'pr
 
   return (
     <>
-      {/* Floating Chip - Subtle & Curiosity-Driven */}
+      {/* Floating Chip - Bottom Right */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`fixed bottom-6 left-4 z-40 px-3 py-2 rounded-full text-[10px] sm:text-xs font-medium shadow-md hover:shadow-xl transition-all hover:scale-110 ${chipClasses} flex items-center gap-1.5 animate-pulse`}
+        className={`fixed bottom-6 right-4 z-40 px-3 py-2 rounded-full text-[10px] sm:text-xs font-medium shadow-md hover:shadow-xl transition-all hover:scale-110 ${chipClasses} flex items-center gap-1.5 animate-pulse`}
         aria-label="What is Professio AI"
       >
         <span>✨</span>
-        <span>Professio AI?</span>
+        <span>Explore Professio AI</span>
       </button>
 
       {/* Bottom Sheet - Mobile */}
