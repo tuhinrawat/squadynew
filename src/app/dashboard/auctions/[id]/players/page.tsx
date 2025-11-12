@@ -40,6 +40,10 @@ export default function PlayerManagement() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
   const [batchProcessing, setBatchProcessing] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
+  const [auctionStatus, setAuctionStatus] = useState<string>('DRAFT')
+  const [editingPlayer, setEditingPlayer] = useState<Player | null>(null)
+  const [editPlayerData, setEditPlayerData] = useState<Record<string, string>>({})
+  const [savingPlayer, setSavingPlayer] = useState(false)
 
   // Fetch players and auction details on component mount
   useEffect(() => {
@@ -53,6 +57,9 @@ export default function PlayerManagement() {
       const data = await response.json()
       
       if (response.ok && data.auction) {
+        // Store auction status
+        setAuctionStatus(data.auction.status)
+        
         // Load saved column order if available
         if (data.auction.columnOrder && Array.isArray(data.auction.columnOrder)) {
           setColumns(data.auction.columnOrder)
@@ -266,36 +273,67 @@ export default function PlayerManagement() {
   }
 
   const handleEditPlayer = async (player: any) => {
-    logger.log('Edit player clicked')
-    // For now, just show an alert with player data
-    // TODO: Implement proper edit modal
-    const playerData = Object.entries(player.data)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join('\n')
+    // Check if auction is in editable state
+    if (auctionStatus === 'LIVE' || auctionStatus === 'MOCK_RUN') {
+      setError('Cannot edit players while auction is LIVE or in MOCK_RUN mode')
+      return
+    }
     
-    const newData = prompt(`Edit player data:\n\n${playerData}\n\nEnter new data (JSON format):`, JSON.stringify(player.data, null, 2))
+    // Find the full player data
+    const fullPlayer = players.find(p => p.id === player.id)
+    if (!fullPlayer) return
     
-    if (newData) {
-      try {
-        const parsedData = JSON.parse(newData)
-        
-        const response = await fetch(`/api/auctions/${auctionId}/players/${player.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: parsedData }),
-        })
-
-        const result = await response.json()
-
-        if (response.ok) {
-          setSuccess('Player updated successfully!')
-          await fetchPlayers()
+    // Set the editing player and populate the form
+    setEditingPlayer(fullPlayer)
+    
+    // Convert player data to editable format (all as strings)
+    const editData: Record<string, string> = {}
+    Object.entries(fullPlayer.data).forEach(([key, value]) => {
+      editData[key] = value != null ? String(value) : ''
+    })
+    setEditPlayerData(editData)
+  }
+  
+  const handleSavePlayerEdit = async () => {
+    if (!editingPlayer) return
+    
+    try {
+      setSavingPlayer(true)
+      setError('')
+      
+      // Convert string values back to appropriate types
+      const updatedData: Record<string, any> = {}
+      Object.entries(editPlayerData).forEach(([key, value]) => {
+        // Try to preserve original type
+        const originalValue = editingPlayer.data[key]
+        if (typeof originalValue === 'number' && !isNaN(Number(value))) {
+          updatedData[key] = Number(value)
         } else {
-          setError(result.error || 'Failed to update player')
+          updatedData[key] = value
         }
-      } catch (error) {
-        setError('Invalid JSON format or network error')
+      })
+      
+      const response = await fetch(`/api/auctions/${auctionId}/players/${editingPlayer.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: updatedData }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        setSuccess('Player updated successfully!')
+        await fetchPlayers()
+        setEditingPlayer(null)
+        setEditPlayerData({})
+      } else {
+        setError(result.error || 'Failed to update player')
       }
+    } catch (error) {
+      setError('Failed to save player data')
+      logger.error('Error saving player:', error)
+    } finally {
+      setSavingPlayer(false)
     }
   }
 
@@ -574,6 +612,17 @@ export default function PlayerManagement() {
         </Alert>
       )}
 
+      {/* Warning for Live/Mock Run Status */}
+      {(auctionStatus === 'LIVE' || auctionStatus === 'MOCK_RUN') && (
+        <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
+          <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+          <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+            <strong>Editing Disabled:</strong> Player data cannot be edited while the auction is {auctionStatus === 'LIVE' ? 'LIVE' : 'in MOCK_RUN mode'}. 
+            {auctionStatus === 'MOCK_RUN' && ' Reset the auction to enable editing.'}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Upload Section */}
       <Card>
         <CardHeader>
@@ -731,6 +780,59 @@ export default function PlayerManagement() {
               )}
             </div>
 
+            {/* Edit Player Dialog */}
+            <Dialog open={!!editingPlayer} onOpenChange={(open) => !open && setEditingPlayer(null)}>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Edit Player Data</DialogTitle>
+                  <DialogDescription>
+                    Update player information. All fields from your Excel file are shown below.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {editingPlayer && Object.keys(editingPlayer.data).map((col) => (
+                    <div key={col} className="space-y-2">
+                      <Label htmlFor={`edit-player-${col}`} className="font-semibold">{col}</Label>
+                      <Input
+                        id={`edit-player-${col}`}
+                        value={editPlayerData[col] || ''}
+                        onChange={(e) => setEditPlayerData(prev => ({ ...prev, [col]: e.target.value }))}
+                        placeholder={`Enter ${col}`}
+                        className="bg-white dark:bg-gray-800"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <DialogFooter>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setEditingPlayer(null)
+                      setEditPlayerData({})
+                    }}
+                    disabled={savingPlayer}
+                    className="text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSavePlayerEdit} 
+                    disabled={savingPlayer}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {savingPlayer ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {/* Batch Action Buttons */}
             {selectedPlayerIds.size > 0 && (
               <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
@@ -794,7 +896,7 @@ export default function PlayerManagement() {
               <DataTable
                 data={tableData}
                 columns={tableColumns}
-                onEdit={handleEditPlayer}
+                onEdit={auctionStatus !== 'LIVE' && auctionStatus !== 'MOCK_RUN' ? handleEditPlayer : undefined}
                 onDelete={handleDeletePlayer}
                 onColumnReorder={handleColumnReorder}
                 searchPlaceholder="Search players..."
@@ -810,6 +912,11 @@ export default function PlayerManagement() {
                     <Badge variant="default" className="bg-purple-600 text-white">
                       ⭐ {players.filter((p: any) => p.isIcon).length} / {auctionRules?.iconPlayerCount ?? 10} Bidder Choice
                     </Badge>
+                    {(auctionStatus === 'LIVE' || auctionStatus === 'MOCK_RUN') && (
+                      <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700">
+                        🔒 Editing Locked
+                      </Badge>
+                    )}
                   </div>
                 }
               />
