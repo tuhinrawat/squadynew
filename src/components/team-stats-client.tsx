@@ -378,6 +378,13 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     }
   }
 
+  console.log('=== TEAM STATS RENDER ===')
+  console.log('Current activeTab:', activeTab)
+  console.log('selectedTeam:', selectedTeam)
+  console.log('fixtures count:', fixtures.length)
+  console.log('fixturesLoading:', fixturesLoading)
+  console.log('========================')
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900">
       {/* Header */}
@@ -502,7 +509,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               </Button>
               <Button
                 variant={activeTab === 'fixtures' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('fixtures')}
+                onClick={() => {
+                  console.log('FIXTURES BUTTON CLICKED - Setting activeTab to fixtures')
+                  setActiveTab('fixtures')
+                  console.log('activeTab after setState:', 'fixtures')
+                }}
                 className={`${activeTab === 'fixtures' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4`}
               >
                 <Calendar className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
