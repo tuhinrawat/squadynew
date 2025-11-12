@@ -197,16 +197,28 @@ export async function POST(
       }
 
       const remainingSlotsAfterThis = Math.max(targetAuctionPlayers - (playersBoughtByBidder + 1), 0)
-      const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
-      const remainingAfterBid = bidder.remainingPurse - amount
-      if (remainingAfterBid < requiredReserve) {
-        const bidderDisplayName = bidder.teamName || bidder.user?.name || bidder.username
-        return broadcastBidError(
-          params.id,
-          `${bidderDisplayName} needs ₹${requiredReserve.toLocaleString('en-IN')} reserve for remaining ${remainingSlotsAfterThis} slots`,
-          bidder.user?.name || bidder.username,
-          bidder.id
-        )
+      
+      // If no remaining slots needed, allow bidding all remaining money
+      if (remainingSlotsAfterThis === 0) {
+        // Allow bidding all remaining purse - no reserve needed
+      } else {
+        // Calculate required reserve for remaining slots
+        const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
+        const remainingAfterBid = bidder.remainingPurse - amount
+        
+        // Allow bidding if remaining after bid is exactly 0 AND only one slot left
+        // (meaning they can bid all money on this player, then have 0 for the last slot)
+        const canBidAllMoney = remainingSlotsAfterThis === 1 && remainingAfterBid === 0
+        
+        if (!canBidAllMoney && remainingAfterBid < requiredReserve) {
+          const bidderDisplayName = bidder.teamName || bidder.user?.name || bidder.username
+          return broadcastBidError(
+            params.id,
+            `This bid would leave insufficient purse to complete the mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after bid: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`,
+            bidder.user?.name || bidder.username,
+            bidder.id
+          )
+        }
       }
     }
 

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, CheckCircle, Plus, Edit, Trash2, Loader2 } from 'lucide-react'
+import { AlertCircle, CheckCircle, Plus, Edit, Trash2, Loader2, Image as ImageIcon } from 'lucide-react'
 
 interface Bidder {
   id: string
@@ -47,6 +47,7 @@ export default function BidderManagement() {
   const [success, setSuccess] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isFixingImages, setIsFixingImages] = useState(false)
   const [editingBidder, setEditingBidder] = useState<Bidder | null>(null)
 
   const [formData, setFormData] = useState({
@@ -216,6 +217,60 @@ export default function BidderManagement() {
     }
   }
 
+  const handleFixBidderImages = async () => {
+    if (!confirm('This will backfill missing bidder images from retired player data. Continue?')) return
+
+    setError('')
+    setSuccess('')
+    setIsFixingImages(true)
+
+    try {
+      const response = await fetch('/api/debug/fix-bidder-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auctionId })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        // Show detailed results
+        const errorDetails = result.results
+          .filter((r: any) => r.status === 'error')
+          .map((r: any) => `${r.teamName || r.username}: ${r.message}`)
+          .join(', ')
+
+        if (result.summary.fixed > 0) {
+          setSuccess(
+            `Successfully fixed ${result.summary.fixed} bidder image(s). ` +
+            `${result.summary.skipped} skipped, ${result.summary.errors} errors.` +
+            (errorDetails ? ` Errors: ${errorDetails}` : '')
+          )
+        } else {
+          setError(
+            `No images were fixed. ` +
+            `${result.summary.skipped} skipped, ${result.summary.errors} errors. ` +
+            (errorDetails ? `Details: ${errorDetails}` : 'Check console for details.')
+          )
+        }
+
+        // Log full results for debugging
+        console.log('Fix Bidder Images Results:', result)
+
+        // Refresh bidders to show updated images
+        await fetchBidders()
+      } else {
+        setError(result.error || 'Failed to fix bidder images')
+        console.error('Fix bidder images error:', result)
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+      console.error('Network error:', error)
+    } finally {
+      setIsFixingImages(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -225,13 +280,33 @@ export default function BidderManagement() {
             Add and manage bidders for this auction
           </p>
         </div>
-        <Button
-          onClick={() => setCreateDialogOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Create Bidder
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={handleFixBidderImages}
+            disabled={isFixingImages}
+            variant="outline"
+            className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+          >
+            {isFixingImages ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Fixing...
+              </>
+            ) : (
+              <>
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Fix Bidder Images
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={() => setCreateDialogOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Bidder
+          </Button>
+        </div>
       </div>
 
       {/* Alerts */}
@@ -303,7 +378,28 @@ export default function BidderManagement() {
                           <span>{bidder.teamName || '-'}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{bidder.user.name}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {bidder.logoUrl ? (
+                            <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700">
+                              <Image
+                                src={bidder.logoUrl}
+                                alt={bidder.user.name || 'Bidder photo'}
+                                fill
+                                className="object-cover"
+                                sizes="32px"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 border border-gray-300 dark:border-gray-600">
+                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                                {bidder.user.name?.charAt(0).toUpperCase() || '?'}
+                              </span>
+                            </div>
+                          )}
+                          <span>{bidder.user.name}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>{bidder.username}</TableCell>
                       <TableCell>{bidder.user.email}</TableCell>
                       <TableCell>

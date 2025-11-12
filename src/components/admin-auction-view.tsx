@@ -271,6 +271,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       // Batch all state updates together (React 18 auto-batches)
                       const previousBid = currentBid
                       const previousHighestBidderId = highestBidderId
+                      
+                      // Create unique optimistic entry ID to track and remove it later
+                      const optimisticEntryId = `optimistic-${Date.now()}-${Math.random()}`
                       const optimisticEntry: BidHistoryEntry = {
                         bidderId: bidder.id,
                         amount: totalBid,
@@ -278,8 +281,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         bidderName: bidder.user?.name || bidder.username,
                         teamName: bidder.teamName || undefined,
                         type: 'bid',
-                        playerId: currentPlayer?.id
-                      }
+                        playerId: currentPlayer?.id,
+                        // Add unique identifier for tracking
+                        _optimisticId: optimisticEntryId
+                      } as any
 
                       // Optimistic UI updates - batched together
                       setIsPlacingBid(true)
@@ -303,18 +308,22 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           if (!response.ok) {
                             const err = await response.json()
                             pushBidError(err.error || 'Failed to place bid')
-                            // Revert optimistic update
+                            // Revert optimistic update - remove by unique ID
                             setCurrentBid(previousBid)
                             setHighestBidderId(previousHighestBidderId)
-                            setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                            setFullBidHistory(prev => prev.filter(entry => 
+                              (entry as any)._optimisticId !== optimisticEntryId
+                            ))
                           }
                         })
                         .catch(() => {
                           pushBidError('Network error')
-                          // Revert optimistic update
+                          // Revert optimistic update - remove by unique ID
                           setCurrentBid(previousBid)
                           setHighestBidderId(previousHighestBidderId)
-                          setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                          setFullBidHistory(prev => prev.filter(entry => 
+                            (entry as any)._optimisticId !== optimisticEntryId
+                          ))
                         })
                         .finally(() => {
                           // Clear placing state in background (non-blocking)
@@ -531,6 +540,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       // Clear bid placement state when Pusher confirms the bid (fallback if API didn't clear it)
       setIsPlacingBid(false)
       setPlacingBidFor(null)
+      
+      // Remove any optimistic entries for this bidder and player before adding server-confirmed bid
+      // This ensures we don't have duplicate entries
+      setFullBidHistory(prev => {
+        // Remove optimistic entries for the same bidder and player
+        const filtered = prev.filter(entry => 
+          !((entry as any)._optimisticId && 
+            entry.bidderId === data.bidderId && 
+            entry.playerId === currentPlayer?.id)
+        )
+        return filtered
+      })
       
       // Update state from Pusher (this is the source of truth, corrects any API response discrepancies)
       setCurrentBid({
@@ -2627,8 +2648,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 }
 
                 // Optimistic UI updates - batched together
+                // Use current state for rollback, but calculate optimistic bid based on latest state
                 const previousBid = currentBid
                 const previousHighestBidderId = highestBidderId
+                
+                // Create unique optimistic entry ID to track and remove it later
+                const optimisticEntryId = `optimistic-${Date.now()}-${Math.random()}`
                 const optimisticEntry: BidHistoryEntry = {
                   type: 'bid',
                   bidderId: activeBidder.id,
@@ -2636,8 +2661,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   timestamp: new Date(),
                   bidderName: activeBidder.user?.name || activeBidder.username,
                   teamName: activeBidder.teamName || undefined,
-                  playerId: currentPlayer?.id
-                }
+                  playerId: currentPlayer?.id,
+                  // Add unique identifier for tracking
+                  _optimisticId: optimisticEntryId
+                } as any
 
                 // Batch all state updates (React 18 auto-batches)
                 setIsPlacingBid(true)
@@ -2664,10 +2691,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     if (!response.ok) {
                       const data = await response.json()
                       showBidError(data.error || 'Failed to place bid')
-                      // Revert optimistic update
+                      // Revert optimistic update - remove by unique ID
                       setCurrentBid(previousBid)
                       setHighestBidderId(previousHighestBidderId)
-                      setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                      setFullBidHistory(prev => prev.filter(entry => 
+                        (entry as any)._optimisticId !== optimisticEntryId
+                      ))
                     } else {
                       // Success - close modal and clear form (non-blocking)
                       startTransition(() => {
@@ -2680,10 +2709,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   })
                   .catch(() => {
                     showBidError('Network error. Please try again.')
-                    // Revert optimistic update
+                    // Revert optimistic update - remove by unique ID
                     setCurrentBid(previousBid)
                     setHighestBidderId(previousHighestBidderId)
-                    setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                    setFullBidHistory(prev => prev.filter(entry => 
+                      (entry as any)._optimisticId !== optimisticEntryId
+                    ))
                   })
                   .finally(() => {
                     setIsPlacingBid(false)
