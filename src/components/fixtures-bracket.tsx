@@ -15,7 +15,6 @@ interface Bidder {
   user: {
     name: string
     email: string
-    profilePhoto: string | null
   }
 }
 
@@ -340,7 +339,7 @@ function TeamCard({ team, isHighlighted = false }: { team: Bidder; isHighlighted
   const bidderName = team.user.name
   const displayName = teamName || bidderName
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  const profilePhoto = team.logoUrl || team.user.profilePhoto
+  const profilePhoto = team.logoUrl
 
   return (
     <div className={`flex items-center gap-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-all ${
