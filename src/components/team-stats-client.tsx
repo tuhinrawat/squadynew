@@ -1439,36 +1439,42 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
             </Card>
 
             {/* Fixtures Tab */}
-            {activeTab === 'fixtures' && (
-              <Card className="bg-white/10 backdrop-blur-md border-white/20">
-                <CardContent className="p-3 sm:p-6">
-                  <h3 className="text-white text-sm sm:text-base font-semibold mb-4">
-                    Match Fixtures {fixturesLoading && '(Loading...)'}
-                  </h3>
-                  <div className="text-white text-xs mb-2">
-                    Debug: activeTab = {activeTab}, fixturesLoading = {String(fixturesLoading)}, fixtures.length = {fixtures.length}
-                  </div>
-                  {fixturesLoading ? (
-                    <div className="flex items-center justify-center py-20">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+            {activeTab === 'fixtures' && (() => {
+              console.log('RENDERING FIXTURES TAB - activeTab:', activeTab, 'fixturesLoading:', fixturesLoading, 'fixtures.length:', fixtures.length)
+              return (
+                <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                  <CardContent className="p-3 sm:p-6">
+                    <h3 className="text-white text-sm sm:text-base font-semibold mb-4">
+                      Match Fixtures {fixturesLoading && '(Loading...)'}
+                    </h3>
+                    <div className="text-white text-xs mb-2 p-2 bg-red-500/50">
+                      Debug: activeTab = {activeTab}, fixturesLoading = {String(fixturesLoading)}, fixtures.length = {fixtures.length}
                     </div>
-                  ) : (
-                    <>
-                      <div className="text-white/60 text-xs mb-4">
-                        Found {fixtures.length} fixture{fixtures.length !== 1 ? 's' : ''}
+                    {fixturesLoading ? (
+                      <div className="flex items-center justify-center py-20">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
                       </div>
-                      {fixtures.length > 0 ? (
-                        <FixturesBracket fixtures={fixtures} />
-                      ) : (
-                        <div className="text-white/80 text-center py-10">
-                          No fixtures to display
+                    ) : (
+                      <>
+                        <div className="text-white/60 text-xs mb-4">
+                          Found {fixtures.length} fixture{fixtures.length !== 1 ? 's' : ''}
                         </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                        {fixtures.length > 0 ? (
+                          <div>
+                            <div className="text-yellow-400 mb-4">About to render FixturesBracket with {fixtures.length} fixtures</div>
+                            <FixturesBracket fixtures={fixtures} />
+                          </div>
+                        ) : (
+                          <div className="text-white/80 text-center py-10">
+                            No fixtures to display
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })()}
 
             {/* Player Bids Modal */}
             <Dialog open={!!bidModalPlayer} onOpenChange={(o) => { if (!o) { setBidModalPlayer(null); setBidModalItems([]) } }}>
