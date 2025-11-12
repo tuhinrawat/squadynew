@@ -148,6 +148,8 @@ export function CountdownToLiveWrapper({
             return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
           case 'bidders':
             return card.isBidder
+          case 'bidder-choice':
+            return card.isBidderChoice
           default:
             return true
         }
@@ -449,6 +451,7 @@ export function CountdownToLiveWrapper({
                         }).length})
                       </SelectItem>
                       <SelectItem value="bidders">Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})</SelectItem>
+                      <SelectItem value="bidder-choice">⭐ Bidder Choice ({knowYourPlayersCards.filter(card => card.isBidderChoice).length})</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -526,6 +529,18 @@ export function CountdownToLiveWrapper({
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
                   >
                     Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={playerFilter === 'bidder-choice' ? 'default' : 'outline'}
+                    onClick={() => setPlayerFilter('bidder-choice')}
+                    className={`${
+                      playerFilter === 'bidder-choice'
+                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 border-0'
+                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
+                  >
+                    ⭐ Bidder Choice ({knowYourPlayersCards.filter(card => card.isBidderChoice).length})
                   </Button>
                 </div>
               </div>
