@@ -29,12 +29,24 @@ export async function GET(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    // Get current player if exists
+    // Get current player if exists and validate it's not SOLD
     let currentPlayer = null
     if (auction.currentPlayerId) {
-      currentPlayer = await prisma.player.findUnique({
+      const fetchedPlayer = await prisma.player.findUnique({
         where: { id: auction.currentPlayerId }
       })
+      
+      // CRITICAL: If current player is SOLD, clear it to prevent showing SOLD players
+      if (fetchedPlayer && fetchedPlayer.status === 'SOLD') {
+        // Clear the invalid currentPlayerId
+        await prisma.auction.update({
+          where: { id: auction.id },
+          data: { currentPlayerId: null }
+        })
+        currentPlayer = null
+      } else {
+        currentPlayer = fetchedPlayer
+      }
     }
 
     // Calculate stats (excluding RETIRED players)

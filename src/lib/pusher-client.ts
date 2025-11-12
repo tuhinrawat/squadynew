@@ -81,6 +81,7 @@ export interface AuctionEventData {
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
+  'auction-reset': {}
   'players-updated': {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
@@ -104,6 +105,7 @@ export interface UsePusherOptions {
   onAuctionPaused?: (data: AuctionEventData['auction-paused']) => void
   onAuctionResumed?: (data: AuctionEventData['auction-resumed']) => void
   onAuctionEnded?: (data: AuctionEventData['auction-ended']) => void
+  onAuctionReset?: (data: AuctionEventData['auction-reset']) => void
   onPlayersUpdated?: (data: AuctionEventData['players-updated']) => void
   onBidError?: (data: AuctionEventData['bid-error']) => void
 }
@@ -191,6 +193,10 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             
             channel.bind('auction-ended', (data: any) => {
               callbacksRef.current.onAuctionEnded?.(data)
+            })
+            
+            channel.bind('auction-reset', (data: any) => {
+              callbacksRef.current.onAuctionReset?.(data)
             })
             
             channel.bind('players-updated', (data: any) => {

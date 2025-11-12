@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { isCuid } from '@/lib/slug'
+import { Prisma } from '@prisma/client'
 
 // POST /api/analytics/[id]/upload-stats - Upload player stats and match by name
 export async function POST(
@@ -15,12 +17,21 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const auction = await prisma.auction.findUnique({
-      where: { id: params.id },
-      include: {
-        players: true
-      }
-    })
+    // Support both slug and ID
+    const isId = isCuid(params.id)
+    const auction = isId
+      ? await prisma.auction.findUnique({
+          where: { id: params.id },
+          include: {
+            players: true
+          }
+        })
+      : await prisma.auction.findUnique({
+          where: { slug: params.id } as unknown as Prisma.AuctionWhereUniqueInput,
+          include: {
+            players: true
+          }
+        })
 
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
@@ -263,7 +274,7 @@ export async function POST(
       const updatedColumns = Array.from(new Set([...currentColumns, ...Array.from(newColumns)]))
       
       await prisma.auction.update({
-        where: { id: params.id },
+        where: { id: auction.id }, // Use auction.id (always use ID for updates)
         data: {
           analyticsVisibleColumns: updatedColumns
         }

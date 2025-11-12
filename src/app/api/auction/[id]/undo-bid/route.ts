@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resetTimer } from '@/lib/auction-timer'
+import { isLiveStatus } from '@/lib/auction-status'
 
 export async function POST(
   request: NextRequest,
@@ -32,7 +33,7 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    if (auction.status !== 'LIVE') {
+    if (!isLiveStatus(auction.status)) {
       return NextResponse.json({ error: 'Auction is not live' }, { status: 400 })
     }
 

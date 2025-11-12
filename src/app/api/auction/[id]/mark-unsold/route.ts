@@ -55,20 +55,37 @@ export async function POST(
       }
     })
 
-    // Pick next random available player
-    // Prioritize icon players if they haven't all been auctioned yet
-    let availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
-    let currentAuctionData = auction
+    // OPTIMIZED: Fetch only AVAILABLE players (not all players)
+    let availablePlayers = await prisma.player.findMany({
+      where: {
+        auctionId: params.id,
+        status: 'AVAILABLE'
+      },
+      select: {
+        id: true,
+        status: true,
+        isIcon: true
+      }
+    })
     
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
     if (availablePlayers.length === 0) {
-      // Explicitly filter for UNSOLD players only - SOLD players should NEVER be recycled
-      const unsoldPlayers = auction.players.filter(p => p.status === 'UNSOLD')
+      // OPTIMIZED: Fetch only UNSOLD players (not all players)
+      const unsoldPlayers = await prisma.player.findMany({
+        where: {
+          auctionId: params.id,
+          status: 'UNSOLD' // Explicit status check ensures SOLD players are never fetched
+        },
+        select: {
+          id: true,
+          status: true,
+          isIcon: true
+        }
+      })
       
-      // Additional safety check: ensure no SOLD players are accidentally included
-      const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
-      if (soldPlayers.length > 0 && unsoldPlayers.some(p => soldPlayers.find(sp => sp.id === p.id))) {
+      // Safety check: ensure no SOLD players (shouldn't happen with status filter)
+      if (unsoldPlayers.some(p => p.status !== 'UNSOLD')) {
         console.error('CRITICAL: Attempted to recycle SOLD players - this should never happen!')
         return NextResponse.json({ error: 'Internal error: Cannot recycle sold players' }, { status: 500 })
       }
@@ -88,19 +105,21 @@ export async function POST(
           }
         })
         
-        // Refresh auction data after conversion
-        const updatedAuction = await prisma.auction.findUnique({
-          where: { id: params.id },
-          include: { players: true }
+        // OPTIMIZED: Fetch only AVAILABLE players after conversion
+        availablePlayers = await prisma.player.findMany({
+          where: {
+            auctionId: params.id,
+            status: 'AVAILABLE'
+          },
+          select: {
+            id: true,
+            status: true,
+            isIcon: true
+          }
         })
         
-        if (updatedAuction) {
-          currentAuctionData = updatedAuction
-          availablePlayers = updatedAuction.players.filter(p => p.status === 'AVAILABLE')
-          
-          // Broadcast players updated event to notify clients of recycled players
-          triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
-        }
+        // Broadcast players updated event to notify clients of recycled players
+        triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
       }
     }
     
@@ -111,17 +130,33 @@ export async function POST(
       // Only show regular players after ALL icon players have been auctioned (SOLD or UNSOLD)
       const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
       
+      let selectedPlayerId: string | null = null
+      
       if (iconPlayersAvailable.length > 0) {
         // There are still icon players available - MUST select from icon players only
         // Regular players cannot be shown until all icon players are processed
-        nextPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
+        selectedPlayerId = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)].id
       } else {
         // All icon players have been processed (either SOLD or UNSOLD and not yet recycled)
         // Now we can show regular players
         const regularPlayersAvailable = availablePlayers.filter(p => !p.isIcon)
         if (regularPlayersAvailable.length > 0) {
-          nextPlayer = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)]
+          selectedPlayerId = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)].id
         }
+      }
+      
+      // CRITICAL: Fetch full player data including the `data` field
+      if (selectedPlayerId) {
+        nextPlayer = await prisma.player.findUnique({
+          where: { id: selectedPlayerId },
+          select: {
+            id: true,
+            status: true,
+            isIcon: true,
+            data: true, // Include full player data
+            auctionId: true
+          }
+        })
       }
     }
 

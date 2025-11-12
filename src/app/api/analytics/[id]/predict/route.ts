@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calculatePlayerScoreFromData, ScoreResult, deriveSpecialityFromStats, getPredictedStatsSummary } from '@/lib/playerStats'
 import { calculateAuctionState, analyzeTeamNeeds, calculateRemainingPoolImpact, getRemainingPoolSummary, AuctionState } from '@/lib/auctionState'
+import { isCuid } from '@/lib/slug'
+import { Prisma } from '@prisma/client'
 
 // Lazy load OpenAI to avoid build-time errors
 function getOpenAI() {
@@ -119,33 +121,55 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
     
-    const { playerId, tusharBidderId, customColumns, useOpenAI = true } = body || {}
-
+    const { playerId, tusharBidderId, customColumns, useOpenAI = false } = body || {}
+    
     if (!playerId || !tusharBidderId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
     
-    // If useOpenAI is false, skip OpenAI and use fallback only
-    const shouldUseOpenAI = useOpenAI !== false && process.env.OPENAI_API_KEY
+    // Mathematical model is now the DEFAULT (faster, cheaper, real-time)
+    // OpenAI is optional enhancement (set useOpenAI = true to enable)
+    const shouldUseOpenAI = useOpenAI === true && process.env.OPENAI_API_KEY
 
+    // Support both slug and ID for analytics
+    const isId = isCuid(params.id)
+    
     // Fetch auction data
-    const auction = await prisma.auction.findUnique({
-      where: { id: params.id },
-      include: {
-        players: true,
-        bidders: {
+    const auction = isId
+      ? await prisma.auction.findUnique({
+          where: { id: params.id },
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
+            players: true,
+            bidders: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
               }
             }
           }
-        }
-      }
-    })
+        })
+      : await prisma.auction.findUnique({
+          where: { slug: params.id } as unknown as Prisma.AuctionWhereUniqueInput,
+          include: {
+            players: true,
+            bidders: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        })
 
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
@@ -176,6 +200,13 @@ export async function POST(
     // Get player data
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playerData = currentPlayer.data as any
+    
+    // Get bidder priorities from auction rules
+    const rules = auction.rules as any
+    const bidderPriorities = rules?.bidderPriorities || {}
+    
+    // Get player name for priority lookup (try multiple formats)
+    const playerName = playerData?.Name || playerData?.name || ''
     
     // Calculate player score using stats-based scoring
     const playerScore: ScoreResult = calculatePlayerScoreFromData(currentPlayer)
@@ -352,9 +383,7 @@ export async function POST(
       : 50)
     const brilliantUpcomingPlayers = upcomingPlayersAnalysis.filter(p => p.brillianceScore >= brilliantThreshold)
 
-    // Get auction rules
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rules = auction.rules as any
+    // Get auction rules (already defined above, reuse)
     const minBidIncrement = rules?.minBidIncrement || 1000
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const maxBidIncrement = rules?.maxBidIncrement
@@ -563,6 +592,29 @@ ${brilliantUpcomingPlayers.slice(0, 10).map(p => {
   })
   return highPurseBidders.length
 })()} bidders with >60% purse remaining) and ${brilliantUpcomingPlayers.length} high-value players coming up, they may be LESS aggressive on current player to save budget. Factor this into probability calculations.\n` : ''}
+
+**BIDDER PRIORITY MATRIX** (CRITICAL FOR PREDICTIONS):
+This shows each bidder's priority ranking for the current player. Lower numbers = higher priority (1 = first choice, 2 = second choice, etc.).
+${Object.keys(bidderPriorities).length > 0 ? `
+Current Player: ${playerName}
+${auction.bidders.map(bidder => {
+  // Try to find priority by matching bidder name/team name with priority matrix keys
+  const bidderKey = Object.keys(bidderPriorities).find(key => {
+    const keyLower = key.toLowerCase()
+    const bidderNameLower = (bidder.user?.name || '').toLowerCase()
+    const teamNameLower = (bidder.teamName || '').toLowerCase()
+    const usernameLower = (bidder.username || '').toLowerCase()
+    return keyLower === bidderNameLower || keyLower === teamNameLower || keyLower === usernameLower
+  })
+  if (bidderKey && bidderPriorities[bidderKey]) {
+    const playerPriority = bidderPriorities[bidderKey][playerName] || bidderPriorities[bidderKey][playerName.toLowerCase()]
+    if (playerPriority) {
+      return `- ${bidder.teamName || bidder.user?.name || bidder.username}: Priority ${playerPriority}${playerPriority <= 3 ? ' (HIGH PRIORITY - likely to bid aggressively)' : playerPriority <= 6 ? ' (MEDIUM PRIORITY)' : ' (LOW PRIORITY)'}`
+    }
+  }
+  return null
+}).filter(Boolean).join('\n') || 'No priority data found for current player'}
+` : 'No bidder priority data available. Use team needs and budget analysis instead.'}
 
 BIDDERS (Detailed Analysis):
 
@@ -1131,7 +1183,8 @@ Return ONLY valid JSON, no other text.`
           playerScore,
           auctionState,
           teamNeedsAnalysis,
-          totalPurse
+          totalPurse,
+          bidderPriorities
         )
       }
     } else {
@@ -1149,7 +1202,8 @@ Return ONLY valid JSON, no other text.`
         playerScore,
         auctionState,
         teamNeedsAnalysis,
-        totalPurse
+        totalPurse,
+        bidderPriorities
       )
     }
 
@@ -1192,7 +1246,9 @@ function generateFallbackPredictions(
   auctionState?: AuctionState,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   teamNeedsAnalysis?: any[],
-  totalPurse: number = 100000
+  totalPurse: number = 100000,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bidderPriorities: Record<string, Record<string, number>> = {}
 ) {
   // Enhanced fallback logic considering all factors
   // Calculate metrics from bid history for THIS player only
@@ -1219,6 +1275,8 @@ function generateFallbackPredictions(
   // Get player speciality - derive from stats instead of using column
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playerData = player?.data as any
+  // Get player name for priority lookup
+  const playerName = playerData?.Name || playerData?.name || ''
   // Derive speciality from stats-based scoring
   const playerSpeciality = playerScore ? deriveSpecialityFromStats(playerScore) : (playerData?.Speciality || playerData?.speciality || '')
   const poolImpact = auctionState ? calculateRemainingPoolImpact(playerSpeciality, auctionState) : 'medium'
@@ -1364,8 +1422,45 @@ function generateFallbackPredictions(
         poolSupplyFactor = 0.15 * (1 - availableSimilarPlayers / 5) // Fewer available = more increase
       }
       
-      // Calculate final probability with normalization (include pool supply factor)
-      const rawProbability = purseFactor + utilizationFactor + needFactor + avgSpentFactor + earlyAuctionFactor + brilliantPlayerFactor + poolSupplyFactor
+      // Factor 8: Bidder Priority Ranking (0-0.3 weight) - HIGHEST PRIORITY FACTOR
+      // Lower priority number = higher probability (1 = first choice, 2 = second, etc.)
+      let priorityFactor = 0
+      if (Object.keys(bidderPriorities).length > 0) {
+        // Try to find bidder in priority matrix
+        // Find actual bidder from auction to get user info
+        const actualBidder = auctionBidders.find(bid => bid.id === b.id)
+        const bidderKey = Object.keys(bidderPriorities).find(key => {
+          const keyLower = key.toLowerCase()
+          const bidderNameLower = (actualBidder?.user?.name || b.name || '').toLowerCase()
+          const teamNameLower = (b.teamName || '').toLowerCase()
+          const usernameLower = (actualBidder?.username || '').toLowerCase()
+          return keyLower === bidderNameLower || keyLower === teamNameLower || keyLower === usernameLower
+        })
+        
+        if (bidderKey && bidderPriorities[bidderKey]) {
+          const playerPriority = bidderPriorities[bidderKey][playerName] || 
+                                 bidderPriorities[bidderKey][playerName.toLowerCase()] ||
+                                 bidderPriorities[bidderKey][(playerName.split(' ')[0] || '').toLowerCase()]
+          
+          if (playerPriority && typeof playerPriority === 'number') {
+            // Priority 1-3: Very high probability boost (0.25-0.3)
+            // Priority 4-6: Medium boost (0.15-0.2)
+            // Priority 7-10: Low boost (0.05-0.1)
+            // Priority >10: No boost
+            if (playerPriority <= 3) {
+              priorityFactor = 0.3 - ((playerPriority - 1) * 0.025) // 0.3 for 1, 0.275 for 2, 0.25 for 3
+            } else if (playerPriority <= 6) {
+              priorityFactor = 0.2 - ((playerPriority - 4) * 0.017) // 0.2 for 4, decreasing
+            } else if (playerPriority <= 10) {
+              priorityFactor = 0.1 - ((playerPriority - 7) * 0.0125) // 0.1 for 7, decreasing
+            }
+            // Priority >10: no boost (priorityFactor = 0)
+          }
+        }
+      }
+      
+      // Calculate final probability with normalization (include all factors)
+      const rawProbability = purseFactor + utilizationFactor + needFactor + avgSpentFactor + earlyAuctionFactor + brilliantPlayerFactor + poolSupplyFactor + priorityFactor
       const probability = Math.max(0, Math.min(0.95, rawProbability))
       
       // Estimate max bid using stats-based predicted price as baseline
@@ -1373,7 +1468,44 @@ function generateFallbackPredictions(
       const basePrice = (player?.data as any)?.['Base Price'] || (player?.data as any)?.['base price'] || 1000
       
       // Use stats-based predicted price if available, otherwise calculate
-      const statsPredictedPrice = playerScore?.predictedPrice || (basePrice * 5) // Fallback to 5x base
+      let statsPredictedPrice = playerScore?.predictedPrice || (basePrice * 5) // Fallback to 5x base
+      
+      // Adjust predicted price based on bidder priority
+      if (Object.keys(bidderPriorities).length > 0) {
+        // Find actual bidder from auction to get user info
+        const actualBidder = auctionBidders.find(bid => bid.id === b.id)
+        const bidderKey = Object.keys(bidderPriorities).find(key => {
+          const keyLower = key.toLowerCase()
+          const bidderNameLower = (actualBidder?.user?.name || b.name || '').toLowerCase()
+          const teamNameLower = (b.teamName || '').toLowerCase()
+          const usernameLower = (actualBidder?.username || '').toLowerCase()
+          return keyLower === bidderNameLower || keyLower === teamNameLower || keyLower === usernameLower
+        })
+        
+        if (bidderKey && bidderPriorities[bidderKey]) {
+          const playerPriority = bidderPriorities[bidderKey][playerName] || 
+                                 bidderPriorities[bidderKey][playerName.toLowerCase()] ||
+                                 bidderPriorities[bidderKey][(playerName.split(' ')[0] || '').toLowerCase()]
+          
+          if (playerPriority && typeof playerPriority === 'number') {
+            // Higher priority (lower number) = willing to pay more
+            // Priority 1: +40% to max bid
+            // Priority 2-3: +25-30%
+            // Priority 4-6: +10-15%
+            // Priority 7-10: +5%
+            // Priority >10: no adjustment
+            if (playerPriority <= 1) {
+              statsPredictedPrice = statsPredictedPrice * 1.4
+            } else if (playerPriority <= 3) {
+              statsPredictedPrice = statsPredictedPrice * (1.3 - ((playerPriority - 2) * 0.05))
+            } else if (playerPriority <= 6) {
+              statsPredictedPrice = statsPredictedPrice * (1.15 - ((playerPriority - 4) * 0.017))
+            } else if (playerPriority <= 10) {
+              statsPredictedPrice = statsPredictedPrice * 1.05
+            }
+          }
+        }
+      }
       
       // Adjust for pool supply impact
       let poolAdjustedPrice = statsPredictedPrice

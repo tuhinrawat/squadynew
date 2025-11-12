@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
         isPublished: true,
         registrationOpen: true,
         status: {
-          not: 'COMPLETED' // Exclude completed auctions
+          notIn: ['COMPLETED', 'MOCK_RUN'] // Exclude completed and mock run auctions
         }
       },
       orderBy: {

@@ -19,6 +19,7 @@ enum Role {
 enum AuctionStatus {
   DRAFT
   LIVE
+  MOCK_RUN
   PAUSED
   COMPLETED
 }
@@ -81,6 +82,7 @@ model Auction {
   totalViews       Int           @default(0) // Total page views
   uniqueVisitors   Int           @default(0) // Unique visitors count
   peakViewers      Int           @default(0) // Peak concurrent viewers
+  timerViews       Int           @default(0) // Countdown timer page views
 
   // Scheduled start date/time for the auction
   scheduledStartDate DateTime?   // When the auction is scheduled to start

@@ -23,32 +23,65 @@ export async function POST(
       return NextResponse.json({ error: 'Player ID required' }, { status: 400 })
     }
 
-    // Fetch auction
-    const auction = await prisma.auction.findUnique({
-      where: { id: params.id },
-      include: {
-        players: true,
-        bidders: true
-      }
-    })
+    // OPTIMIZED: Fetch only required fields in parallel
+    const [auction, currentPlayer] = await Promise.all([
+      prisma.auction.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          status: true,
+          currentPlayerId: true,
+          rules: true,
+          bidHistory: true,
+          bidders: {
+            select: {
+              id: true,
+              username: true,
+              teamName: true,
+              remainingPurse: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            }
+          }
+        }
+      }),
+      prisma.player.findUnique({
+        where: { id: playerId },
+        select: {
+          id: true,
+          auctionId: true,
+          status: true,
+          soldTo: true,
+          data: true
+        }
+      })
+    ])
 
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    // Fetch current player and bid history
-    const currentPlayer = await prisma.player.findUnique({
-      where: { id: playerId }
-    })
-
     if (!currentPlayer || currentPlayer.auctionId !== params.id) {
       return NextResponse.json({ error: 'Invalid player' }, { status: 400 })
     }
 
+    // CRITICAL: Re-fetch bid history right before updating to ensure we have the latest
+    // This prevents race conditions where bids were added after the initial fetch
+    const freshAuction = await prisma.auction.findUnique({
+      where: { id: params.id },
+      select: {
+        bidHistory: true
+      }
+    })
+
     // Parse bid history to get current highest bid (filter for current player only)
     let bidHistory: any[] = []
-    if (auction.bidHistory && typeof auction.bidHistory === 'object') {
-      const bidHistoryData = auction.bidHistory as any
+    if (freshAuction?.bidHistory && typeof freshAuction.bidHistory === 'object') {
+      const bidHistoryData = freshAuction.bidHistory as any
       if (Array.isArray(bidHistoryData)) {
         bidHistory = bidHistoryData
       }
@@ -70,6 +103,20 @@ export async function POST(
 
     if (!winningBidderId) {
       return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })
+    }
+
+    // CRITICAL: Check if player is already SOLD to prevent duplicate sales
+    // Do this check AFTER we know the winning bidder ID so we can check if it's the same bidder
+    if (currentPlayer.status === 'SOLD') {
+      // If already sold to the same bidder, this is a duplicate sale attempt
+      if (currentPlayer.soldTo === winningBidderId) {
+        return NextResponse.json({ 
+          error: `This player is already sold to this bidder. Duplicate sale prevented. The bidder's purse was not deducted.` 
+        }, { status: 400 })
+      }
+      return NextResponse.json({ 
+        error: `This player is already sold to another bidder. Cannot sell again.` 
+      }, { status: 400 })
     }
 
     // Fetch winning bidder with user relation (fresh from database to ensure correct purse)
@@ -95,9 +142,13 @@ export async function POST(
     const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
     const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || Number(rules?.minBidIncrement) || 0
 
-    // Count already-bought players
+    // OPTIMIZED: Count already-bought players with status filter for faster query
     const playersBoughtByBidder = await prisma.player.count({
-      where: { auctionId: params.id, soldTo: winningBidder.id }
+      where: { 
+        auctionId: params.id, 
+        soldTo: winningBidder.id,
+        status: 'SOLD' // Add status filter for faster indexed query
+      }
     })
 
     if (maxTeamSize && playersBoughtByBidder + 1 > maxTeamSize) {
@@ -152,20 +203,39 @@ export async function POST(
       })
     ])
 
-    // Pick next random available player
-    // Prioritize icon players if they haven't all been auctioned yet
-    let availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
-    let currentAuctionData = auction
+    // OPTIMIZED: Fetch only AVAILABLE players needed for next player selection (not all auction data)
+    // This is much faster than fetching all players and bidders
+    let availablePlayers = await prisma.player.findMany({
+      where: {
+        auctionId: params.id,
+        status: 'AVAILABLE',
+        id: { not: currentPlayer.id } // Exclude current player
+      },
+      select: {
+        id: true,
+        status: true,
+        isIcon: true
+      }
+    })
     
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
     if (availablePlayers.length === 0) {
-      // Explicitly filter for UNSOLD players only - SOLD players should NEVER be recycled
-      const unsoldPlayers = auction.players.filter(p => p.status === 'UNSOLD')
+      // OPTIMIZED: Fetch only UNSOLD players (not all players)
+      const unsoldPlayers = await prisma.player.findMany({
+        where: {
+          auctionId: params.id,
+          status: 'UNSOLD' // Explicit status check ensures SOLD players are never fetched
+        },
+        select: {
+          id: true,
+          status: true,
+          isIcon: true
+        }
+      })
       
-      // Additional safety check: ensure no SOLD players are accidentally included
-      const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
-      if (soldPlayers.length > 0 && unsoldPlayers.some(p => soldPlayers.find(sp => sp.id === p.id))) {
+      // Safety check: ensure no SOLD players (shouldn't happen with status filter)
+      if (unsoldPlayers.some(p => p.status !== 'UNSOLD')) {
         console.error('CRITICAL: Attempted to recycle SOLD players - this should never happen!')
         return NextResponse.json({ error: 'Internal error: Cannot recycle sold players' }, { status: 500 })
       }
@@ -185,22 +255,24 @@ export async function POST(
           }
         })
         
-        // Refresh auction data after conversion
-        const updatedAuction = await prisma.auction.findUnique({
-          where: { id: params.id },
-          include: { 
-            players: true,
-            bidders: true
+        // OPTIMIZED: Fetch only AVAILABLE players after conversion (not all auction data)
+        const recycledPlayers = await prisma.player.findMany({
+          where: {
+            auctionId: params.id,
+            status: 'AVAILABLE',
+            id: { not: currentPlayer.id } // Exclude current player
+          },
+          select: {
+            id: true,
+            status: true,
+            isIcon: true
           }
         })
         
-        if (updatedAuction) {
-          currentAuctionData = updatedAuction
-          availablePlayers = updatedAuction.players.filter(p => p.status === 'AVAILABLE')
-          
-          // Broadcast players updated event to notify clients of recycled players
-          triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
-        }
+        availablePlayers = recycledPlayers
+        
+        // Broadcast players updated event to notify clients of recycled players
+        triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
       }
     }
     
@@ -211,17 +283,33 @@ export async function POST(
       // Only show regular players after ALL icon players have been auctioned (SOLD or UNSOLD)
       const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
       
+      let selectedPlayerId: string | null = null
+      
       if (iconPlayersAvailable.length > 0) {
         // There are still icon players available - MUST select from icon players only
         // Regular players cannot be shown until all icon players are processed
-        nextPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
+        selectedPlayerId = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)].id
       } else {
         // All icon players have been processed (either SOLD or UNSOLD and not yet recycled)
         // Now we can show regular players
         const regularPlayersAvailable = availablePlayers.filter(p => !p.isIcon)
         if (regularPlayersAvailable.length > 0) {
-          nextPlayer = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)]
+          selectedPlayerId = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)].id
         }
+      }
+      
+      // CRITICAL: Fetch full player data including the `data` field
+      if (selectedPlayerId) {
+        nextPlayer = await prisma.player.findUnique({
+          where: { id: selectedPlayerId },
+          select: {
+            id: true,
+            status: true,
+            isIcon: true,
+            data: true, // Include full player data
+            auctionId: true
+          }
+        })
       }
     }
 
@@ -237,8 +325,17 @@ export async function POST(
       timestamp: new Date().toISOString()
     }
     
-    // Add sold event to the full bid history (not just current player's history)
+    // CRITICAL: Preserve ALL bids in history - add sold event at the beginning
+    // Do NOT filter or remove any bids - keep the complete bid history
     const updatedHistory = [soldEvent, ...bidHistory]
+    
+    // Log bid history for debugging
+    console.log('📊 Mark Sold - Bid History Update:', {
+      totalBids: bidHistory.length,
+      currentPlayerBids: currentPlayerBidHistory.length,
+      updatedHistoryLength: updatedHistory.length,
+      currentPlayerId: currentPlayer.id
+    })
 
     // Update auction
     await prisma.auction.update({

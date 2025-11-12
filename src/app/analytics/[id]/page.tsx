@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import dynamic from 'next/dynamic'
+import { isCuid } from '@/lib/slug'
+import { Prisma } from '@prisma/client'
 
 // Dynamically import client component with SSR disabled
 const AnalyticsView = dynamic(() => import('@/components/analytics-view').then(mod => ({ default: mod.AnalyticsView })), {
@@ -27,28 +29,53 @@ export default async function AnalyticsPage({
     redirect('/')
   }
 
-  // Fetch auction data
-  const auction = await prisma.auction.findUnique({
-    where: { id: params.id },
-    include: {
-      players: {
-        orderBy: {
-          createdAt: 'asc'
-        }
-      },
-      bidders: {
+  // Determine if the param is a slug or an ID
+  const isId = isCuid(params.id)
+  
+  // Fetch auction by slug or ID (support both for analytics)
+  const auction = isId
+    ? await prisma.auction.findUnique({
+        where: { id: params.id },
         include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true
+          players: {
+            orderBy: {
+              createdAt: 'asc'
+            }
+          },
+          bidders: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
             }
           }
         }
-      }
-    }
-  })
+      })
+    : await prisma.auction.findUnique({
+        where: { slug: params.id } as unknown as Prisma.AuctionWhereUniqueInput,
+        include: {
+          players: {
+            orderBy: {
+              createdAt: 'asc'
+            }
+          },
+          bidders: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          }
+        }
+      })
 
   if (!auction) {
     redirect('/')

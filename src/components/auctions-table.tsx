@@ -11,15 +11,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 import Image from 'next/image'
+import { isLiveStatus } from '@/lib/auction-status'
 
 const getStatusBadge = (status: AuctionStatus, isPublished: boolean = false) => {
   const colors = {
     DRAFT: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
     LIVE: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    MOCK_RUN: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
     PAUSED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
     COMPLETED: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
   }
@@ -45,6 +47,7 @@ interface Auction {
   totalViews: number
   uniqueVisitors: number
   peakViewers: number
+  timerViews: number
   _count: {
     players: number
     bidders: number
@@ -258,6 +261,25 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     }
   }
 
+  const handleMockRun = async (auctionId: string, auction: any) => {
+    try {
+      const response = await fetch(`/api/auction/${auctionId}/mock-run`, {
+        method: 'POST'
+      })
+      if (response.ok) {
+        toast.success('Mock run started successfully!')
+        window.open(`/auction/${auctionId}`, '_blank', 'noopener,noreferrer')
+        window.location.reload() // Refresh to show updated status
+      } else {
+        const data = await response.json()
+        toast.error(data.error || 'Failed to start mock run')
+      }
+    } catch (error) {
+      console.error('Error starting mock run:', error)
+      toast.error('Failed to start mock run')
+    }
+  }
+
   const handlePublish = async (auctionId: string) => {
     try {
       const response = await fetch(`/api/auctions/${auctionId}/publish`, {
@@ -372,7 +394,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     <Trophy className="mr-2 h-4 w-4" />
                     Manage Fixtures
                   </DropdownMenuItem>
-                  {(auction.status === 'LIVE' || auction.status === 'PAUSED') && (
+                  {(isLiveStatus(auction.status) || auction.status === 'PAUSED') && (
                     <DropdownMenuItem onClick={() => handleViewAuction(auction.id)}>
                       <Eye className="mr-2 h-4 w-4" />
                       View Live Auction
@@ -389,9 +411,21 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     </DropdownMenuItem>
                   )}
                   {auction.status === 'DRAFT' && (
-                    <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>
-                      <Play className="mr-2 h-4 w-4" />
-                      Start Auction
+                    <>
+                      <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>
+                        <Play className="mr-2 h-4 w-4" />
+                        Start Auction
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleMockRun(auction.id, auction)}>
+                        <TestTube className="mr-2 h-4 w-4" />
+                        Start Mock Run
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {(auction.status === 'PAUSED') && (
+                    <DropdownMenuItem onClick={() => handleMockRun(auction.id, auction)}>
+                      <TestTube className="mr-2 h-4 w-4" />
+                      Start Mock Run
                     </DropdownMenuItem>
                   )}
                   {!auction.isPublished && (
@@ -446,6 +480,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Players</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Bidders</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Views</TableHead>
+              <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Timer Views</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Unique</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Peak</TableHead>
               <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</TableHead>
@@ -477,6 +512,9 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                 <TableCell className="text-sm text-gray-900 dark:text-gray-100 font-medium">
                   {auction.totalViews.toLocaleString()}
                 </TableCell>
+                <TableCell className="text-sm text-gray-900 dark:text-gray-100 font-medium">
+                  {auction.timerViews.toLocaleString()}
+                </TableCell>
                 <TableCell className="text-sm text-gray-600 dark:text-gray-400">
                   {auction.uniqueVisitors.toLocaleString()}
                 </TableCell>
@@ -505,7 +543,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     <Trophy className="mr-2 h-4 w-4" />
                     Manage Fixtures
                   </DropdownMenuItem>
-                  {(auction.status === 'LIVE' || auction.status === 'PAUSED') && (
+                  {(isLiveStatus(auction.status) || auction.status === 'PAUSED') && (
                     <DropdownMenuItem onClick={() => handleViewAuction(auction.id)}>
                       <Eye className="mr-2 h-4 w-4" />
                       View Live Auction
@@ -522,9 +560,21 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     </DropdownMenuItem>
                   )}
                   {auction.status === 'DRAFT' && (
-                    <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>
-                      <Play className="mr-2 h-4 w-4" />
-                      Start Auction
+                    <>
+                      <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>
+                        <Play className="mr-2 h-4 w-4" />
+                        Start Auction
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleMockRun(auction.id, auction)}>
+                        <TestTube className="mr-2 h-4 w-4" />
+                        Start Mock Run
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {(auction.status === 'PAUSED') && (
+                    <DropdownMenuItem onClick={() => handleMockRun(auction.id, auction)}>
+                      <TestTube className="mr-2 h-4 w-4" />
+                      Start Mock Run
                     </DropdownMenuItem>
                   )}
                   {!auction.isPublished && (

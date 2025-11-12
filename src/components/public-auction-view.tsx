@@ -131,9 +131,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   // Detect when auction goes live and show banner
   useEffect(() => {
-    // Check if auction status changed from DRAFT/PAUSED to LIVE
-    const wasNotLive = previousAuctionStatus !== 'LIVE'
-    const isNowLive = auction.status === 'LIVE'
+    // Check if auction status changed from DRAFT/PAUSED to LIVE/MOCK_RUN
+    const { isLiveStatus } = require('@/lib/auction-status')
+    const wasNotLive = !isLiveStatus(previousAuctionStatus)
+    const isNowLive = isLiveStatus(auction.status)
     const hasCurrentPlayer = localCurrentPlayer !== null
 
     if (wasNotLive && isNowLive && hasCurrentPlayer) {

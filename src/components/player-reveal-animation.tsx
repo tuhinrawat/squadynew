@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
 
@@ -11,179 +11,128 @@ interface PlayerRevealAnimationProps {
   duration?: number // Duration in milliseconds (default 5000ms)
 }
 
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
 export function PlayerRevealAnimation({ 
   allPlayerNames, 
   finalPlayerName, 
   onComplete,
   duration = 5000 
 }: PlayerRevealAnimationProps) {
-  const [currentName, setCurrentName] = useState('')
+  const [displayText, setDisplayText] = useState<string[]>([])
   const [isRevealing, setIsRevealing] = useState(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const slowIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const animationFrameRef = useRef<number | null>(null)
   const finalTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const onCompleteRef = useRef(onComplete)
-  const currentNameRef = useRef('')
+  const startTimeRef = useRef<number>(0)
+  const lastUpdateRef = useRef<number>(0)
+  const phaseRef = useRef<'fast' | 'slow' | 'reveal'>('fast')
+  const finalNameRef = useRef<string>(finalPlayerName)
 
-  // Keep onComplete ref updated
+  // Keep onComplete and finalName refs updated
   useEffect(() => {
     onCompleteRef.current = onComplete
-  }, [onComplete])
+    finalNameRef.current = finalPlayerName
+  }, [onComplete, finalPlayerName])
 
+  // Generate random letter for each position
+  const getRandomLetter = useCallback(() => {
+    return ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+  }, [])
+
+  // Initialize display text with random letters matching final name length
   useEffect(() => {
-    console.log('🎭 PlayerRevealAnimation mounted!', { 
-      allPlayerNamesCount: allPlayerNames.length, 
-      finalPlayerName,
-      duration 
-    })
-    
-    // Clear any existing intervals/timeouts
-    if (intervalRef.current) clearInterval(intervalRef.current)
-    if (slowIntervalRef.current) clearInterval(slowIntervalRef.current)
-    if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    if (finalTimeoutRef.current) clearTimeout(finalTimeoutRef.current)
-    
-    if (allPlayerNames.length === 0) {
-      console.log('⚠️ No player names available, completing immediately')
-      onCompleteRef.current()
-      return
-    }
+    const nameLength = finalNameRef.current.length
+    const initialLetters = Array.from({ length: nameLength }, () => getRandomLetter())
+    setDisplayText(initialLetters)
+  }, [getRandomLetter])
 
-    // Filter out the final player to avoid showing it early
-    const otherNames = allPlayerNames.filter(name => name !== finalPlayerName)
-    
-    console.log('🎭 Filtered names for animation:', {
-      totalNames: allPlayerNames.length,
-      otherNamesCount: otherNames.length,
-      finalPlayerName,
-      otherNames: otherNames.slice(0, 5)
-    })
-    
-    // If no other names available, just show the final name
-    if (otherNames.length === 0) {
-      console.log('⚠️ No other names available, showing final name immediately')
-      currentNameRef.current = finalPlayerName
-      setCurrentName(finalPlayerName)
+  // Optimized animation loop using requestAnimationFrame
+  const animate = useCallback(() => {
+    const now = Date.now()
+    const elapsed = now - startTimeRef.current
+    const remaining = duration - elapsed
+
+    if (remaining <= 0) {
+      // Final reveal - show actual player name
+      phaseRef.current = 'reveal'
       setIsRevealing(true)
+      const finalName = finalNameRef.current
+      setDisplayText(finalName.split(''))
+      
       finalTimeoutRef.current = setTimeout(() => {
         onCompleteRef.current()
-      }, 2000)
+      }, 1500)
       return
     }
 
-    // Start with a random name immediately
-    const initialName = otherNames[Math.floor(Math.random() * otherNames.length)]
-    console.log('🎭 Starting with initial name:', initialName)
-    currentNameRef.current = initialName
-    setCurrentName(initialName)
+    if (remaining <= 1500 && phaseRef.current === 'fast') {
+      // Switch to slow phase
+      phaseRef.current = 'slow'
+    }
 
-    // Phase 1: Fast random cycling (first 3 seconds)
-    const fastCycleSpeed = 150 // Change name every 150ms
-    console.log('🎭 Starting fast cycle (150ms intervals)')
-    intervalRef.current = setInterval(() => {
-      // Ensure we pick a different name than the current one
-      let randomName = otherNames[Math.floor(Math.random() * otherNames.length)]
-      // If we picked the same name and there are other options, try again
-      if (randomName === currentNameRef.current && otherNames.length > 1) {
-        const filtered = otherNames.filter(n => n !== currentNameRef.current)
-        if (filtered.length > 0) {
-          randomName = filtered[Math.floor(Math.random() * filtered.length)]
-        }
-      }
-      if (randomName !== currentNameRef.current) {
-        console.log('🔄 Fast cycle name change:', randomName, '(was:', currentNameRef.current + ')')
-        currentNameRef.current = randomName
-        setCurrentName(randomName)
-      }
-    }, fastCycleSpeed)
+    // Update letters based on phase
+    const timeSinceLastUpdate = now - lastUpdateRef.current
+    const updateInterval = phaseRef.current === 'fast' ? 100 : 200
 
-    // Phase 2: Slow down (last 1.5 seconds)
-    timeoutRef.current = setTimeout(() => {
-      console.log('🎭 Switching to slow cycle (300ms intervals)')
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      
-      // Slow cycling
-      const slowCycleSpeed = 300
-      slowIntervalRef.current = setInterval(() => {
-        let randomName = otherNames[Math.floor(Math.random() * otherNames.length)]
-        // If we picked the same name and there are other options, try again
-        if (randomName === currentNameRef.current && otherNames.length > 1) {
-          const filtered = otherNames.filter(n => n !== currentNameRef.current)
-          if (filtered.length > 0) {
-            randomName = filtered[Math.floor(Math.random() * filtered.length)]
-          }
-        }
-        if (randomName !== currentNameRef.current) {
-          console.log('🔄 Slow cycle name change:', randomName, '(was:', currentNameRef.current + ')')
-          currentNameRef.current = randomName
-          setCurrentName(randomName)
-        }
-      }, slowCycleSpeed)
-    }, duration - 1500)
+    if (timeSinceLastUpdate >= updateInterval) {
+      const nameLength = finalNameRef.current.length
+      const newLetters = Array.from({ length: nameLength }, () => getRandomLetter())
+      setDisplayText(newLetters)
+      lastUpdateRef.current = now
+    }
 
-    // Phase 3: Final reveal
-    finalTimeoutRef.current = setTimeout(() => {
-      console.log('🎭 Final reveal:', finalPlayerName)
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      if (slowIntervalRef.current) {
-        clearInterval(slowIntervalRef.current)
-        slowIntervalRef.current = null
-      }
-      setIsRevealing(true)
-      currentNameRef.current = finalPlayerName
-      setCurrentName(finalPlayerName)
-      
-      // Complete after showing final name for 1.5 seconds
-      setTimeout(() => {
-        console.log('✅ Animation complete, calling onComplete')
-        onCompleteRef.current()
-      }, 1500)
-    }, duration)
+    // Continue animation
+    animationFrameRef.current = requestAnimationFrame(animate)
+  }, [duration, getRandomLetter])
+
+  useEffect(() => {
+    // Clear any existing animations
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
+    }
+    if (finalTimeoutRef.current) {
+      clearTimeout(finalTimeoutRef.current)
+      finalTimeoutRef.current = null
+    }
+    
+    const now = Date.now()
+    startTimeRef.current = now
+    lastUpdateRef.current = now
+    phaseRef.current = 'fast'
+
+    // Initialize with random letters
+    const nameLength = finalNameRef.current.length
+    const initialLetters = Array.from({ length: nameLength }, () => getRandomLetter())
+    setDisplayText(initialLetters)
+
+    // Start animation loop
+    animationFrameRef.current = requestAnimationFrame(animate)
 
     return () => {
-      console.log('🧹 Cleaning up animation intervals/timeouts')
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      if (slowIntervalRef.current) {
-        clearInterval(slowIntervalRef.current)
-        slowIntervalRef.current = null
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-        timeoutRef.current = null
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+        animationFrameRef.current = null
       }
       if (finalTimeoutRef.current) {
         clearTimeout(finalTimeoutRef.current)
         finalTimeoutRef.current = null
       }
     }
-  }, [allPlayerNames, finalPlayerName, duration]) // Removed onComplete from deps to prevent re-running
-
-  console.log('🎭 PlayerRevealAnimation RENDERING', {
-    allPlayerNamesCount: allPlayerNames.length,
-    finalPlayerName,
-    currentName,
-    isRevealing
-  })
+  }, [animate, getRandomLetter])
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
       className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md rounded-xl overflow-hidden"
+      style={{ willChange: 'transform, opacity' }}
     >
       <div className="relative w-full h-full flex items-center justify-center">
-        {/* Animated background glow */}
+        {/* Optimized background glow */}
         <motion.div
           animate={{
             scale: [1, 1.1, 1],
@@ -195,15 +144,17 @@ export function PlayerRevealAnimation({
             ease: "easeInOut"
           }}
           className="absolute inset-0 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 rounded-full blur-2xl"
+          style={{ willChange: 'transform, opacity' }}
         />
 
-        {/* Card container - smaller and centered */}
+        {/* Card container */}
         <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl p-6 sm:p-8 shadow-2xl border border-yellow-500/30 max-w-[90%] sm:max-w-md">
           {/* Sparkles decoration */}
           <div className="absolute top-4 right-4">
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+              style={{ willChange: 'transform' }}
             >
               <Sparkles className="h-6 w-6 text-yellow-400" />
             </motion.div>
@@ -213,48 +164,59 @@ export function PlayerRevealAnimation({
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
             className="text-center mb-3 sm:mb-4"
           >
             <h3 className="text-xs sm:text-sm font-semibold text-yellow-400 uppercase tracking-wider">
-              {isRevealing ? '🎉 Introducing 🎉' : 'Next Player Coming...'}
+              {isRevealing ? `🎉 ${finalPlayerName} 🎉` : 'Next Player Coming...'}
             </h3>
           </motion.div>
 
-          {/* Player name cycling animation */}
+          {/* Letter shuffling display - timer style */}
           <div className="relative h-20 sm:h-28 flex items-center justify-center overflow-hidden">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentName}
-                initial={{ 
-                  opacity: 0, 
-                  y: isRevealing ? -30 : 15,
-                  scale: isRevealing ? 0.5 : 0.9
-                }}
-                animate={{ 
-                  opacity: 1, 
-                  y: 0,
-                  scale: isRevealing ? 1.05 : 1
-                }}
-                exit={{ 
-                  opacity: 0, 
-                  y: isRevealing ? 30 : -15,
-                  scale: isRevealing ? 1.3 : 0.9
-                }}
-                transition={{ 
-                  duration: isRevealing ? 0.8 : 0.15,
-                  ease: isRevealing ? "easeOut" : "linear"
-                }}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                <h1 className={`text-2xl sm:text-4xl font-black text-center px-2 ${
-                  isRevealing 
-                    ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 drop-shadow-2xl' 
-                    : 'text-white font-extrabold drop-shadow-lg'
-                }`}>
-                  {currentName || '...'}
-                </h1>
-              </motion.div>
-            </AnimatePresence>
+            <div className="flex items-center justify-center gap-1 sm:gap-2">
+              {displayText.map((letter, index) => (
+                <AnimatePresence key={`${letter}-${index}`} mode="wait">
+                  <motion.div
+                    key={`${letter}-${index}-${Date.now()}`}
+                    initial={{ 
+                      opacity: 0, 
+                      y: isRevealing ? -30 : 20,
+                      scale: isRevealing ? 0.5 : 0.8
+                    }}
+                    animate={{ 
+                      opacity: 1, 
+                      y: 0,
+                      scale: isRevealing ? 1.1 : 1
+                    }}
+                    exit={{ 
+                      opacity: 0, 
+                      y: isRevealing ? 30 : -20,
+                      scale: isRevealing ? 1.3 : 0.8
+                    }}
+                    transition={{ 
+                      duration: isRevealing ? 0.6 : 0.1,
+                      ease: isRevealing ? "easeOut" : "linear"
+                    }}
+                    className={`inline-block ${
+                      isRevealing 
+                        ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 drop-shadow-2xl' 
+                        : 'text-white font-extrabold drop-shadow-lg'
+                    }`}
+                    style={{ 
+                      willChange: 'transform, opacity',
+                      fontFamily: 'monospace'
+                    }}
+                  >
+                    <span className={`text-3xl sm:text-5xl font-black ${
+                      isRevealing ? '' : 'font-mono'
+                    }`}>
+                      {letter}
+                    </span>
+                  </motion.div>
+                </AnimatePresence>
+              ))}
+            </div>
           </div>
 
           {/* Loading dots (only when cycling) */}
@@ -262,6 +224,7 @@ export function PlayerRevealAnimation({
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
               className="flex justify-center gap-2 mt-6"
             >
               {[0, 1, 2].map((i) => (
@@ -275,21 +238,24 @@ export function PlayerRevealAnimation({
                     duration: 1,
                     repeat: Infinity,
                     delay: i * 0.2,
+                    ease: "easeInOut"
                   }}
                   className="w-2 h-2 bg-yellow-400 rounded-full"
+                  style={{ willChange: 'transform, opacity' }}
                 />
               ))}
             </motion.div>
           )}
 
-          {/* Confetti effect on reveal */}
+          {/* Simplified confetti effect on reveal */}
           {isRevealing && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="absolute inset-0 pointer-events-none"
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 pointer-events-none overflow-hidden"
             >
-              {[...Array(20)].map((_, i) => (
+              {[...Array(12)].map((_, i) => (
                 <motion.div
                   key={i}
                   initial={{ 
@@ -306,12 +272,14 @@ export function PlayerRevealAnimation({
                     opacity: [0, 1, 0]
                   }}
                   transition={{
-                    duration: 1.5,
-                    ease: "easeOut"
+                    duration: 1.2,
+                    ease: "easeOut",
+                    delay: i * 0.05
                   }}
                   className="absolute w-3 h-3 rounded-full"
                   style={{
-                    backgroundColor: ['#fbbf24', '#f97316', '#ef4444', '#8b5cf6'][Math.floor(Math.random() * 4)]
+                    backgroundColor: ['#fbbf24', '#f97316', '#ef4444', '#8b5cf6'][Math.floor(Math.random() * 4)],
+                    willChange: 'transform, opacity'
                   }}
                 />
               ))}
@@ -322,4 +290,3 @@ export function PlayerRevealAnimation({
     </motion.div>
   )
 }
-

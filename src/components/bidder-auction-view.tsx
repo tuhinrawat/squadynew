@@ -204,8 +204,9 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
   const playerName = playerData.name || playerData.Name || 'No Player Selected'
 
   // Check if user is current highest bidder
+  const { isLiveStatus } = require('@/lib/auction-status')
   const isHighestBidder = currentBid?.bidderId === userBidder?.id
-  const canBid = auction.status === 'LIVE' && !isHighestBidder && bidAmount >= nextValidBid && bidAmount <= userBidder?.remainingPurse
+  const canBid = isLiveStatus(auction.status) && !isHighestBidder && bidAmount >= nextValidBid && bidAmount <= userBidder?.remainingPurse
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-4">
@@ -255,7 +256,7 @@ export function BidderAuctionView({ auction, currentPlayer: initialPlayer, stats
             </div>
 
             {/* Bid Controls */}
-            {auction.status === 'LIVE' && (
+            {isLiveStatus(auction.status) && (
               <div className="border-t pt-4 space-y-4">
                 <div className="flex items-center gap-2">
                   <Input

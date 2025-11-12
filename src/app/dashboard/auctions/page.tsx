@@ -37,6 +37,7 @@ export default async function AuctionsList() {
       isPublished: true,
       createdAt: true,
       totalViews: true,
+      timerViews: true,
       uniqueVisitors: true,
       peakViewers: true,
       _count: {

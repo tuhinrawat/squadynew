@@ -59,7 +59,8 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    if (auction.status !== 'LIVE') {
+    const { isLiveStatus } = await import('@/lib/auction-status')
+    if (!isLiveStatus(auction.status)) {
       return NextResponse.json({ error: 'Auction is not active' }, { status: 400 })
     }
 
@@ -173,10 +174,16 @@ export async function POST(
 
     // Enforce roster-size financial feasibility: ensure enough purse remains
     // to reach mandatoryTeamSize with at least minPerPlayerReserve per remaining slot
+    // OPTIMIZED: Only check if mandatoryTeamSize is set (skip if null)
     if (targetAuctionPlayers !== null) {
-      // Count players already bought by this bidder in this auction
+      // OPTIMIZED: Count players in parallel with other operations if possible
+      // For now, keep sequential but use indexed query
       const playersBoughtByBidder = await prisma.player.count({
-        where: { auctionId: params.id, soldTo: bidder.id }
+        where: { 
+          auctionId: params.id, 
+          soldTo: bidder.id,
+          status: 'SOLD' // Add status filter for faster query
+        }
       })
 
       // If maxTeamSize is set, prevent bidding that would exceed it after winning

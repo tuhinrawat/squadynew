@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { AdminAuctionView } from '@/components/admin-auction-view'
 import { PublicAuctionView } from '@/components/public-auction-view'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import { PreAuctionBanner } from '@/components/pre-auction-banner'
 import { CountdownToLiveWrapper } from '@/components/countdown-to-live-wrapper'
 import { PublicHeaderWithChat } from '@/components/public-header-with-chat'
 import { isCuid } from '@/lib/slug'
+import { isLiveStatus } from '@/lib/auction-status'
 import type { Metadata } from 'next'
 
 type AuctionStats = {
@@ -125,24 +127,43 @@ function isScheduledDateInFuture(date: Date | string | null | undefined): boolea
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const isId = isCuid(params.id)
   
-  const auction = await prisma.auction.findUnique({
-    where: isId ? { id: params.id } : { slug: params.id },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      image: true,
-      status: true,
-      isPublished: true,
-      _count: {
+  const auction = isId
+    ? await prisma.auction.findUnique({
+        where: { id: params.id },
         select: {
-          players: true,
-          bidders: true
-        }
-      }
-    }
-  })
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          image: true,
+          status: true,
+          isPublished: true,
+          _count: {
+            select: {
+              players: true,
+              bidders: true
+            }
+          }
+        } as Prisma.AuctionSelect
+      })
+    : await prisma.auction.findUnique({
+        where: { slug: params.id } as unknown as Prisma.AuctionWhereUniqueInput,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          image: true,
+          status: true,
+          isPublished: true,
+          _count: {
+            select: {
+              players: true,
+              bidders: true
+            }
+          }
+        } as Prisma.AuctionSelect
+      })
 
   if (!auction) {
     return {
@@ -152,12 +173,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   }
 
   const title = `${auction.name} - Live Auction on Squady`
+  const auctionWithCount = auction as typeof auction & { _count: { players: number; bidders: number }; slug: string | null }
   const description = auction.description 
     ? auction.description.substring(0, 160) // Limit to 160 chars for SEO
-    : `Join the live auction with ${auction._count.players} players and ${auction._count.bidders} teams. Real-time bidding, instant updates, and comprehensive team management.`
+    : `Join the live auction with ${auctionWithCount._count.players} players and ${auctionWithCount._count.bidders} teams. Real-time bidding, instant updates, and comprehensive team management.`
   
-  const url = auction.slug 
-    ? `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auction.slug}`
+  const url = auctionWithCount.slug 
+    ? `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auctionWithCount.slug}`
     : `${process.env.NEXT_PUBLIC_SITE_URL || 'https://squady.auction'}/auction/${auction.id}`
 
   // Use Squady logo for social sharing with absolute URL (use PNG for better compatibility)
@@ -206,23 +228,41 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
   const isId = isCuid(params.id)
   
   // Fetch auction by slug or ID
-  const auction = await prisma.auction.findUnique({
-    where: isId ? { id: params.id } : { slug: params.id },
-    include: {
-      players: true,
-      bidders: {
+  const auction = isId
+    ? await prisma.auction.findUnique({
+        where: { id: params.id },
         include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true
+          players: true,
+          bidders: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
             }
           }
         }
-      }
-    }
-  })
+      })
+    : await prisma.auction.findUnique({
+        where: { slug: params.id } as unknown as Prisma.AuctionWhereUniqueInput,
+        include: {
+          players: true,
+          bidders: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          }
+        }
+      })
 
   if (!auction) {
     if (!session) {
@@ -232,17 +272,33 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
   }
   
   // If accessed by ID but slug exists, redirect to slug URL for SEO
-  if (isId && auction.slug) {
-    redirect(`/auction/${auction.slug}`)
+  const auctionWithSlug = auction as typeof auction & { slug: string | null }
+  if (isId && auctionWithSlug.slug) {
+    redirect(`/auction/${auctionWithSlug.slug}`)
   }
 
-  const currentPlayer = auction.currentPlayerId
+  // Fetch current player and validate it's not SOLD
+  let currentPlayer = auction.currentPlayerId
     ? await prisma.player.findUnique({
         where: { id: auction.currentPlayerId }
       })
     : null
 
-  const auctionStats = calculateAuctionStats(auction.players)
+  // CRITICAL: If current player is SOLD, clear it to prevent showing SOLD players
+  if (currentPlayer && currentPlayer.status === 'SOLD') {
+    // Clear the invalid currentPlayerId
+    await prisma.auction.update({
+      where: { id: auction.id },
+      data: { currentPlayerId: null }
+    })
+    currentPlayer = null
+  }
+
+  const auctionWithRelations = auction as typeof auction & { 
+    players: Array<{ status?: string | null }>
+    bidders: Array<{ userId: string }>
+  }
+  const auctionStats = calculateAuctionStats(auctionWithRelations.players)
   const fullBidHistory = parseBidHistory(auction.bidHistory)
 
   // If user is logged in, check access
@@ -255,7 +311,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     isAdmin = session.user?.role === 'ADMIN'
     isSuperAdmin = session.user?.role === 'SUPER_ADMIN'
     isCreator = auction.createdById === session.user?.id
-    isParticipant = auction.bidders.some(b => b.userId === session.user?.id)
+    isParticipant = auctionWithRelations.bidders.some((b) => b.userId === session.user?.id)
   }
 
   // If auction is published, allow public viewing without auth (regardless of status)
@@ -276,11 +332,11 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
         if (hasScheduledDate) {
           return (
             <CountdownToLiveWrapper
-              auction={auction}
+              auction={auctionWithRelations as unknown as Parameters<typeof CountdownToLiveWrapper>[0]['auction']}
               initialCurrentPlayer={currentPlayer}
               initialStats={auctionStats}
               initialBidHistory={fullBidHistory}
-              bidders={auction.bidders}
+              bidders={auctionWithRelations.bidders as unknown as Parameters<typeof CountdownToLiveWrapper>[0]['bidders']}
             />
           )
         } else {
@@ -327,11 +383,11 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
           </div>
           
           <PublicAuctionView 
-            auction={auction}
+            auction={auctionWithRelations as unknown as Parameters<typeof PublicAuctionView>[0]['auction']}
             currentPlayer={currentPlayer}
             stats={auctionStats}
             bidHistory={fullBidHistory}
-            bidders={auction.bidders}
+            bidders={auctionWithRelations.bidders as unknown as Parameters<typeof PublicAuctionView>[0]['bidders']}
           />
           
           {/* Footer for Public View */}
@@ -423,14 +479,14 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Pre-Auction Banner - Show when published but not live */}
       {/* Note: COMPLETED status is already handled earlier, so this won't execute for COMPLETED */}
-      {auction.isPublished && auction.status !== 'LIVE' && auction.scheduledStartDate && (
+      {auction.isPublished && !isLiveStatus(auction.status) && auction.status !== 'PAUSED' && auction.scheduledStartDate && (
         <PreAuctionBanner 
           scheduledStartDate={auction.scheduledStartDate}
           auctionName={auction.name}
         />
       )}
       {/* Header with Logo and User Info */}
-      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${auction.isPublished && auction.status !== 'LIVE' && auction.scheduledStartDate ? 'mt-[88px]' : ''}`}>
+      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${auction.isPublished && !isLiveStatus(auction.status) && auction.status !== 'PAUSED' && auction.scheduledStartDate ? 'mt-[88px]' : ''}`}>
         <div className="max-w-full mx-auto px-3 sm:px-6">
           <div className="flex justify-between items-center h-14 sm:h-16">
             {/* Logo */}
@@ -495,7 +551,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       
       {/* Auction View */}
       <AdminAuctionView 
-        auction={auction}
+        auction={auctionWithRelations as unknown as Parameters<typeof AdminAuctionView>[0]['auction']}
         currentPlayer={currentPlayer}
         stats={auctionStats}
         bidHistory={fullBidHistory}

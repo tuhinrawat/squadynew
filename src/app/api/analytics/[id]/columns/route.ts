@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { isCuid } from '@/lib/slug'
+import { Prisma } from '@prisma/client'
 
 // PUT /api/analytics/[id]/columns - Update analytics visible columns (no auth required, uses special key)
 export async function PUT(
@@ -16,12 +18,15 @@ export async function PUT(
       )
     }
 
-    // Check if auction exists
-    const existingAuction = await prisma.auction.findUnique({
-      where: {
-        id: params.id
-      }
-    })
+    // Support both slug and ID
+    const isId = isCuid(params.id)
+    const existingAuction = isId
+      ? await prisma.auction.findUnique({
+          where: { id: params.id }
+        })
+      : await prisma.auction.findUnique({
+          where: { slug: params.id } as unknown as Prisma.AuctionWhereUniqueInput
+        })
 
     if (!existingAuction) {
       return NextResponse.json(
@@ -30,10 +35,10 @@ export async function PUT(
       )
     }
 
-    // Update analytics visible columns
+    // Update analytics visible columns (always use ID for updates)
     const auction = await prisma.auction.update({
       where: {
-        id: params.id
+        id: existingAuction.id
       },
       data: {
         analyticsVisibleColumns: analyticsVisibleColumns

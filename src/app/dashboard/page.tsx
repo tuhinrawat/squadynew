@@ -166,7 +166,7 @@ export default async function Dashboard() {
                         </h4>
                         <div className="flex items-center gap-2 mt-1">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            auction.status === 'LIVE' 
+                            (auction.status === 'LIVE' || auction.status === 'MOCK_RUN') 
                               ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                               : auction.status === 'DRAFT'
                               ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'

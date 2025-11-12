@@ -122,7 +122,7 @@ export default async function BidderAuctions() {
                       )}
                     </CardContent>
                     <CardFooter>
-                      {auction.status === 'LIVE' || auction.status === 'PAUSED' ? (
+                      {(auction.status === 'LIVE' || auction.status === 'MOCK_RUN' || auction.status === 'PAUSED') ? (
                         <Button asChild className="w-full">
                           <Link href={`/auction/${auction.id}`} target="_blank" rel="noopener noreferrer">Join Auction</Link>
                         </Button>

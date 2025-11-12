@@ -15,13 +15,15 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { isLiveStatus } from '@/lib/auction-status'
+import { AuctionStatus } from '@prisma/client'
 
 interface CountdownToLiveWrapperProps {
   auction: {
     id: string
     name: string
     scheduledStartDate: Date | string | null
-    status: string
+    status: AuctionStatus
     players: any[]
     bidders: any[]
     [key: string]: any
@@ -54,6 +56,7 @@ export function CountdownToLiveWrapper({
   const [searchQuery, setSearchQuery] = useState('')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
+  const timerViewTrackedRef = useRef(false)
 
   const knowYourPlayersCards = useMemo(() => {
     return auction.players.map(player => {
@@ -185,15 +188,15 @@ export function CountdownToLiveWrapper({
         const response = await fetch(`/api/auctions/${auction.id}/public`)
         if (response.ok) {
           const data = await response.json()
-          setAuctionData(data.auction)
+          setAuctionData({ ...data.auction, status: data.auction.status as AuctionStatus })
           
           // Update all data
           setCurrentPlayer(data.currentPlayer || null)
           setStats(data.stats || initialStats)
           setBidHistory(data.bidHistory || [])
           
-          // If auction is now LIVE or PAUSED, stop polling and show live view
-          if (data.auction.status === 'LIVE' || data.auction.status === 'PAUSED') {
+          // If auction is now LIVE/MOCK_RUN or PAUSED, stop polling and show live view
+          if (isLiveStatus(data.auction.status as AuctionStatus) || data.auction.status === 'PAUSED') {
             if (pollIntervalRef.current) {
               clearInterval(pollIntervalRef.current)
               pollIntervalRef.current = null
@@ -213,6 +216,25 @@ export function CountdownToLiveWrapper({
       }
     }, 10 * 60 * 1000)
   }, [auction.id, initialStats])
+
+  // Track timer view on mount (only once)
+  useEffect(() => {
+    if (timerViewTrackedRef.current) return
+    
+    const trackTimerView = async () => {
+      try {
+        await fetch(`/api/auction/${auction.id}/track-timer-view`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        timerViewTrackedRef.current = true
+      } catch (error) {
+        console.error('Failed to track timer view:', error)
+      }
+    }
+    
+    trackTimerView()
+  }, [auction.id])
 
   // Check if countdown has reached zero
   useEffect(() => {
@@ -890,8 +912,8 @@ export function CountdownToLiveWrapper({
   // Show live auction view with full layout (matching the page.tsx structure)
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Banner for LIVE/PAUSED published auctions */}
-      {auctionData.status === 'LIVE' && (
+      {/* Banner for LIVE/MOCK_RUN/PAUSED published auctions */}
+      {isLiveStatus(auctionData.status) && (
         <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 shadow-lg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-center gap-3 text-white">
@@ -915,7 +937,7 @@ export function CountdownToLiveWrapper({
         </div>
       )}
       {/* Header for Public View */}
-      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${(auctionData.status === 'LIVE' || auctionData.status === 'PAUSED') ? 'mt-[88px]' : ''}`}>
+      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${(isLiveStatus(auctionData.status) || auctionData.status === 'PAUSED') ? 'mt-[88px]' : ''}`}>
         <div className="max-w-full mx-auto px-4 sm:px-6">
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center">

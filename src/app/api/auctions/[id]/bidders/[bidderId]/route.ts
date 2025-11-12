@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import { isLiveStatus } from '@/lib/auction-status'
 import bcrypt from 'bcryptjs'
 
 // GET /api/auctions/[id]/bidders/[bidderId] - Get a specific bidder
@@ -85,8 +86,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
     }
 
-    // Prevent editing if auction is live
-    if (existingBidder.auction.status === 'LIVE') {
+    // Prevent editing if auction is live (including MOCK_RUN)
+    if (isLiveStatus(existingBidder.auction.status)) {
       return NextResponse.json(
         { error: 'Cannot edit bidder details when auction is live' },
         { status: 403 }
@@ -211,8 +212,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
     }
 
-    // Prevent deletion if auction is live
-    if (bidder.auction.status === 'LIVE') {
+    // Prevent deletion if auction is live (including MOCK_RUN)
+    if (isLiveStatus(bidder.auction.status)) {
       return NextResponse.json(
         { error: 'Cannot delete bidder when auction is live' },
         { status: 403 }

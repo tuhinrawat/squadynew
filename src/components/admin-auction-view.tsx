@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, memo } from 'react'
 import dynamic from 'next/dynamic'
+import { useRouter } from 'next/navigation'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,12 +11,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy } from 'lucide-react'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ActivityLog } from '@/components/activity-log'
+import { isLiveStatus } from '@/lib/auction-status'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
@@ -153,6 +155,7 @@ interface AdminAuctionViewProps {
 }
 
 export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, viewMode = 'admin' }: AdminAuctionViewProps) {
+  const router = useRouter()
   const { data: session } = useSession()
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
@@ -265,20 +268,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
                       const totalBid = currentBidAmount + minInc
 
-                      setIsPlacingBid(true)
-                      setPlacingBidFor(bidder.id)
+                      // Batch all state updates together (React 18 auto-batches)
                       const previousBid = currentBid
                       const previousHighestBidderId = highestBidderId
-
-                      // Optimistic UI update
-                      setCurrentBid({
-                        bidderId: bidder.id,
-                        amount: totalBid,
-                        bidderName: bidder.user?.name || bidder.username,
-                        teamName: bidder.teamName || undefined
-                      })
-                      setHighestBidderId(bidder.id)
-
                       const optimisticEntry: BidHistoryEntry = {
                         bidderId: bidder.id,
                         amount: totalBid,
@@ -288,35 +280,49 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         type: 'bid',
                         playerId: currentPlayer?.id
                       }
+
+                      // Optimistic UI updates - batched together
+                      setIsPlacingBid(true)
+                      setPlacingBidFor(bidder.id)
+                      setCurrentBid({
+                        bidderId: bidder.id,
+                        amount: totalBid,
+                        bidderName: bidder.user?.name || bidder.username,
+                        teamName: bidder.teamName || undefined
+                      })
+                      setHighestBidderId(bidder.id)
                       setFullBidHistory(prev => [optimisticEntry, ...prev])
 
-                      try {
-                        const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                      // Fire-and-forget API call - don't block UI
+                      fetch(`/api/auction/${auction.id}/bid`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ bidderId: bidder.id, amount: totalBid })
+                      })
+                        .then(async (response) => {
+                          if (!response.ok) {
+                            const err = await response.json()
+                            pushBidError(err.error || 'Failed to place bid')
+                            // Revert optimistic update
+                            setCurrentBid(previousBid)
+                            setHighestBidderId(previousHighestBidderId)
+                            setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                          }
                         })
-                        if (!response.ok) {
-                          const err = await response.json()
-                          pushBidError(err.error || 'Failed to place bid')
+                        .catch(() => {
+                          pushBidError('Network error')
                           // Revert optimistic update
                           setCurrentBid(previousBid)
                           setHighestBidderId(previousHighestBidderId)
                           setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                        }
-                      } catch {
-                        pushBidError('Network error')
-                        // Revert optimistic update
-                        setCurrentBid(previousBid)
-                        setHighestBidderId(previousHighestBidderId)
-                        setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
-                      } finally {
-                        // Always clear the placing state after API call
-                        startTransition(() => {
-                          setIsPlacingBid(false)
-                          setPlacingBidFor(null)
                         })
-                      }
+                        .finally(() => {
+                          // Clear placing state in background (non-blocking)
+                          startTransition(() => {
+                            setIsPlacingBid(false)
+                            setPlacingBidFor(null)
+                          })
+                        })
                     }}
                   >
                     {placingBidFor === bidder.id ? 'Placing...' : 'Raise'}
@@ -433,9 +439,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
   // Detect when auction goes live and show banner
   useEffect(() => {
-    // Check if auction status changed from DRAFT/PAUSED to LIVE
-    const wasNotLive = previousAuctionStatus !== 'LIVE'
-    const isNowLive = auction.status === 'LIVE'
+    // Check if auction status changed from DRAFT/PAUSED to LIVE/MOCK_RUN
+    const wasNotLive = !isLiveStatus(previousAuctionStatus)
+    const isNowLive = isLiveStatus(auction.status)
     const hasCurrentPlayer = currentPlayer !== null
 
     if (wasNotLive && isNowLive && hasCurrentPlayer) {
@@ -698,7 +704,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setCurrentBid(null)
       setHighestBidderId(null)
       
-      // Remove the "sold" entry and all bids for this player, then add undo event to bid history
+      // Remove only the "sold" entry for this player (keep all bids)
+      // Bids should only be removed via "undo bid" action
       const playerData = data.player?.data as any
       const playerName = playerData?.Name || playerData?.name || 'Player'
       const undoEvent: BidHistoryEntry = {
@@ -709,17 +716,24 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         refundedAmount: data.refundedAmount
       }
       setFullBidHistory(prev => {
-        // Remove the "sold" entry and all bid entries for this player
-        // (keep unsold and sale-undo entries for other players)
+        // Remove only "sold" events for this player
+        // Keep all bids - bids should only be removed via "undo bid"
         const filtered = prev.filter(entry => 
-          !(entry.playerId === data.player.id && (entry.type === 'sold' || entry.type === 'bid'))
+          !(entry.playerId === data.player.id && entry.type === 'sold')
         )
         // Add the undo event at the beginning
         return [undoEvent, ...filtered]
       })
       
-      // Clear bid history for this player to start fresh
-      setBidHistory([])
+      // Update bid history to show remaining bids for this player
+      // Filter to only show bids for current player (excluding sold/unsold events)
+      setBidHistory(prev => {
+        return prev.filter(entry => 
+          entry.playerId === data.player.id && 
+          entry.type !== 'sold' && 
+          entry.type !== 'unsold'
+        )
+      })
       
       // Show success toast
       toast.success(`Sale undone! Player restored and ₹${data.refundedAmount?.toLocaleString('en-IN') || 'amount'} refunded`)
@@ -795,6 +809,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       
       // Store the new player
       setPendingPlayer(data.player)
+      pendingPlayerRef.current = data.player
       
       console.log('🎬 handleNewPlayer called (from Pusher):', {
         hasPlayer: !!data.player,
@@ -832,7 +847,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // Handler when reveal animation completes
   const handleRevealComplete = useCallback(() => {
       console.log('✅ REVEAL ANIMATION COMPLETE - Updating player')
-      setShowPlayerReveal(false)
       
       // Clear any pending fallback timeout since animation completed
       if (fallbackTimeoutRef.current) {
@@ -840,9 +854,20 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         fallbackTimeoutRef.current = null
       }
       
-      if (pendingPlayer) {
+      // Use ref to get latest pendingPlayer value (closure issue fix)
+      const latestPendingPlayer = pendingPlayerRef.current
+      
+      if (latestPendingPlayer) {
+        console.log('✅ Setting current player from pending player:', latestPendingPlayer)
+        console.log('✅ Player data:', latestPendingPlayer.data)
+        console.log('✅ Player name:', (latestPendingPlayer.data as any)?.Name || (latestPendingPlayer.data as any)?.name)
+        
+        // Hide animation first
+        setShowPlayerReveal(false)
+        
+        // Set all state updates together - React 18 batches these automatically
         setIsImageLoading(true)
-        setCurrentPlayer(pendingPlayer)
+        setCurrentPlayer(latestPendingPlayer) // Set player FIRST
         setTimer(30)
         setBidHistory([]) // Clear bid history for new player
         setCurrentBid(null) // Clear current bid
@@ -854,12 +879,22 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         setIsMarkingSold(false)
         setIsMarkingUnsold(false)
         
+        // Use setTimeout to ensure currentPlayer state update completes before clearing pending
+        // This ensures the player card renders with the new player
+        setTimeout(() => {
+          // Clear pending player AFTER current player is set
+          setPendingPlayer(null)
+          pendingPlayerRef.current = null
+        }, 0)
+        
         // Refresh full bid history from server when new player loads
         refreshAuctionState()
-        
-        setPendingPlayer(null)
+      } else {
+        console.warn('⚠️ No pending player found when animation completed')
+        // Still hide animation even if no pending player
+        setShowPlayerReveal(false)
       }
-  }, [pendingPlayer, refreshAuctionState])
+  }, [refreshAuctionState])
 
   const handleAuctionPaused = useCallback(() => setIsPaused(true), [])
   const handleAuctionResumed = useCallback(() => setIsPaused(false), [])
@@ -887,6 +922,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         }))
       }
   }, [])
+
+  const handleAuctionReset = useCallback(() => {
+      toast.success('Auction has been reset! Reloading page...')
+      // Use router.refresh() to reload data without full page reload
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
+  }, [router])
+
   const handleAuctionEnded = useCallback(() => {
       toast.success('Auction ended successfully! Redirecting to results...')
       setTimeout(() => {
@@ -907,6 +951,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     onAuctionResumed: handleAuctionResumed,
     onPlayersUpdated: handlePlayersUpdated,
     onAuctionEnded: handleAuctionEnded,
+    onAuctionReset: handleAuctionReset,
     onBidError: (data) => {
       // Display error message via Pusher
       pushBidError(data.message)
@@ -952,141 +997,168 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     await fetch(`/api/auction/${auction.id}/end`, { method: 'POST' })
   }
 
+  const handleResetAuction = async () => {
+    if (!confirm('Are you sure you want to reset the auction? This will:\n- Reset all players to AVAILABLE\n- Reset all bidders\' purses to original amounts\n- Clear all bid history\n- Set auction status to DRAFT\n\nThis action cannot be undone!')) {
+      return
+    }
+    
+    try {
+      const response = await fetch(`/api/auction/${auction.id}/reset`, { method: 'POST' })
+      if (response.ok) {
+        toast.success('Auction reset successfully')
+        // Use router.refresh() to reload data without full page reload
+        // This avoids React context issues that occur with window.location.reload()
+        setTimeout(() => {
+          router.refresh()
+        }, 500)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || 'Failed to reset auction')
+      }
+    } catch (error) {
+      console.error('Error resetting auction:', error)
+      toast.error('Failed to reset auction')
+    }
+  }
+
   const handleMarkSold = async () => {
     if (!currentPlayer || !currentBid) return
 
-    // Show loading state immediately
+    // Optimistic UI update - show sold animation immediately
     setIsMarkingSold(true)
-    toast.info('Marking player as sold...')
+    setSoldAnimation(true)
     
-    try {
-      const response = await fetch(`/api/auction/${auction.id}/mark-sold`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId: currentPlayer.id })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        // Show sold animation after server confirms
-        setSoldAnimation(true)
-        toast.success('Player marked as sold!')
-        
-        // Trigger reveal animation immediately if we have next player
-        // Don't wait for Pusher - start animation right away for better UX
-        if (data.nextPlayer) {
-          console.log('🎬 Triggering reveal animation immediately with next player from API')
-          // Store the next player for animation
-          setPendingPlayer(data.nextPlayer)
+    // Fire-and-forget API call - don't block UI
+    fetch(`/api/auction/${auction.id}/mark-sold`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: currentPlayer.id })
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          const data = await response.json()
+          toast.success('Player marked as sold!')
           
-          // Clear any existing fallback timeout
-          if (fallbackTimeoutRef.current) {
-            clearTimeout(fallbackTimeoutRef.current)
-            fallbackTimeoutRef.current = null
+          // Trigger reveal animation immediately if we have next player
+          if (data.nextPlayer) {
+            console.log('🎬 Setting pending player from mark-sold response:', data.nextPlayer)
+            setPendingPlayer(data.nextPlayer)
+            pendingPlayerRef.current = data.nextPlayer
+            
+            // Clear any existing fallback timeout
+            if (fallbackTimeoutRef.current) {
+              clearTimeout(fallbackTimeoutRef.current)
+              fallbackTimeoutRef.current = null
+            }
+            
+            // Start reveal animation after sold animation closes (3 seconds)
+            setTimeout(() => {
+              console.log('🎬 Starting reveal animation after sold banner closed')
+              setShowPlayerReveal(true)
+            }, 3000)
+            
+            // Set a timeout fallback in case animation doesn't complete
+            // Increased timeout to 12 seconds (3s sold + 5s reveal + 1.5s buffer + 2.5s extra safety)
+            fallbackTimeoutRef.current = setTimeout(() => {
+              console.warn('⚠️ Animation fallback triggered - setting player directly')
+              const fallbackPlayer = pendingPlayerRef.current || data.nextPlayer
+              if (fallbackPlayer) {
+                setCurrentPlayer(fallbackPlayer)
+                setCurrentBid(null)
+                setBidHistory([])
+                setHighestBidderId(null)
+                setIsMarkingSold(false)
+                setShowPlayerReveal(false)
+                setPendingPlayer(null)
+                pendingPlayerRef.current = null
+                refreshAuctionState()
+              }
+              fallbackTimeoutRef.current = null
+            }, 12000)
           }
           
-          // Start reveal animation after sold animation closes (3 seconds)
-          // The sold animation shows for 3 seconds, so delay reveal by 3s
           setTimeout(() => {
-            console.log('🎬 Starting reveal animation after sold banner closed')
-            setShowPlayerReveal(true)
-          }, 3000)
-          
-          // Set a timeout fallback in case animation doesn't complete
-          // Wait for sold animation (3s) + reveal animation (5s) + buffer (1.5s) = 9.5s total
-          fallbackTimeoutRef.current = setTimeout(() => {
-            // If we reach here, something went wrong with animation
-            console.warn('⚠️ Animation not completed within 9.5s, using fallback')
-            setCurrentPlayer(data.nextPlayer)
+            setSoldAnimation(false)
             setCurrentBid(null)
             setBidHistory([])
             setHighestBidderId(null)
-            setIsMarkingSold(false)
-            // Refresh bidders balance when next player is set
-            refreshAuctionState()
-            fallbackTimeoutRef.current = null
-          }, 9500) // 3s sold animation + 5s reveal animation + 1.5s buffer
-        }
-        
-        setTimeout(() => {
+          }, 3000)
+        } else {
+          const errorData = await response.json()
+          toast.error(errorData.error || 'Failed to mark as sold')
+          setIsMarkingSold(false)
           setSoldAnimation(false)
-          // Don't set isMarkingSold to false here - let fallback or animation completion handle it
-          // Clear current bid and history - new player will be set by Pusher event or fallback
-          setCurrentBid(null)
-          setBidHistory([])
-          setHighestBidderId(null)
-        }, 3000)
-      } else {
-        const errorData = await response.json()
-        toast.error(errorData.error || 'Failed to mark as sold')
+        }
+      })
+      .catch(() => {
+        toast.error('Network error')
         setIsMarkingSold(false)
-      }
-    } catch {
-      toast.error('Network error')
-      setIsMarkingSold(false)
-    }
+        setSoldAnimation(false)
+      })
   }
 
   const handleMarkUnsold = async () => {
     if (!currentPlayer) return
 
-    // Show loading state immediately
+    // Optimistic UI update
     setIsMarkingUnsold(true)
-    toast.info('Marking player as unsold...')
-
-    try {
-      const response = await fetch(`/api/auction/${auction.id}/mark-unsold`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId: currentPlayer.id })
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        toast.success('Player marked as unsold')
-        
-        // Trigger reveal animation immediately if we have next player
-        // Don't wait for Pusher - start animation right away for better UX
-        if (data.nextPlayer) {
-          console.log('🎬 Triggering reveal animation immediately with next player from API (unsold)')
-          // Store the next player for animation
-          setPendingPlayer(data.nextPlayer)
+    
+    // Fire-and-forget API call - don't block UI
+    fetch(`/api/auction/${auction.id}/mark-unsold`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: currentPlayer.id })
+    })
+      .then(async (response) => {
+        if (response.ok) {
+          const data = await response.json()
+          toast.success('Player marked as unsold')
           
-          // Clear any existing fallback timeout
-          if (fallbackTimeoutRef.current) {
-            clearTimeout(fallbackTimeoutRef.current)
-            fallbackTimeoutRef.current = null
-          }
-          
-          // Start reveal animation immediately (no sold banner for unsold)
-          console.log('🎬 Starting reveal animation immediately (unsold)')
-          setShowPlayerReveal(true)
-          
-          // Set a timeout fallback in case animation doesn't complete
-          // Wait for reveal animation (5s) + buffer (1.5s) = 6.5s total
-          fallbackTimeoutRef.current = setTimeout(() => {
-            // If we reach here, something went wrong with animation
-            console.warn('⚠️ Animation not completed within 6.5s, using fallback')
-            setCurrentPlayer(data.nextPlayer)
-            setCurrentBid(null)
-            setBidHistory([])
-            setHighestBidderId(null)
+          // Trigger reveal animation immediately if we have next player
+          if (data.nextPlayer) {
+            console.log('🎬 Setting pending player from mark-unsold response:', data.nextPlayer)
+            setPendingPlayer(data.nextPlayer)
+            pendingPlayerRef.current = data.nextPlayer
+            
+            // Clear any existing fallback timeout
+            if (fallbackTimeoutRef.current) {
+              clearTimeout(fallbackTimeoutRef.current)
+              fallbackTimeoutRef.current = null
+            }
+            
+            // Start reveal animation immediately (no sold banner for unsold)
+            setShowPlayerReveal(true)
+            
+            // Set a timeout fallback in case animation doesn't complete
+            // Increased timeout to 8 seconds (5s reveal + 1.5s buffer + 1.5s extra safety)
+            fallbackTimeoutRef.current = setTimeout(() => {
+              console.warn('⚠️ Animation fallback triggered - setting player directly')
+              const fallbackPlayer = pendingPlayerRef.current || data.nextPlayer
+              if (fallbackPlayer) {
+                setCurrentPlayer(fallbackPlayer)
+                setCurrentBid(null)
+                setBidHistory([])
+                setHighestBidderId(null)
+                setIsMarkingUnsold(false)
+                setShowPlayerReveal(false)
+                setPendingPlayer(null)
+                pendingPlayerRef.current = null
+                refreshAuctionState()
+              }
+              fallbackTimeoutRef.current = null
+            }, 8000)
+          } else {
             setIsMarkingUnsold(false)
-            // Refresh bidders balance when next player is set
-            refreshAuctionState()
-            fallbackTimeoutRef.current = null
-          }, 6500)
+          }
         } else {
+          toast.error('Failed to mark as unsold')
           setIsMarkingUnsold(false)
         }
-      } else {
-        toast.error('Failed to mark as unsold')
+      })
+      .catch(() => {
+        toast.error('Network error')
         setIsMarkingUnsold(false)
-      }
-    } catch {
-      toast.error('Network error')
-      setIsMarkingUnsold(false)
-    }
+      })
   }
 
   const handleUndoSaleConfirm = async () => {
@@ -1329,7 +1401,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 mb-2">
                   <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100">{auction.name}</h1>
                   <Badge className={`px-2 py-0.5 sm:px-3 sm:py-1 text-[10px] sm:text-sm font-semibold rounded-full flex-shrink-0 ${
-                    auction.status === 'LIVE' 
+                    isLiveStatus(auction.status) 
                       ? 'bg-green-500 text-white animate-pulse' 
                       : auction.status === 'PAUSED'
                       ? 'bg-yellow-500 text-white'
@@ -1432,7 +1504,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onSelect={handleStartAuction} 
-                          disabled={auction.status === 'LIVE'}
+                          disabled={isLiveStatus(auction.status)}
                           className="text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
                           <Play className="h-4 w-4 mr-2" />
@@ -1440,7 +1512,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onSelect={handlePauseResume} 
-                          disabled={auction.status !== 'LIVE'}
+                          disabled={!isLiveStatus(auction.status)}
                           className="text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
                           {isPaused ? <Play className="h-4 w-4 mr-2" /> : <Pause className="h-4 w-4 mr-2" />}
@@ -1448,7 +1520,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onSelect={handleNextPlayer} 
-                          disabled={auction.status !== 'LIVE'}
+                          disabled={!isLiveStatus(auction.status)}
                           className="text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
                           <SkipForward className="h-4 w-4 mr-2" />
@@ -1456,11 +1528,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onSelect={handleEndAuction} 
-                          disabled={auction.status !== 'LIVE'} 
+                          disabled={!isLiveStatus(auction.status)} 
                           className="text-red-600 dark:text-red-400 cursor-pointer"
                         >
                           <Square className="h-4 w-4 mr-2" />
                           End Auction
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onSelect={handleResetAuction} 
+                          className="text-orange-600 dark:text-orange-400 cursor-pointer"
+                        >
+                          <RotateCcw className="h-4 w-4 mr-2" />
+                          Reset Auction
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1851,7 +1930,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             
             {/* Bid console moved to sliding drawer */}
             {/* Bidder Controls - Show at top of sidebar for bidders */}
-            {viewMode === 'bidder' && userBidder && auction.status === 'LIVE' && (
+            {viewMode === 'bidder' && userBidder && isLiveStatus(auction.status) && (
               <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 shadow-lg">
                 <CardHeader className="p-4 sm:p-6">
                   <CardTitle className="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">Place Your Bid</CardTitle>
@@ -2547,34 +2626,68 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   return
                 }
 
+                // Optimistic UI updates - batched together
+                const previousBid = currentBid
+                const previousHighestBidderId = highestBidderId
+                const optimisticEntry: BidHistoryEntry = {
+                  type: 'bid',
+                  bidderId: activeBidder.id,
+                  amount: totalBid,
+                  timestamp: new Date(),
+                  bidderName: activeBidder.user?.name || activeBidder.username,
+                  teamName: activeBidder.teamName || undefined,
+                  playerId: currentPlayer?.id
+                }
+
+                // Batch all state updates (React 18 auto-batches)
                 setIsPlacingBid(true)
                 setError('')
+                setCurrentBid({
+                  bidderId: activeBidder.id,
+                  amount: totalBid,
+                  bidderName: activeBidder.user?.name || activeBidder.username,
+                  teamName: activeBidder.teamName || undefined
+                })
+                setHighestBidderId(activeBidder.id)
+                setFullBidHistory(prev => [optimisticEntry, ...prev])
 
-                try {
-                  const response = await fetch(`/api/auction/${auction.id}/bid`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      bidderId: activeBidder.id,
-                      amount: totalBid
-                    })
+                // Fire-and-forget API call - don't block UI
+                fetch(`/api/auction/${auction.id}/bid`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    bidderId: activeBidder.id,
+                    amount: totalBid
                   })
-
-                  const data = await response.json()
-
-                  if (response.ok) {
-                    setBidAmount(0)
-                    setCustomBidModalOpen(false)
-                    setSelectedBidderForBid(null)
-                    toast.success('Bid placed successfully!')
-                  } else {
-                    showBidError(data.error || 'Failed to place bid')
-                  }
-                } catch {
-                  showBidError('Network error. Please try again.')
-                } finally {
-                  setIsPlacingBid(false)
-                }
+                })
+                  .then(async (response) => {
+                    if (!response.ok) {
+                      const data = await response.json()
+                      showBidError(data.error || 'Failed to place bid')
+                      // Revert optimistic update
+                      setCurrentBid(previousBid)
+                      setHighestBidderId(previousHighestBidderId)
+                      setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                    } else {
+                      // Success - close modal and clear form (non-blocking)
+                      startTransition(() => {
+                        setBidAmount(0)
+                        setCustomBidModalOpen(false)
+                        setSelectedBidderForBid(null)
+                      })
+                      toast.success('Bid placed successfully!')
+                    }
+                  })
+                  .catch(() => {
+                    showBidError('Network error. Please try again.')
+                    // Revert optimistic update
+                    setCurrentBid(previousBid)
+                    setHighestBidderId(previousHighestBidderId)
+                    setFullBidHistory(prev => prev.filter(entry => entry !== optimisticEntry))
+                  })
+                  .finally(() => {
+                    setIsPlacingBid(false)
+                  })
               }}
               disabled={isPlacingBid || bidAmount === 0}
             >

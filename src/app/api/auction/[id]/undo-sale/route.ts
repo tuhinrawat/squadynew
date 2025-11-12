@@ -102,10 +102,25 @@ export async function POST(
     const refundAmount = lastSoldPlayer.soldPrice
     const newPurseAmount = bidder.remainingPurse + refundAmount
 
-    // Remove all bids for this player from bid history so bidding starts fresh
-    const clearedBidHistory = bidHistory.filter((bid: any) => 
-      bid.playerId !== lastSoldPlayer.id
-    )
+    // CRITICAL: Only remove the "sold" event for this player
+    // Keep all bids - bids should only be removed via "undo bid" action
+    // Remove: 'sold' events for this player
+    // Keep: 'bid', 'bid-undo', 'unsold', 'sale-undo' events
+    const clearedBidHistory = bidHistory.filter((bid: any) => {
+      // Keep all entries that are NOT a "sold" event for this player
+      if (bid.playerId !== lastSoldPlayer.id) return true
+      if (bid.type !== 'sold') return true // Keep non-sold events (bids, bid-undo, etc.)
+      return false // Remove sold events for this player
+    })
+    
+    // Log for debugging
+    console.log('🔄 Undo Sale - Bid History Update:', {
+      originalBidHistoryLength: bidHistory.length,
+      clearedBidHistoryLength: clearedBidHistory.length,
+      removedEntries: bidHistory.length - clearedBidHistory.length,
+      playerId: lastSoldPlayer.id,
+      note: 'Only removed "sold" events, kept all bids'
+    })
 
     // Revert the sale in a transaction
     await prisma.$transaction([

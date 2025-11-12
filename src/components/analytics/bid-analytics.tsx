@@ -127,6 +127,13 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
   const [lastBidTime, setLastBidTime] = useState<number>(0)
   const [bidCountForCurrentPlayer, setBidCountForCurrentPlayer] = useState<number>(0)
   const [lastOpenAICallTime, setLastOpenAICallTime] = useState<number>(0)
+  const [bidderPriorities, setBidderPriorities] = useState<Record<string, Record<string, number>>>({})
+  
+  // Track factors that should trigger OpenAI calls
+  const [lastTeamCompositionHash, setLastTeamCompositionHash] = useState<string>('')
+  const [lastBidderPrioritiesHash, setLastBidderPrioritiesHash] = useState<string>('')
+  const [lastPlayerStatsHash, setLastPlayerStatsHash] = useState<string>('')
+  const [lastPlayerPosition, setLastPlayerPosition] = useState<number>(-1)
   
   // Refs to store timeout IDs for cleanup
   const timeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set())
@@ -152,6 +159,126 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
   useEffect(() => {
     setLocalAuction(auction)
   }, [auction])
+
+  // Helper function to calculate hash of team composition (players sold to bidder)
+  const calculateTeamCompositionHash = useCallback((bidderId: string) => {
+    const soldPlayers = localAuction.players
+      .filter(p => p.soldTo === bidderId && p.status === 'SOLD')
+      .map(p => p.id)
+      .sort()
+      .join(',')
+    return `${bidderId}:${soldPlayers}`
+  }, [localAuction.players])
+
+  // Helper function to calculate hash of bidder priorities
+  const calculateBidderPrioritiesHash = useCallback(() => {
+    return JSON.stringify(bidderPriorities)
+  }, [bidderPriorities])
+
+  // Helper function to calculate hash of player stats
+  const calculatePlayerStatsHash = useCallback((player: Player | null) => {
+    if (!player) return ''
+    const data = player.data as any
+    return JSON.stringify({
+      batting: data?.Batting || data?.batting,
+      bowling: data?.Bowling || data?.bowling,
+      experience: data?.Experience || data?.experience,
+      form: data?.Form || data?.form
+    })
+  }, [])
+
+  // Helper function to get player position in auction (order in which players are auctioned)
+  const getPlayerPosition = useCallback((player: Player | null) => {
+    if (!player) return -1
+    // Players are ordered by createdAt, so position is index in sorted array
+    const sortedPlayers = [...localAuction.players].sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
+    return sortedPlayers.findIndex(p => p.id === player.id)
+  }, [localAuction.players])
+
+  // Check if any OpenAI-triggering factors have changed
+  const checkIfFactorsChanged = useCallback((player: Player | null) => {
+    if (!player) return false
+
+    const currentTeamHash = calculateTeamCompositionHash(selectedBidder.id)
+    const currentPrioritiesHash = calculateBidderPrioritiesHash()
+    const currentStatsHash = calculatePlayerStatsHash(player)
+    const currentPosition = getPlayerPosition(player)
+
+    const factorsChanged = 
+      currentTeamHash !== lastTeamCompositionHash ||
+      currentPrioritiesHash !== lastBidderPrioritiesHash ||
+      currentStatsHash !== lastPlayerStatsHash ||
+      currentPosition !== lastPlayerPosition
+
+    if (factorsChanged) {
+      console.log('[Analytics] OpenAI-triggering factors changed:', {
+        teamComposition: currentTeamHash !== lastTeamCompositionHash,
+        bidderPriorities: currentPrioritiesHash !== lastBidderPrioritiesHash,
+        playerStats: currentStatsHash !== lastPlayerStatsHash,
+        playerPosition: currentPosition !== lastPlayerPosition
+      })
+      
+      // Update tracked values
+      setLastTeamCompositionHash(currentTeamHash)
+      setLastBidderPrioritiesHash(currentPrioritiesHash)
+      setLastPlayerStatsHash(currentStatsHash)
+      setLastPlayerPosition(currentPosition)
+    }
+
+    return factorsChanged
+  }, [
+    selectedBidder.id,
+    lastTeamCompositionHash,
+    lastBidderPrioritiesHash,
+    lastPlayerStatsHash,
+    lastPlayerPosition,
+    calculateTeamCompositionHash,
+    calculateBidderPrioritiesHash,
+    calculatePlayerStatsHash,
+    getPlayerPosition
+  ])
+
+  // Monitor bidder priorities changes - refresh with mathematical model (default)
+  useEffect(() => {
+    if (Object.keys(bidderPriorities).length > 0) {
+      const currentHash = calculateBidderPrioritiesHash()
+      if (currentHash !== lastBidderPrioritiesHash && lastBidderPrioritiesHash !== '') {
+        console.log('[Analytics] Bidder priorities changed - refreshing with mathematical model')
+        setLastBidderPrioritiesHash(currentHash)
+        if (localCurrentPlayer) {
+          // Clear cache and refresh with mathematical model (default)
+          const cacheKey = `${localCurrentPlayer.id}-${localAuction.id}`
+          setAnalyticsCache(prev => {
+            const newCache = new Map(prev)
+            newCache.delete(cacheKey)
+            return newCache
+          })
+          fetchAnalytics(true, false) // Use mathematical model (default)
+        }
+      } else if (lastBidderPrioritiesHash === '') {
+        // First time - just set the hash
+        setLastBidderPrioritiesHash(currentHash)
+      }
+    }
+  }, [bidderPriorities, calculateBidderPrioritiesHash, lastBidderPrioritiesHash, localCurrentPlayer, localAuction.id])
+
+  // Fetch bidder priorities on mount
+  useEffect(() => {
+    const fetchPriorities = async () => {
+      try {
+        const response = await fetch(`/api/analytics/${auction.id}/bidder-priorities?key=tushkiKILLS`)
+        if (response.ok) {
+          const data = await response.json()
+          setBidderPriorities(data.bidderPriorities || {})
+        }
+      } catch (error) {
+        console.error('Error fetching bidder priorities:', error)
+      }
+    }
+    fetchPriorities()
+  }, [auction.id])
   
   // Cleanup all timeouts on unmount
   useEffect(() => {
@@ -174,8 +301,17 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
     }
   }, [analyticsCache.size])
 
-  const fetchAnalytics = useCallback(async (forceRefresh = false, useAI = true) => {
-    if (!localCurrentPlayer) return
+  const fetchAnalytics = useCallback(async (forceRefresh = false, useAI = false) => {
+    if (!localCurrentPlayer) {
+      console.log('[Analytics] No current player, skipping fetch')
+      return
+    }
+
+    console.log('[Analytics] fetchAnalytics called', { 
+      playerId: localCurrentPlayer.id, 
+      forceRefresh, 
+      useAI 
+    })
 
     // Check cache first (unless force refresh) - use ref for efficient access
     const cacheKey = `${localCurrentPlayer.id}-${localAuction.id}`
@@ -191,20 +327,36 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
       return
     }
 
-    // Smart OpenAI usage strategy:
-    // 1. Always use OpenAI for new players (first analysis)
-    // 2. Use OpenAI if significant changes (multiple bids, high-value bids)
-    // 3. Use fallback predictions for minor updates (single bids)
-    // 4. Rate limit: Don't call OpenAI more than once per 30 seconds for same player
+    // Mathematical model is now the DEFAULT (faster, cheaper, real-time)
+    // OpenAI is optional enhancement - only use if explicitly requested
+    // The mathematical model already handles:
+    // - Multi-factor probability calculations (8 weighted factors)
+    // - Stats-based pricing
+    // - Team composition analysis
+    // - Bidder priority matrix
+    // - Pool supply impact
+    // - Budget pressure calculations
+    // - Real-time auction state
     const now = Date.now()
     const timeSinceLastAI = now - lastOpenAICallTime
+    
+    // Check if factors changed
+    const factorsChanged = checkIfFactorsChanged(localCurrentPlayer)
+    
+    // Only use OpenAI if explicitly requested AND factors changed (cost optimization)
     const shouldUseAI = useAI && (
-      !cached || // First time for this player
-      forceRefresh && timeSinceLastAI > 30000 || // Force refresh and 30s passed
-      bidCountForCurrentPlayer === 0 || // No bids yet (initial analysis)
-      bidCountForCurrentPlayer >= 3 || // Multiple bids (significant change)
-      timeSinceLastAI > 60000 // 1 minute passed (periodic refresh)
+      factorsChanged || // Any factor changed (priorities, team composition, stats, position)
+      (forceRefresh && timeSinceLastAI > 30000) // Force refresh and 30s passed (manual refresh)
     )
+    
+    if (shouldUseAI) {
+      console.log('[Analytics] Using OpenAI enhancement because:', {
+        factorsChanged,
+        forceRefresh: forceRefresh && timeSinceLastAI > 30000
+      })
+    } else {
+      console.log('[Analytics] Using mathematical model (default) - real-time, cost-effective')
+    }
 
     setAnalytics(prev => ({ ...prev, loading: true, error: null }))
 
@@ -219,7 +371,7 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
           playerId: localCurrentPlayer.id,
           tusharBidderId: selectedBidder.id,
           customColumns: customColumns,
-          useOpenAI: shouldUseAI // Tell API whether to use OpenAI or fallback
+          useOpenAI: shouldUseAI // Mathematical model is default (false), set true for OpenAI enhancement
         })
       })
 
@@ -261,34 +413,46 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         setLastOpenAICallTime(now)
       }
 
+      console.log('[Analytics] Successfully fetched analytics', data.predictions)
       setAnalytics({
         predictions: data.predictions,
         loading: false,
         error: null
       })
     } catch (error) {
+      console.error('[Analytics] Error fetching analytics:', error)
       setAnalytics(prev => ({
         ...prev,
         loading: false,
         error: error instanceof Error ? error.message : 'Unknown error'
       }))
     }
-  }, [localCurrentPlayer?.id, selectedBidder.id, localAuction.id, (localAuction as any).analyticsVisibleColumns, lastOpenAICallTime, bidCountForCurrentPlayer])
+  }, [localCurrentPlayer?.id, selectedBidder.id, localAuction.id, (localAuction as any).analyticsVisibleColumns, lastOpenAICallTime, bidCountForCurrentPlayer, checkIfFactorsChanged])
 
-  // Fetch analytics on mount and when current player changes (only if not cached)
+  // Fetch analytics on mount and when current player changes
+  // Only use OpenAI if factors changed or first time
   useEffect(() => {
     if (localCurrentPlayer) {
       const cacheKey = `${localCurrentPlayer.id}-${localAuction.id}`
       const cached = cacheRef.current.get(cacheKey)
       // Reset bid count for new player
       setBidCountForCurrentPlayer(0)
-      setLastOpenAICallTime(0) // Reset timer for new player
+      
+      // Check if factors changed
+      const factorsChanged = checkIfFactorsChanged(localCurrentPlayer)
       
       if (!cached) {
-        // First time for this player - use OpenAI
-        fetchAnalytics(false, true)
+        // First time for this player - use mathematical model (default)
+        console.log('[Analytics] Fetching analytics for new player using mathematical model')
+        fetchAnalytics(false, false) // Use mathematical model (default)
+      } else if (factorsChanged) {
+        // Factors changed - optionally use OpenAI enhancement
+        console.log('[Analytics] Factors changed - using OpenAI enhancement')
+        setLastOpenAICallTime(0) // Reset timer
+        fetchAnalytics(false, true) // Use OpenAI (optional enhancement)
       } else {
-        // Use cached data
+        // Use cached data (factors unchanged)
+        console.log('[Analytics] Using cached analytics (factors unchanged)')
         setAnalytics({
           predictions: cached,
           loading: false,
@@ -296,78 +460,82 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         })
       }
     }
-  }, [localCurrentPlayer?.id]) // Only depend on player ID, not fetchAnalytics
+  }, [localCurrentPlayer?.id, fetchAnalytics, checkIfFactorsChanged, localAuction.id]) // Include dependencies
 
   // Real-time updates via Pusher
   usePusher(auction.id, {
     onNewBid: (data) => {
-      // New bid placed - increment bid count
+      // New bid placed - DO NOT call OpenAI (too costly)
+      // Only track bid count for display purposes
       setBidCountForCurrentPlayer(prev => prev + 1)
       setLastBidTime(Date.now())
-      
-      // Smart refresh strategy:
-      // - First 2 bids: Use fallback (no OpenAI) - just update with new bid data
-      // - 3rd+ bid or significant price change: Use OpenAI for deeper analysis
-      // - If bid amount is very high, always refresh to check if it exceeds suggested price
-      // - Debounce to avoid rapid calls
-      if (localCurrentPlayer) {
-        const currentBidCount = bidCountForCurrentPlayer + 1
-        const newBidAmount = data?.amount || 0
-        
-        // Check if we have a suggested buy price in current analytics (use ref to avoid stale closure)
-        const currentSuggestedPrice = analyticsRef.current.predictions.recommendedAction.suggestedBuyPrice
-        
-        // If new bid significantly exceeds suggested price, always refresh (even if early bids)
-        const priceExceeded = currentSuggestedPrice && newBidAmount > currentSuggestedPrice * 1.1
-        
-        const shouldUseAI = Boolean(currentBidCount >= 3 || priceExceeded) // Use AI after 3 bids OR if price exceeded
-        
-        console.log(`[Analytics] New bid received (count: ${currentBidCount}, amount: ₹${newBidAmount.toLocaleString('en-IN')}). Using ${shouldUseAI ? 'OpenAI' : 'fallback'}...`)
-        
-        // Shorter debounce if price exceeded (need faster update)
-        const debounceTime = priceExceeded ? 500 : (shouldUseAI ? 1000 : 1500)
-        
-        // Debounce: wait before refreshing to batch multiple rapid bids
-        const timeout = setTimeout(() => {
-          timeoutRefs.current.delete(timeout)
-          fetchAnalytics(true, shouldUseAI) // Use AI if significant change or price exceeded
-        }, debounceTime)
-        timeoutRefs.current.add(timeout)
-      }
+      console.log('[Analytics] New bid received - NOT calling OpenAI (cost optimization)')
+      // Analytics will be refreshed when factors change (team composition, priorities, etc.)
     },
     onPlayerSold: (data) => {
-      // Player sold - no need to refresh analytics (player is gone)
-      // Analytics will refresh when new player comes
-      console.log('[Analytics] Player sold, will refresh when new player comes')
+      // Player sold - team composition changed, trigger OpenAI refresh
+      console.log('[Analytics] Player sold - team composition changed, triggering OpenAI refresh')
       setLastBidTime(Date.now())
+      
+      // Reset team composition hash to force refresh on next player
+      setLastTeamCompositionHash('')
+      
       // Don't call fetchAnalytics here - wait for new player
+      // The new player will trigger a refresh with updated team composition
     },
     onNewPlayer: (data) => {
-      // New player in auction - update current player and refresh analytics
-      console.log('[Analytics] New player in auction, updating analytics...')
+      // New player in auction - check if factors changed and refresh with OpenAI
+      console.log('[Analytics] New player in auction, checking if OpenAI refresh needed...')
       if (data.player) {
-        setLocalCurrentPlayer(data.player as Player)
-        onCurrentPlayerChange?.(data.player as Player)
+        const newPlayer = data.player as Player
+        setLocalCurrentPlayer(newPlayer)
+        onCurrentPlayerChange?.(newPlayer)
         // Reset counters for new player
         setBidCountForCurrentPlayer(0)
-        setLastOpenAICallTime(0)
-        // Clear cache for new player and fetch fresh analytics with OpenAI
-        const newCacheKey = `${data.player.id}-${localAuction.id}`
+        
+        // Check if factors changed (team composition, priorities, stats, position)
+        const factorsChanged = checkIfFactorsChanged(newPlayer)
+        
+        // Clear cache for new player
+        const newCacheKey = `${newPlayer.id}-${localAuction.id}`
         setAnalyticsCache(prev => {
           const newCache = new Map(prev)
-          newCache.delete(newCacheKey) // Clear cache for new player
+          newCache.delete(newCacheKey)
           return newCache
         })
-        const timeout = setTimeout(() => {
-          timeoutRefs.current.delete(timeout)
-          fetchAnalytics(true, true) // Force refresh with OpenAI for new player
-        }, 500)
-        timeoutRefs.current.add(timeout)
+        
+        // Use mathematical model by default (faster, cheaper, real-time)
+        // Only use OpenAI if factors changed (optional enhancement)
+        const shouldUseAI = factorsChanged
+        
+        if (shouldUseAI) {
+          console.log('[Analytics] Factors changed - using OpenAI enhancement')
+          setLastOpenAICallTime(0) // Reset timer
+          const timeout = setTimeout(() => {
+            timeoutRefs.current.delete(timeout)
+            fetchAnalytics(true, true) // Force refresh with OpenAI (optional)
+          }, 500)
+          timeoutRefs.current.add(timeout)
+        } else {
+          console.log('[Analytics] Using mathematical model (default) - real-time predictions')
+          // Use cached data if available
+          const cached = cacheRef.current.get(newCacheKey)
+          if (cached) {
+            setAnalytics({
+              predictions: cached,
+              loading: false,
+              error: null
+            })
+          } else {
+            // Fetch with mathematical model (default, no OpenAI)
+            fetchAnalytics(true, false)
+          }
+        }
       }
     },
     onPlayersUpdated: (data) => {
-      // Players or bidders updated - use fallback (purse changes don't need AI)
-      console.log('[Analytics] Players/bidders updated, using fallback predictions...')
+      // Players or bidders updated - check if team composition changed
+      console.log('[Analytics] Players/bidders updated, checking for team composition changes...')
       setLastBidTime(Date.now())
       if (data.bidders) {
         // Update local auction with new bidder data
@@ -380,49 +548,76 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
         }))
         onAuctionUpdate?.(localAuction)
       }
-      // Refresh analytics with fallback (no OpenAI) - just update purse data
-      const timeout = setTimeout(() => {
-        timeoutRefs.current.delete(timeout)
-        fetchAnalytics(true, false) // Use fallback for purse updates
-      }, 500)
-      timeoutRefs.current.add(timeout)
-    },
-    onBidUndo: (data) => {
-      // Bid undone - decrement bid count and use fallback
-      setBidCountForCurrentPlayer(prev => Math.max(0, prev - 1))
-      console.log('[Analytics] Bid undone, using fallback predictions...')
-      setLastBidTime(Date.now())
+      
+      // Check if team composition changed (player sold)
       if (localCurrentPlayer) {
-        const timeout = setTimeout(() => {
-          timeoutRefs.current.delete(timeout)
-          fetchAnalytics(true, false) // Use fallback for undo
-        }, 500)
-        timeoutRefs.current.add(timeout)
+        const factorsChanged = checkIfFactorsChanged(localCurrentPlayer)
+        const shouldUseAI = factorsChanged
+        
+        if (shouldUseAI) {
+          console.log('[Analytics] Team composition changed - using OpenAI enhancement')
+          const timeout = setTimeout(() => {
+            timeoutRefs.current.delete(timeout)
+            fetchAnalytics(true, true) // Use OpenAI if team composition changed (optional)
+          }, 500)
+          timeoutRefs.current.add(timeout)
+        } else {
+          // Use mathematical model (default) for purse updates
+          const timeout = setTimeout(() => {
+            timeoutRefs.current.delete(timeout)
+            fetchAnalytics(true, false) // Use mathematical model (default)
+          }, 500)
+          timeoutRefs.current.add(timeout)
+        }
       }
     },
+    onBidUndo: (data) => {
+      // Bid undone - DO NOT call OpenAI (just update bid count)
+      setBidCountForCurrentPlayer(prev => Math.max(0, prev - 1))
+      console.log('[Analytics] Bid undone - NOT calling OpenAI (cost optimization)')
+      setLastBidTime(Date.now())
+      // No analytics refresh needed - factors haven't changed
+    },
     onSaleUndo: (data) => {
-      // Sale undone - refresh analytics with OpenAI (significant change)
-      console.log('[Analytics] Sale undone, refreshing with OpenAI...')
+      // Sale undone - team composition changed, refresh with mathematical model (default)
+      console.log('[Analytics] Sale undone - refreshing with mathematical model')
       setLastBidTime(Date.now())
       if (data.player) {
-        setLocalCurrentPlayer(data.player as Player)
-        onCurrentPlayerChange?.(data.player as Player)
+        const player = data.player as Player
+        setLocalCurrentPlayer(player)
+        onCurrentPlayerChange?.(player)
         // Reset counters
         setBidCountForCurrentPlayer(0)
         setLastOpenAICallTime(0)
+        
+        // Reset team composition hash to force refresh
+        setLastTeamCompositionHash('')
+        
         // Clear cache for the player
-        const cacheKey = `${data.player.id}-${localAuction.id}`
+        const cacheKey = `${player.id}-${localAuction.id}`
         setAnalyticsCache(prev => {
           const newCache = new Map(prev)
           newCache.delete(cacheKey)
           return newCache
         })
+        
+        // Check if factors changed
+        const factorsChanged = checkIfFactorsChanged(player)
+        if (factorsChanged) {
+          const timeout = setTimeout(() => {
+            timeoutRefs.current.delete(timeout)
+            fetchAnalytics(true, true) // Use OpenAI for sale undo (optional enhancement)
+          }, 1000)
+          timeoutRefs.current.add(timeout)
+        } else {
+          // Use mathematical model (default) if no factor changes
+          const timeout = setTimeout(() => {
+            timeoutRefs.current.delete(timeout)
+            fetchAnalytics(true, false) // Use mathematical model (default)
+          }, 500)
+          timeoutRefs.current.add(timeout)
+        }
       }
-      const timeout = setTimeout(() => {
-        timeoutRefs.current.delete(timeout)
-        fetchAnalytics(true, true) // Use OpenAI for sale undo (significant change)
-      }, 1000)
-      timeoutRefs.current.add(timeout)
     }
   })
 
@@ -647,8 +842,11 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 {analytics.predictions.recommendedAction.reasoning}
               </p>
-              <Button onClick={() => fetchAnalytics(true, true)} variant="outline" className="w-full">
-                Refresh Analysis (with AI)
+              <Button onClick={() => fetchAnalytics(true, false)} variant="outline" className="w-full">
+                Refresh Analysis (Mathematical Model)
+              </Button>
+              <Button onClick={() => fetchAnalytics(true, true)} variant="outline" className="w-full mt-2">
+                Refresh with AI Enhancement (Optional)
               </Button>
             </div>
           )}
@@ -663,7 +861,7 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
             Likely Bidders Analysis
           </CardTitle>
           <CardDescription>
-            Advanced probability model based on multiple factors: purse balance, team needs, spending patterns, and bidding history
+            Advanced probability model based on multiple factors: bidder priorities, purse balance, team needs, spending patterns, and bidding history
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -676,6 +874,7 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                       <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Team / Bidder</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Priority</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Probability</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Ideal Bid Price</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Purse</th>
@@ -721,6 +920,24 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                         bidderName = selectedBidder.user?.name || selectedBidder.username || 'Unknown Bidder'
                       }
                       
+                      // Get priority for this bidder-player combination
+                      const currentPlayerName = (localCurrentPlayer?.data as any)?.Name || (localCurrentPlayer?.data as any)?.name || ''
+                      let playerPriority: number | null = null
+                      if (currentPlayerName && Object.keys(bidderPriorities).length > 0) {
+                        const bidderKey = Object.keys(bidderPriorities).find(key => {
+                          const keyLower = key.toLowerCase()
+                          const bidderNameLower = bidderName.toLowerCase()
+                          const teamNameLower = teamName.toLowerCase()
+                          return keyLower === bidderNameLower || keyLower === teamNameLower
+                        })
+                        if (bidderKey && bidderPriorities[bidderKey]) {
+                          playerPriority = bidderPriorities[bidderKey][currentPlayerName] || 
+                                          bidderPriorities[bidderKey][currentPlayerName.toLowerCase()] ||
+                                          bidderPriorities[bidderKey][(currentPlayerName.split(' ')[0] || '').toLowerCase()] ||
+                                          null
+                        }
+                      }
+                      
                       const probability = Math.round(bidder.probability * 100)
                       const probabilityColor = probability >= 70 ? 'text-green-600 dark:text-green-400' : 
                                                probability >= 40 ? 'text-yellow-600 dark:text-yellow-400' : 
@@ -742,6 +959,18 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                               </div>
                               <span className="text-xs text-gray-600 dark:text-gray-400 ml-5">{bidderName}</span>
                             </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {playerPriority ? (
+                              <Badge 
+                                variant={playerPriority <= 3 ? 'default' : playerPriority <= 6 ? 'secondary' : 'outline'}
+                                className="text-xs"
+                              >
+                                #{playerPriority}
+                              </Badge>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex flex-col items-center">

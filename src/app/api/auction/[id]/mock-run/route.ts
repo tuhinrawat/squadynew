@@ -25,8 +25,17 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    if (isLiveStatus(auction.status)) {
-      return NextResponse.json({ error: 'Auction already started' }, { status: 400 })
+    // Can only start mock run from DRAFT or PAUSED status
+    if (auction.status === 'LIVE') {
+      return NextResponse.json({ error: 'Auction is already live. Please pause it first.' }, { status: 400 })
+    }
+
+    if (auction.status === 'COMPLETED') {
+      return NextResponse.json({ error: 'Cannot start mock run for completed auction' }, { status: 400 })
+    }
+
+    if (auction.status === 'MOCK_RUN') {
+      return NextResponse.json({ error: 'Mock run is already active' }, { status: 400 })
     }
 
     // Pick random available player
@@ -60,14 +69,20 @@ export async function POST(
       return NextResponse.json({ error: 'No available players' }, { status: 400 })
     }
 
-    // Update auction status and current player
+    // Update auction status to MOCK_RUN and set current player
+    // If coming from PAUSED, preserve bid history; otherwise start fresh
+    const updateData: any = {
+      status: 'MOCK_RUN',
+      currentPlayerId: randomPlayer.id
+    }
+    
+    if (auction.status !== 'PAUSED') {
+      updateData.bidHistory = []
+    }
+    
     await prisma.auction.update({
       where: { id: params.id },
-      data: {
-        status: 'LIVE',
-        currentPlayerId: randomPlayer.id,
-        bidHistory: []
-      }
+      data: updateData
     })
 
     // Broadcast player-sold event
@@ -75,7 +90,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, player: randomPlayer })
   } catch (error) {
-    console.error('Error starting auction:', error)
+    console.error('Error starting mock run:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

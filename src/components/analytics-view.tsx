@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PlayerTable } from '@/components/analytics/player-table'
 import { BidAnalytics } from '@/components/analytics/bid-analytics'
+import { BidderPrioritiesUpload } from '@/components/analytics/bidder-priorities-upload'
 import { Auction, Player, Bidder } from '@prisma/client'
 
 interface AnalyticsViewProps {
@@ -162,9 +163,10 @@ export function AnalyticsView({ auction, currentPlayer, bidHistory }: AnalyticsV
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="players">Player Table</TabsTrigger>
             <TabsTrigger value="analytics">Bid Analytics</TabsTrigger>
+            <TabsTrigger value="priorities">Bidder Priorities</TabsTrigger>
           </TabsList>
 
           <TabsContent value="players" className="mt-6">
@@ -204,6 +206,14 @@ export function AnalyticsView({ auction, currentPlayer, bidHistory }: AnalyticsV
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="priorities" className="mt-6">
+            <BidderPrioritiesUpload
+              auctionId={localAuction.id}
+              bidders={localAuction.bidders}
+              players={localAuction.players}
+            />
           </TabsContent>
         </Tabs>
       </div>

@@ -62,6 +62,7 @@ export interface AuctionEventData {
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
+  'auction-reset': {}
   'players-updated': {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
