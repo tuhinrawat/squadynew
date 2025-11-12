@@ -106,7 +106,7 @@ export async function POST(
         where: { id: params.id }
       })
       const rules = auction?.rules as any
-      const purseAmount = rules?.totalPurse || 10000000
+      const purseAmount = rules?.totalPurse || 100000
 
       for (const player of existingPlayers) {
         if (player.status !== 'RETIRED') { // Only create bidder if not already retired

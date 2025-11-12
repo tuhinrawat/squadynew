@@ -153,7 +153,7 @@ export async function PUT(
           where: { id: params.id }
         })
         const rules = auction?.rules as any
-        const purseAmount = rules?.totalPurse || 10000000
+        const purseAmount = rules?.totalPurse || 100000
 
         // Generate credentials
         const username = `retired_${player.id}`

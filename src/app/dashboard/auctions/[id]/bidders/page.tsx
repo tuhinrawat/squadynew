@@ -54,7 +54,7 @@ export default function BidderManagement() {
     email: '',
     username: '',
     password: '',
-    purseAmount: 10000000,
+    purseAmount: 100000,
     logoUrl: ''
   })
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -108,7 +108,7 @@ export default function BidderManagement() {
           email: '',
           username: '',
           password: '',
-          purseAmount: 10000000,
+          purseAmount: 100000,
           logoUrl: ''
         })
         setLogoFile(null)
@@ -179,7 +179,7 @@ export default function BidderManagement() {
           email: '',
           username: '',
           password: '',
-          purseAmount: 10000000,
+          purseAmount: 100000,
           logoUrl: ''
         })
         setLogoFile(null)
@@ -430,7 +430,7 @@ export default function BidderManagement() {
                   type="number"
                   value={formData.purseAmount}
                   onChange={(e) => setFormData({ ...formData, purseAmount: Number(e.target.value) })}
-                  placeholder="₹ 1,00,00,000 (optional)"
+                  placeholder="₹ 1,00,000 (optional)"
                 />
               </div>
             </div>
@@ -617,7 +617,7 @@ export default function BidderManagement() {
                   type="number"
                   value={formData.purseAmount}
                   onChange={(e) => setFormData({ ...formData, purseAmount: Number(e.target.value) })}
-                  placeholder="₹ 1,00,00,000"
+                  placeholder="₹ 1,00,000"
                   required
                 />
               </div>

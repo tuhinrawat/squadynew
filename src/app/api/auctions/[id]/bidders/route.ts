@@ -99,7 +99,7 @@ export async function POST(
     const finalUsername = username || `bidder_${Date.now()}_${Math.random().toString(36).substring(7)}`
     const finalEmail = email || `${finalUsername}@noemail.com`
     const finalPassword = password || Math.random().toString(36).substring(2, 10)
-    const finalPurseAmount = purseAmount || 10000000
+    const finalPurseAmount = purseAmount || 100000
 
     // Check if username is unique for this auction
     const existingBidder = await prisma.bidder.findUnique({
