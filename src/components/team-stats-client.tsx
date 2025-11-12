@@ -1445,6 +1445,9 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                   <h3 className="text-white text-sm sm:text-base font-semibold mb-4">
                     Match Fixtures {fixturesLoading && '(Loading...)'}
                   </h3>
+                  <div className="text-white text-xs mb-2">
+                    Debug: activeTab = {activeTab}, fixturesLoading = {String(fixturesLoading)}, fixtures.length = {fixtures.length}
+                  </div>
                   {fixturesLoading ? (
                     <div className="flex items-center justify-center py-20">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
@@ -1454,7 +1457,13 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                       <div className="text-white/60 text-xs mb-4">
                         Found {fixtures.length} fixture{fixtures.length !== 1 ? 's' : ''}
                       </div>
-                      <FixturesBracket fixtures={fixtures} />
+                      {fixtures.length > 0 ? (
+                        <FixturesBracket fixtures={fixtures} />
+                      ) : (
+                        <div className="text-white/80 text-center py-10">
+                          No fixtures to display
+                        </div>
+                      )}
                     </>
                   )}
                 </CardContent>
