@@ -234,24 +234,29 @@ export async function DELETE(
       )
     }
 
-    // Delete related records first
-    // Delete players
+    // Delete related records first (ORDER MATTERS!)
+    // 1. Delete players
     await prisma.player.deleteMany({
       where: { auctionId: params.id }
     })
 
-    // Delete bidders and associated users
+    // 2. Delete fixtures (MUST be before bidders due to foreign key constraints)
+    await prisma.fixture.deleteMany({
+      where: { auctionId: params.id }
+    })
+
+    // 3. Get bidders for user cleanup
     const bidders = await prisma.bidder.findMany({
       where: { auctionId: params.id },
       select: { userId: true }
     })
 
-    // Delete bidders
+    // 4. Delete bidders
     await prisma.bidder.deleteMany({
       where: { auctionId: params.id }
     })
 
-    // Delete associated users (only BIDDER role users)
+    // 5. Delete associated users (only BIDDER role users)
     const bidderUserIds = bidders.map(b => b.userId)
     if (bidderUserIds.length > 0) {
       await prisma.user.deleteMany({
@@ -262,7 +267,7 @@ export async function DELETE(
       })
     }
 
-    // Finally delete the auction
+    // 6. Finally delete the auction
     await prisma.auction.delete({
       where: {
         id: params.id
