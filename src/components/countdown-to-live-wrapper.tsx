@@ -100,6 +100,8 @@ export function CountdownToLiveWrapper({
       })()
       const status = player.status
       const isBidder = status === 'RETIRED'
+      const isBidderChoice = (player as any).isIcon === true
+      const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName
 
       const statusLabel = status === 'SOLD'
         ? 'Sold'
@@ -119,6 +121,8 @@ export function CountdownToLiveWrapper({
         basePrice,
         statusLabel,
         isBidder,
+        isBidderChoice,
+        teamName,
         purchasedPrice: status === 'SOLD' ? (player.soldPrice || 0) : null,
         cricherosLink
       }
@@ -541,7 +545,19 @@ export function CountdownToLiveWrapper({
                         key={card.id}
                         className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${isBidder ? 'border-violet-400 shadow-[0_0_20px_rgba(168,85,247,0.6)] bg-gradient-to-br from-violet-900 via-purple-900 to-slate-950' : 'border-white/20 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950'} max-w-md mx-auto w-full`}
                       >
-                        {/* Status Badge */}
+                        {/* Bidder Choice Badge - Top Left */}
+                        {card.isBidderChoice && (
+                          <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20">
+                            <Badge
+                              variant="secondary"
+                              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border border-purple-300 backdrop-blur px-2 py-1 text-[9px] sm:text-xs font-bold"
+                            >
+                              ⭐ BIDDER CHOICE
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Status Badge - Top Right */}
                         <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
                           <Badge
                             variant="secondary"
@@ -605,6 +621,12 @@ export function CountdownToLiveWrapper({
                                 </a>
                             )}
                           </div>
+                            {/* Team Name for Bidders */}
+                            {isBidder && card.teamName && (
+                              <p className="text-violet-300 text-[10px] sm:text-xs font-bold tracking-wide truncate mt-1">
+                                {card.teamName}
+                              </p>
+                            )}
                             {card.specialty && (
                               <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
                             )}
