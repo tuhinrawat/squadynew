@@ -928,7 +928,13 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                           const keyLower = key.toLowerCase()
                           const bidderNameLower = bidderName.toLowerCase()
                           const teamNameLower = teamName.toLowerCase()
-                          return keyLower === bidderNameLower || keyLower === teamNameLower
+                          
+                          // Match against new format "Team Name (Bidder Name)" or old formats
+                          return keyLower === bidderNameLower || 
+                                 keyLower === teamNameLower ||
+                                 keyLower === `${teamNameLower} (${bidderNameLower})` ||
+                                 keyLower.includes(bidderNameLower) ||
+                                 keyLower.includes(teamNameLower)
                         })
                         if (bidderKey && bidderPriorities[bidderKey]) {
                           playerPriority = bidderPriorities[bidderKey][currentPlayerName] || 

@@ -46,8 +46,8 @@ export default function PlayerManagement() {
   const [editPlayerData, setEditPlayerData] = useState<Record<string, string>>({})
   const [savingPlayer, setSavingPlayer] = useState(false)
 
-  // Check if editing is allowed
-  const isEditingAllowed = !isPublished && auctionStatus !== 'LIVE' && auctionStatus !== 'MOCK_RUN'
+  // Check if editing is allowed - only block during LIVE and MOCK_RUN
+  const isEditingAllowed = auctionStatus !== 'LIVE' && auctionStatus !== 'MOCK_RUN'
 
   // Fetch players and auction details on component mount
   useEffect(() => {
@@ -280,12 +280,10 @@ export default function PlayerManagement() {
   const handleEditPlayer = async (player: any) => {
     // Check if auction is in editable state
     if (!isEditingAllowed) {
-      if (isPublished) {
-        setError('Cannot edit players - auction is already published to the public')
-      } else if (auctionStatus === 'LIVE') {
+      if (auctionStatus === 'LIVE') {
         setError('Cannot edit players while auction is LIVE')
       } else if (auctionStatus === 'MOCK_RUN') {
-        setError('Cannot edit players while in MOCK_RUN mode')
+        setError('Cannot edit players while in MOCK_RUN mode. Reset the auction to enable editing.')
       }
       return
     }
@@ -623,17 +621,16 @@ export default function PlayerManagement() {
         </Alert>
       )}
 
-      {/* Warning for Published/Live/Mock Run Status */}
+      {/* Warning for Live/Mock Run Status */}
       {!isEditingAllowed && (
         <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
           <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
           <AlertDescription className="text-yellow-800 dark:text-yellow-200">
             <strong>Editing Disabled:</strong> Player data cannot be edited 
-            {isPublished && ' because the auction is published to the public'}
             {auctionStatus === 'LIVE' && ' while the auction is LIVE'}
             {auctionStatus === 'MOCK_RUN' && ' while in MOCK_RUN mode'}
             .
-            {(auctionStatus === 'MOCK_RUN' || isPublished) && ' Unpublish or reset the auction to enable editing.'}
+            {auctionStatus === 'MOCK_RUN' && ' Reset the auction to enable editing.'}
           </AlertDescription>
         </Alert>
       )}

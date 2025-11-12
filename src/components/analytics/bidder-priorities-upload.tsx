@@ -74,7 +74,32 @@ export function BidderPrioritiesUpload({ auctionId, bidders, players }: BidderPr
       const response = await fetch(`/api/analytics/${auctionId}/bidder-priorities?key=tushkiKILLS`)
       if (response.ok) {
         const data = await response.json()
-        setPriorities(data.bidderPriorities || {})
+        const loadedPriorities = data.bidderPriorities || {}
+        
+        // Migrate old priority format to new format (Team Name (Bidder Name))
+        const migratedPriorities: Record<string, Record<string, number>> = {}
+        
+        bidders.forEach(bidder => {
+          const bidderName = bidder.user?.name || bidder.username || 'Unknown'
+          const teamName = bidder.teamName
+          const newKey = teamName ? `${teamName} (${bidderName})` : bidderName
+          
+          // Try to find priorities under old keys (just team name or just bidder name)
+          const oldTeamKey = loadedPriorities[teamName || '']
+          const oldBidderKey = loadedPriorities[bidderName]
+          const newKeyData = loadedPriorities[newKey]
+          
+          // Use priorities in this priority order: new key > team name > bidder name
+          if (newKeyData) {
+            migratedPriorities[newKey] = newKeyData
+          } else if (oldTeamKey) {
+            migratedPriorities[newKey] = oldTeamKey
+          } else if (oldBidderKey) {
+            migratedPriorities[newKey] = oldBidderKey
+          }
+        })
+        
+        setPriorities(migratedPriorities)
         
         // Load saved player order if available
         if (data.playerOrder && Array.isArray(data.playerOrder) && data.playerOrder.length > 0) {
@@ -113,10 +138,17 @@ export function BidderPrioritiesUpload({ auctionId, bidders, players }: BidderPr
     ...allPlayers.filter(p => !orderedPlayers.find(op => op.name === p.name))
   ]
 
-  // Get bidder names
-  const bidderNames = bidders.map(b => 
-    b.teamName || b.user?.name || b.username || 'Unknown'
-  ).sort()
+  // Get bidder names with team names
+  const bidderNames = bidders.map(b => {
+    const bidderName = b.user?.name || b.username || 'Unknown'
+    const teamName = b.teamName
+    
+    // Show both team name and bidder name if team name exists
+    if (teamName) {
+      return `${teamName} (${bidderName})`
+    }
+    return bidderName
+  }).sort()
 
   // Handle priority change
   const handlePriorityChange = (bidderName: string, playerName: string, value: string) => {
