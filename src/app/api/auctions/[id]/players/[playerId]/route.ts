@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import bcrypt from 'bcryptjs'
 
 // GET /api/auctions/[id]/players/[playerId] - Get specific player
 export async function GET(
@@ -131,6 +132,91 @@ export async function PUT(
       },
       data: updateData
     })
+
+    // If retiring player, create a bidder record for them
+    if (status === 'RETIRED' && existingPlayer.status !== 'RETIRED') {
+      const playerData = player.data as any
+      const playerName = playerData?.name || playerData?.Name || player.name || 'Retired Player'
+      const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
+      
+      // Check if bidder already exists
+      const existingBidder = await prisma.bidder.findFirst({
+        where: {
+          auctionId: params.id,
+          username: `retired_${player.id}`
+        }
+      })
+
+      if (!existingBidder) {
+        // Get auction to get purse amount
+        const auction = await prisma.auction.findUnique({
+          where: { id: params.id }
+        })
+        const rules = auction?.rules as any
+        const purseAmount = rules?.totalPurse || 10000000
+
+        // Generate credentials
+        const username = `retired_${player.id}`
+        const email = `${username}@retired.player`
+        const password = Math.random().toString(36).substring(2, 10)
+        const hashedPassword = await bcrypt.hash(password, 10)
+
+        // Create or get user
+        let user = await prisma.user.findUnique({ where: { email } })
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email,
+              name: playerName,
+              password: hashedPassword,
+            }
+          })
+        }
+
+        // Update user role to BIDDER
+        if (user.role !== 'BIDDER') {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { role: 'BIDDER' }
+          })
+        }
+
+        // Get profile photo URL
+        const photoKeys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
+        const photoValue = photoKeys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+        let logoUrl = null
+        if (photoValue) {
+          const photoStr = String(photoValue).trim()
+          const match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+          if (match && match[1]) {
+            logoUrl = `/api/proxy-image?id=${match[1]}`
+          }
+        }
+
+        // Create bidder
+        await prisma.bidder.create({
+          data: {
+            userId: user.id,
+            auctionId: params.id,
+            teamName,
+            username,
+            purseAmount,
+            remainingPurse: purseAmount,
+            logoUrl
+          }
+        })
+      }
+    }
+
+    // If un-retiring player, delete bidder record
+    if (status !== 'RETIRED' && existingPlayer.status === 'RETIRED') {
+      await prisma.bidder.deleteMany({
+        where: {
+          auctionId: params.id,
+          username: `retired_${player.id}`
+        }
+      })
+    }
 
     return NextResponse.json({
       message: 'Player updated successfully',
