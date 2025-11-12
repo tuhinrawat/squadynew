@@ -41,9 +41,13 @@ export default function PlayerManagement() {
   const [batchProcessing, setBatchProcessing] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
   const [auctionStatus, setAuctionStatus] = useState<string>('DRAFT')
+  const [isPublished, setIsPublished] = useState<boolean>(false)
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null)
   const [editPlayerData, setEditPlayerData] = useState<Record<string, string>>({})
   const [savingPlayer, setSavingPlayer] = useState(false)
+
+  // Check if editing is allowed
+  const isEditingAllowed = !isPublished && auctionStatus !== 'LIVE' && auctionStatus !== 'MOCK_RUN'
 
   // Fetch players and auction details on component mount
   useEffect(() => {
@@ -57,8 +61,9 @@ export default function PlayerManagement() {
       const data = await response.json()
       
       if (response.ok && data.auction) {
-        // Store auction status
+        // Store auction status and published state
         setAuctionStatus(data.auction.status)
+        setIsPublished(data.auction.isPublished || false)
         
         // Load saved column order if available
         if (data.auction.columnOrder && Array.isArray(data.auction.columnOrder)) {
@@ -274,8 +279,14 @@ export default function PlayerManagement() {
 
   const handleEditPlayer = async (player: any) => {
     // Check if auction is in editable state
-    if (auctionStatus === 'LIVE' || auctionStatus === 'MOCK_RUN') {
-      setError('Cannot edit players while auction is LIVE or in MOCK_RUN mode')
+    if (!isEditingAllowed) {
+      if (isPublished) {
+        setError('Cannot edit players - auction is already published to the public')
+      } else if (auctionStatus === 'LIVE') {
+        setError('Cannot edit players while auction is LIVE')
+      } else if (auctionStatus === 'MOCK_RUN') {
+        setError('Cannot edit players while in MOCK_RUN mode')
+      }
       return
     }
     
@@ -612,13 +623,17 @@ export default function PlayerManagement() {
         </Alert>
       )}
 
-      {/* Warning for Live/Mock Run Status */}
-      {(auctionStatus === 'LIVE' || auctionStatus === 'MOCK_RUN') && (
+      {/* Warning for Published/Live/Mock Run Status */}
+      {!isEditingAllowed && (
         <Alert className="bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800">
           <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
           <AlertDescription className="text-yellow-800 dark:text-yellow-200">
-            <strong>Editing Disabled:</strong> Player data cannot be edited while the auction is {auctionStatus === 'LIVE' ? 'LIVE' : 'in MOCK_RUN mode'}. 
-            {auctionStatus === 'MOCK_RUN' && ' Reset the auction to enable editing.'}
+            <strong>Editing Disabled:</strong> Player data cannot be edited 
+            {isPublished && ' because the auction is published to the public'}
+            {auctionStatus === 'LIVE' && ' while the auction is LIVE'}
+            {auctionStatus === 'MOCK_RUN' && ' while in MOCK_RUN mode'}
+            .
+            {(auctionStatus === 'MOCK_RUN' || isPublished) && ' Unpublish or reset the auction to enable editing.'}
           </AlertDescription>
         </Alert>
       )}
@@ -896,7 +911,7 @@ export default function PlayerManagement() {
               <DataTable
                 data={tableData}
                 columns={tableColumns}
-                onEdit={auctionStatus !== 'LIVE' && auctionStatus !== 'MOCK_RUN' ? handleEditPlayer : undefined}
+                onEdit={isEditingAllowed ? handleEditPlayer : undefined}
                 onDelete={handleDeletePlayer}
                 onColumnReorder={handleColumnReorder}
                 searchPlaceholder="Search players..."
@@ -912,7 +927,7 @@ export default function PlayerManagement() {
                     <Badge variant="default" className="bg-purple-600 text-white">
                       ⭐ {players.filter((p: any) => p.isIcon).length} / {auctionRules?.iconPlayerCount ?? 10} Bidder Choice
                     </Badge>
-                    {(auctionStatus === 'LIVE' || auctionStatus === 'MOCK_RUN') && (
+                    {!isEditingAllowed && (
                       <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700">
                         🔒 Editing Locked
                       </Badge>
