@@ -49,6 +49,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [fixtures, setFixtures] = useState<any[]>([])
+  const [fixturesLoading, setFixturesLoading] = useState(true)
 
   // Subscribe to real-time updates with incremental updates (no API calls - millisecond latency)
   useEffect(() => {
@@ -117,13 +118,25 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   useEffect(() => {
     const fetchFixtures = async () => {
       try {
+        setFixturesLoading(true)
+        console.log('Fetching fixtures for auction:', auction.id)
         const response = await fetch(`/api/auctions/${auction.id}/fixtures`)
+        console.log('Fixtures response status:', response.status)
         if (response.ok) {
           const data = await response.json()
-          setFixtures(data.fixtures)
+          console.log('Fixtures data:', data)
+          console.log('Number of fixtures:', data.fixtures?.length || 0)
+          setFixtures(data.fixtures || [])
+        } else {
+          const errorText = await response.text()
+          console.error('Failed to fetch fixtures, status:', response.status, 'error:', errorText)
+          setFixtures([])
         }
       } catch (error) {
         console.error('Error fetching fixtures:', error)
+        setFixtures([])
+      } finally {
+        setFixturesLoading(false)
       }
     }
     fetchFixtures()
@@ -1429,8 +1442,21 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
             {activeTab === 'fixtures' && (
               <Card className="bg-white/10 backdrop-blur-md border-white/20">
                 <CardContent className="p-3 sm:p-6">
-                  <h3 className="text-white text-sm sm:text-base font-semibold mb-4">Match Fixtures</h3>
-                  <FixturesBracket fixtures={fixtures} />
+                  <h3 className="text-white text-sm sm:text-base font-semibold mb-4">
+                    Match Fixtures {fixturesLoading && '(Loading...)'}
+                  </h3>
+                  {fixturesLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-white/60 text-xs mb-4">
+                        Found {fixtures.length} fixture{fixtures.length !== 1 ? 's' : ''}
+                      </div>
+                      <FixturesBracket fixtures={fixtures} />
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}
