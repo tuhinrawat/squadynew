@@ -85,10 +85,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
     }
 
-    // Prevent editing if auction is published or live
-    if (existingBidder.auction.isPublished || existingBidder.auction.status === 'LIVE') {
+    // Prevent editing if auction is live
+    if (existingBidder.auction.status === 'LIVE') {
       return NextResponse.json(
-        { error: 'Cannot edit bidder details when auction is published or live' },
+        { error: 'Cannot edit bidder details when auction is live' },
         { status: 403 }
       )
     }
@@ -197,11 +197,26 @@ export async function DELETE(
         auction: {
           createdById: session.user.id
         }
+      },
+      include: {
+        auction: {
+          select: {
+            status: true
+          }
+        }
       }
     })
 
     if (!bidder) {
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
+    }
+
+    // Prevent deletion if auction is live
+    if (bidder.auction.status === 'LIVE') {
+      return NextResponse.json(
+        { error: 'Cannot delete bidder when auction is live' },
+        { status: 403 }
+      )
     }
 
     // Delete bidder (cascades to user if no other relations)
