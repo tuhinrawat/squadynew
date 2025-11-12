@@ -111,7 +111,7 @@ export async function POST(
       for (const player of existingPlayers) {
         if (player.status !== 'RETIRED') { // Only create bidder if not already retired
           const playerData = player.data as any
-          const playerName = playerData?.name || playerData?.Name || player.name || 'Retired Player'
+          const playerName = playerData?.name || playerData?.Name || 'Retired Player'
           const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
           
           // Check if bidder already exists

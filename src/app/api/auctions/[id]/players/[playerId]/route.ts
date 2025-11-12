@@ -136,7 +136,7 @@ export async function PUT(
     // If retiring player, create a bidder record for them
     if (status === 'RETIRED' && existingPlayer.status !== 'RETIRED') {
       const playerData = player.data as any
-      const playerName = playerData?.name || playerData?.Name || player.name || 'Retired Player'
+      const playerName = playerData?.name || playerData?.Name || 'Retired Player'
       const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
       
       // Check if bidder already exists

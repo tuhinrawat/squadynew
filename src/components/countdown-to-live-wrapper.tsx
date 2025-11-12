@@ -48,7 +48,7 @@ export function CountdownToLiveWrapper({
   const [stats, setStats] = useState(initialStats)
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
-  const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders'>('all')
+  const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders' | 'bidder-choice'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
