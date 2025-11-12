@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -87,6 +87,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
 
   const handleManageBidders = (auctionId: string) => {
     router.push(`/dashboard/auctions/${auctionId}/bidders`)
+  }
+
+  const handleManageFixtures = (auctionId: string) => {
+    router.push(`/dashboard/auctions/${auctionId}/fixtures`)
   }
 
   const handleViewAuction = (auctionId: string) => {
@@ -364,6 +368,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     <UserPlus className="mr-2 h-4 w-4" />
                     Manage Bidders
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleManageFixtures(auction.id)}>
+                    <Trophy className="mr-2 h-4 w-4" />
+                    Manage Fixtures
+                  </DropdownMenuItem>
                   {(auction.status === 'LIVE' || auction.status === 'PAUSED') && (
                     <DropdownMenuItem onClick={() => handleViewAuction(auction.id)}>
                       <Eye className="mr-2 h-4 w-4" />
@@ -492,6 +500,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   <DropdownMenuItem onClick={() => handleManageBidders(auction.id)}>
                     <UserPlus className="mr-2 h-4 w-4" />
                     Manage Bidders
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleManageFixtures(auction.id)}>
+                    <Trophy className="mr-2 h-4 w-4" />
+                    Manage Fixtures
                   </DropdownMenuItem>
                   {(auction.status === 'LIVE' || auction.status === 'PAUSED') && (
                     <DropdownMenuItem onClick={() => handleViewAuction(auction.id)}>

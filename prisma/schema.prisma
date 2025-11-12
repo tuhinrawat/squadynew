@@ -91,6 +91,7 @@ model Auction {
   bidders      Bidder[]
   chatMessages ChatMessage[]
   views        AuctionView[] // Individual view records
+  fixtures     Fixture[]     // Fixtures/matches for this auction
 
   // Performance indexes
   @@index([createdById])
@@ -133,8 +134,10 @@ model Bidder {
   createdAt      DateTime @default(now())
 
   // Relations
-  user    User    @relation(fields: [userId], references: [id])
-  auction Auction @relation(fields: [auctionId], references: [id])
+  user            User      @relation(fields: [userId], references: [id])
+  auction         Auction   @relation(fields: [auctionId], references: [id])
+  fixturesAsTeam1 Fixture[] @relation("Team1Fixtures")
+  fixturesAsTeam2 Fixture[] @relation("Team2Fixtures")
 
   @@unique([auctionId, username])
   // Performance indexes
@@ -190,4 +193,29 @@ model AuctionView {
   @@index([auctionId, visitorId])
   @@index([auctionId, viewedAt])
   @@map("auction_views")
+}
+
+model Fixture {
+  id          String    @id @default(cuid())
+  auctionId   String
+  matchName   String    // Name of the match/fixture
+  team1Id     String    // Bidder 1
+  team2Id     String    // Bidder 2
+  matchDate   DateTime? // Optional scheduled date
+  venue       String?   // Optional venue
+  status      String    @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  result      String?   // Match result (optional)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  team1   Bidder  @relation("Team1Fixtures", fields: [team1Id], references: [id])
+  team2   Bidder  @relation("Team2Fixtures", fields: [team2Id], references: [id])
+
+  // Performance indexes
+  @@index([auctionId])
+  @@index([team1Id])
+  @@index([team2Id])
+  @@map("fixtures")
 }
