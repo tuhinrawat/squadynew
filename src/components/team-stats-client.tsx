@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye, ExternalLink, Instagram, Search, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye, ExternalLink, Instagram, Search, ChevronDown, Calendar } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ActivityLog } from '@/components/activity-log'
+import { FixturesBracket } from '@/components/fixtures-bracket'
 import Link from 'next/link'
 import { initializePusher } from '@/lib/pusher-client'
 
@@ -40,13 +41,14 @@ const teamColors = [
 export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProps) {
   const [auction, setAuction] = useState(initialAuction)
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'sold' | 'unsold' | 'know'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'sold' | 'unsold' | 'know' | 'fixtures'>('overview')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [bidModalPlayer, setBidModalPlayer] = useState<Player | null>(null)
   const [bidModalItems, setBidModalItems] = useState<any[]>([])
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [fixtures, setFixtures] = useState<any[]>([])
 
   // Subscribe to real-time updates with incremental updates (no API calls - millisecond latency)
   useEffect(() => {
@@ -109,6 +111,22 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       channel.unbind_all()
       pusher.unsubscribe(`auction-${auction.id}`)
     }
+  }, [auction.id])
+
+  // Fetch fixtures
+  useEffect(() => {
+    const fetchFixtures = async () => {
+      try {
+        const response = await fetch(`/api/auctions/${auction.id}/fixtures`)
+        if (response.ok) {
+          const data = await response.json()
+          setFixtures(data.fixtures)
+        }
+      } catch (error) {
+        console.error('Error fetching fixtures:', error)
+      }
+    }
+    fetchFixtures()
   }, [auction.id])
 
   // Helper functions - must be defined before use
@@ -468,6 +486,15 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 <Eye className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Know Your Players</span>
                 <span className="sm:hidden">Players</span>
+              </Button>
+              <Button
+                variant={activeTab === 'fixtures' ? 'default' : 'ghost'}
+                onClick={() => setActiveTab('fixtures')}
+                className={`${activeTab === 'fixtures' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'} flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4`}
+              >
+                <Calendar className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Fixtures</span>
+                <span className="sm:hidden">Fixtures</span>
               </Button>
             </div>
 
@@ -1397,6 +1424,17 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 </div>
               </CardContent>
             </Card>
+
+            {/* Fixtures Tab */}
+            {activeTab === 'fixtures' && (
+              <Card className="bg-white/10 backdrop-blur-md border-white/20">
+                <CardContent className="p-3 sm:p-6">
+                  <h3 className="text-white text-sm sm:text-base font-semibold mb-4">Match Fixtures</h3>
+                  <FixturesBracket fixtures={fixtures} />
+                </CardContent>
+              </Card>
+            )}
+
             {/* Player Bids Modal */}
             <Dialog open={!!bidModalPlayer} onOpenChange={(o) => { if (!o) { setBidModalPlayer(null); setBidModalItems([]) } }}>
               <DialogContent className="sm:max-w-lg">
