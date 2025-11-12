@@ -7,7 +7,8 @@ import { ProfessioPromoButton } from './professio-promo-button'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown } from 'lucide-react'
+import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown, Calendar } from 'lucide-react'
+import { AddToCalendar } from './add-to-calendar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -372,8 +373,20 @@ export function CountdownToLiveWrapper({
                 </p>
               )}
               
-              {/* Know Your Players Button */}
-              <div className="flex justify-center mt-2">
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-3 mt-2">
+                {/* Add to Calendar Button */}
+                {auction.scheduledStartDate && (
+                  <AddToCalendar
+                    auctionName={auction.name}
+                    auctionDescription={auction.description || `Join us for the ${auction.name} live auction!`}
+                    startDate={auction.scheduledStartDate}
+                    auctionUrl={typeof window !== 'undefined' ? window.location.href : `https://squady.auction/auction/${auction.id}`}
+                    className="text-xs sm:text-sm px-3 py-1.5"
+                  />
+                )}
+                
+                {/* Know Your Players Button */}
                 <Button
                   type="button"
                   variant="outline"
