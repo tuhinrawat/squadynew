@@ -318,14 +318,14 @@ export function CountdownToLiveWrapper({
         </header>
 
         {/* Centered Countdown Content */}
-        <div className="flex-1 flex items-center justify-center pt-4 sm:pt-8 pb-0">
+        <div className="flex-1 flex items-center justify-center pt-2 sm:pt-8 pb-0">
           <div className="text-center px-3 sm:px-4 w-full max-w-6xl">
             {/* Auction Logo & Name */}
-            <div className="mb-6 sm:mb-8 md:mb-12 lg:mb-16 space-y-4 sm:space-y-6">
-              {/* Auction Logo - Large centered display */}
+            <div className="mb-3 sm:mb-8 md:mb-12 lg:mb-16 space-y-2 sm:space-y-6">
+              {/* Auction Logo - Compact on mobile */}
               {auction.image && (
                 <div className="flex flex-col items-center">
-                  <div className="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/40 backdrop-blur-md rounded-2xl p-4 border-2 border-white/60 shadow-2xl">
+                  <div className="relative w-24 h-24 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/40 backdrop-blur-md rounded-2xl p-3 sm:p-4 border-2 border-white/60 shadow-2xl">
                     <Image 
                       src={auction.image} 
                       alt={auction.name} 
@@ -336,8 +336,8 @@ export function CountdownToLiveWrapper({
                 </div>
               )}
               
-              {/* Auction Name - Bigger and prominent */}
-              <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-4 sm:mb-6 drop-shadow-lg px-2 break-words">
+              {/* Auction Name - Compact on mobile */}
+              <h1 className="text-2xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-2 sm:mb-6 drop-shadow-lg px-2 break-words leading-tight">
                 {auction.name}
               </h1>
               
@@ -366,24 +366,40 @@ export function CountdownToLiveWrapper({
                 </a>
               </div>
               
-              {/* Auction Description */}
+              {/* Auction Description - Compact on mobile */}
               {auction.description && (
-                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-white/80 px-4 max-w-3xl mx-auto">
+                <p className="text-xs sm:text-base md:text-lg lg:text-xl text-white/80 px-4 max-w-3xl mx-auto leading-snug">
                   {auction.description}
                 </p>
               )}
               
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row justify-center items-center gap-3 mt-2">
-                {/* Add to Calendar Button */}
+              <div className="flex flex-row justify-center items-center gap-2 mt-2">
+                {/* Add to Calendar Button - Icon only on mobile, full on desktop */}
                 {auction.scheduledStartDate && (
-                  <AddToCalendar
-                    auctionName={auction.name}
-                    auctionDescription={auction.description || `Join us for the ${auction.name} live auction!`}
-                    startDate={auction.scheduledStartDate}
-                    auctionUrl={typeof window !== 'undefined' ? window.location.href : `https://squady.auction/auction/${auction.id}`}
-                    className="text-xs sm:text-sm px-3 py-1.5"
-                  />
+                  <>
+                    {/* Mobile: Icon Only */}
+                    <div className="sm:hidden">
+                      <AddToCalendar
+                        auctionName={auction.name}
+                        auctionDescription={auction.description || `Join us for the ${auction.name} live auction!`}
+                        startDate={auction.scheduledStartDate}
+                        auctionUrl={typeof window !== 'undefined' ? window.location.href : `https://squady.auction/auction/${auction.id}`}
+                        iconOnly={true}
+                        className="h-9 w-9"
+                      />
+                    </div>
+                    {/* Desktop: Full Button */}
+                    <div className="hidden sm:block">
+                      <AddToCalendar
+                        auctionName={auction.name}
+                        auctionDescription={auction.description || `Join us for the ${auction.name} live auction!`}
+                        startDate={auction.scheduledStartDate}
+                        auctionUrl={typeof window !== 'undefined' ? window.location.href : `https://squady.auction/auction/${auction.id}`}
+                        className="text-xs sm:text-sm px-3 py-1.5"
+                      />
+                    </div>
+                  </>
                 )}
                 
                 {/* Know Your Players Button */}
@@ -391,10 +407,11 @@ export function CountdownToLiveWrapper({
                   type="button"
                   variant="outline"
                   onClick={scrollToKnowPlayers}
-                  className="bg-white/35 hover:bg-white/45 text-white border-white/60 backdrop-blur-md text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5"
+                  className="bg-white/35 hover:bg-white/45 text-white border-white/60 backdrop-blur-md text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5 h-9"
                 >
                   <Eye className="h-4 w-4" />
-                  Know Your Players
+                  <span className="hidden xs:inline sm:inline">Know Your Players</span>
+                  <span className="xs:hidden sm:hidden">Players</span>
                 </Button>
               </div>
             </div>

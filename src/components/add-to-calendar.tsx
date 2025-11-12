@@ -16,6 +16,7 @@ interface AddToCalendarProps {
   startDate: Date | string
   auctionUrl: string
   className?: string
+  iconOnly?: boolean
 }
 
 export function AddToCalendar({
@@ -23,7 +24,8 @@ export function AddToCalendar({
   auctionDescription,
   startDate,
   auctionUrl,
-  className = ''
+  className = '',
+  iconOnly = false
 }: AddToCalendarProps) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -143,13 +145,23 @@ export function AddToCalendar({
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button 
-          className={`bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${className}`}
-        >
-          <Calendar className="h-4 w-4 mr-2" />
-          Add to Calendar
-          <ChevronDown className="h-4 w-4 ml-2" />
-        </Button>
+        {iconOnly ? (
+          <Button 
+            size="icon"
+            className={`bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transition-all ${className}`}
+            title="Add to Calendar"
+          >
+            <Calendar className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button 
+            className={`bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all ${className}`}
+          >
+            <Calendar className="h-4 w-4 mr-2" />
+            Add to Calendar
+            <ChevronDown className="h-4 w-4 ml-2" />
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center" className="w-56 bg-slate-900 border-slate-700">
         <DropdownMenuItem 
