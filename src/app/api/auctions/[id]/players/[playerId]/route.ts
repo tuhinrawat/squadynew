@@ -81,9 +81,9 @@ export async function PUT(
       )
     }
 
-    // Validate icon player count if trying to mark as icon
+    // Validate Bidder Choice count if trying to mark as Bidder Choice
     if (isIcon === true) {
-      // Get auction rules to check icon player count
+      // Get auction rules to check Bidder Choice count
       const auction = await prisma.auction.findUnique({
         where: { id: params.id }
       })
@@ -91,7 +91,7 @@ export async function PUT(
       const rules = auction?.rules as any
       const maxIconPlayers = rules?.iconPlayerCount ?? 10
 
-      // Count current icon players
+      // Count current Bidder Choice players
       const currentIconCount = await prisma.player.count({
         where: {
           auctionId: params.id,
@@ -99,11 +99,11 @@ export async function PUT(
         }
       })
 
-      // If the player is already an icon player, allow the update
+      // If the player is already a Bidder Choice, allow the update
       // Otherwise, check if we can add one more
       if (!existingPlayer.isIcon && currentIconCount >= maxIconPlayers) {
         return NextResponse.json(
-          { error: `Maximum ${maxIconPlayers} icon players allowed for this auction. Please unmark another icon player first.` },
+          { error: `Maximum ${maxIconPlayers} Bidder Choice players allowed for this auction. Please unmark another Bidder Choice player first.` },
           { status: 400 }
         )
       }

@@ -723,7 +723,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       return undefined
                     })()}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
-                    tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Icon', color: 'purple' }] : []}
+                    tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                     profileLink={(() => {
                       const link = (playerData as any)?.['Cricheroes Profile link'] || 
                                    (playerData as any)?.[' Cricheroes Profile link'] ||

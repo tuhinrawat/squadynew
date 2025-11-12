@@ -347,9 +347,9 @@ export default function PlayerManagement() {
     }
   }
 
-  const handleToggleIconPlayer = async (player: any) => {
+  const handleToggleBidderChoice = async (player: any) => {
     const isIcon = !(player as any).isIcon
-    const action = isIcon ? 'mark as icon player' : 'remove icon player status'
+    const action = isIcon ? 'mark as Bidder Choice' : 'remove Bidder Choice status'
     
     if (!confirm(`Are you sure you want to ${action}?`)) return
 
@@ -377,13 +377,13 @@ export default function PlayerManagement() {
     }
   }
 
-  const handleBatchMarkIcon = async (markAsIcon: boolean) => {
+  const handleBatchMarkBidderChoice = async (markAsBidderChoice: boolean) => {
     if (selectedPlayerIds.size === 0) {
       setError('Please select at least one player')
       return
     }
 
-    const action = markAsIcon ? 'mark as icon players' : 'remove icon player status from'
+    const action = markAsBidderChoice ? 'mark as Bidder Choice' : 'remove Bidder Choice status from'
     if (!confirm(`Are you sure you want to ${action} ${selectedPlayerIds.size} player(s)?`)) return
 
     setBatchProcessing(true)
@@ -396,7 +396,7 @@ export default function PlayerManagement() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playerIds: Array.from(selectedPlayerIds),
-          updates: { isIcon: markAsIcon }
+          updates: { isIcon: markAsBidderChoice }
         }),
       })
 
@@ -465,7 +465,7 @@ export default function PlayerManagement() {
     }
   }
 
-  // Convert players to DataTable format and sort by isIcon (icon players first)
+  // Convert players to DataTable format and sort by isIcon (Bidder Choice first)
   const tableData = players.map(player => ({
     ...player.data,
     id: player.id,
@@ -473,7 +473,7 @@ export default function PlayerManagement() {
     isIcon: (player as any).isIcon || false,
     createdAt: new Date(player.createdAt).toLocaleDateString()
   })).sort((a, b) => {
-    // Sort by isIcon (true first), then by createdAt
+    // Sort by isIcon (Bidder Choice first), then by createdAt
     if (a.isIcon !== b.isIcon) {
       return b.isIcon ? 1 : -1
     }
@@ -491,13 +491,13 @@ export default function PlayerManagement() {
     })),
     {
       key: 'isIcon',
-      label: 'Icon Player',
+      label: 'Bidder Choice',
       sortable: true,
       filterable: true,
       render: (value: boolean) => (
         value ? (
           <Badge className="bg-purple-600 text-white font-semibold">
-            ⭐ Icon Player
+            ⭐ Bidder Choice
           </Badge>
         ) : (
           <span className="text-gray-400 text-sm">-</span>
@@ -751,21 +751,21 @@ export default function PlayerManagement() {
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       <Button
-                        onClick={() => handleBatchMarkIcon(true)}
+                        onClick={() => handleBatchMarkBidderChoice(true)}
                         disabled={batchProcessing}
                         className="bg-purple-600 hover:bg-purple-700 text-white"
                       >
                         {batchProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        ⭐ Mark as Icon
+                        ⭐ Mark as Bidder Choice
                       </Button>
                       <Button
-                        onClick={() => handleBatchMarkIcon(false)}
+                        onClick={() => handleBatchMarkBidderChoice(false)}
                         disabled={batchProcessing}
                         variant="outline"
                         className="border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
                       >
                         {batchProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Remove Icon
+                        Remove Bidder Choice
                       </Button>
                       <Button
                         onClick={() => handleBatchRetire(true)}
@@ -808,7 +808,7 @@ export default function PlayerManagement() {
                   <div className="flex items-center gap-2">
                     <span>Players ({players.length})</span>
                     <Badge variant="default" className="bg-purple-600 text-white">
-                      ⭐ {players.filter((p: any) => p.isIcon).length} / {auctionRules?.iconPlayerCount ?? 10} Icon Players
+                      ⭐ {players.filter((p: any) => p.isIcon).length} / {auctionRules?.iconPlayerCount ?? 10} Bidder Choice
                     </Badge>
                   </div>
                 }
