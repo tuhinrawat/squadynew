@@ -339,7 +339,10 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetContent
             side="bottom"
-            className="h-[80vh] sm:h-[70vh] p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden"
+            className="max-h-[90vh] h-[90vh] p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden flex flex-col"
+            style={{
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
           >
           {/* Flying Emojis Overlay */}
           <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
@@ -376,9 +379,9 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
             })}
           </div>
 
-          <div className="flex flex-col h-full relative">
-            {/* Header - Compact */}
-            <SheetHeader className="px-4 py-2.5 border-b border-teal-200 dark:border-teal-800 bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 shadow-md">
+          <div className="flex flex-col h-full relative min-h-0">
+            {/* Header - Compact - Fixed at top */}
+            <SheetHeader className="flex-shrink-0 px-4 py-2.5 border-b border-teal-200 dark:border-teal-800 bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 shadow-md">
               <div className="w-12 h-1 bg-white/50 rounded-full mx-auto mb-1.5" />
               <SheetTitle className="text-white flex items-center justify-center gap-2 text-base font-bold">
                 <MessageCircle className="h-4 w-4" />
@@ -421,8 +424,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
               </div>
             ) : (
               <>
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-br from-white/50 to-transparent">
+                {/* Messages - Scrollable area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-br from-white/50 to-transparent overscroll-contain">
                   {messages.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="text-5xl mb-4">💬</div>
@@ -449,8 +452,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Quick Emoji Reactions */}
-                <div className="px-4 py-2 border-t border-teal-200 dark:border-teal-800 bg-white/50 dark:bg-gray-800/50">
+                {/* Quick Emoji Reactions - Fixed above input */}
+                <div className="flex-shrink-0 px-4 py-2 border-t border-teal-200 dark:border-teal-800 bg-white/50 dark:bg-gray-800/50">
                   <div className="flex justify-around items-center gap-2">
                     {quickEmojis.map((emoji) => (
                       <motion.button
@@ -469,10 +472,13 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                   </div>
                 </div>
 
-                {/* Message Input */}
+                {/* Message Input - Fixed at bottom */}
                 <form
                   onSubmit={handleSendMessage}
-                  className="p-3 border-t-2 border-teal-200 dark:border-teal-800 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 shadow-lg"
+                  className="flex-shrink-0 p-3 border-t-2 border-teal-200 dark:border-teal-800 bg-gradient-to-r from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 shadow-lg"
+                  style={{
+                    paddingBottom: 'max(12px, env(safe-area-inset-bottom, 0px))',
+                  }}
                 >
                   <div className="flex gap-2 items-center">
                     <Input
@@ -512,7 +518,7 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
 
       {/* Desktop Compact Chat Window - Facebook Style */}
       {!isMobile && isOpen && (
-        <div className={`fixed bottom-6 ${rightOffsetClass ?? 'right-20'} z-50 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden`}>
+        <div className={`fixed bottom-6 ${rightOffsetClass ?? 'right-20'} z-50 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden min-h-0`}>
           {/* Flying Emojis Overlay */}
           <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden rounded-lg">
             {flyingEmojis.map(({ id, emoji, left }) => {
@@ -548,8 +554,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
             })}
           </div>
           
-          {/* Compact Header */}
-          <div className="bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-3 flex items-center justify-between">
+          {/* Compact Header - Fixed at top */}
+          <div className="flex-shrink-0 bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5 text-white" />
               <span className="text-white font-bold text-base">Live Chat</span>
@@ -588,8 +594,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
             </div>
           ) : (
             <>
-              {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50 dark:bg-gray-900">
+              {/* Messages Area - Scrollable */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-gray-50 dark:bg-gray-900 overscroll-contain min-h-0">
                 {messages.map((msg, index) => {
                   const prevMsg = index > 0 ? messages[index - 1] : null
                   const isFirstInGroup = !prevMsg || prevMsg.userId !== msg.userId
@@ -605,8 +611,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Quick Emojis */}
-              <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              {/* Quick Emojis - Fixed above input */}
+              <div className="flex-shrink-0 px-3 py-2 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
                 <div className="flex gap-2 justify-center">
                   {quickEmojis.map((emoji) => (
                     <button
@@ -624,8 +630,11 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                 </div>
               </div>
 
-              {/* Input Form */}
-              <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              {/* Input Form - Fixed at bottom */}
+              <form 
+                onSubmit={handleSendMessage} 
+                className="flex-shrink-0 p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+              >
                 <div className="flex gap-2">
                   <Input
                     type="text"
