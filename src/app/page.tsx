@@ -173,6 +173,50 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Video Posters Section */}
+      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              See Squady in Action
+            </h2>
+            <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300">
+              Watch how Squady transforms your auction experience
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 lg:gap-12">
+            {/* Video 1 */}
+            <div className="relative w-full rounded-lg overflow-hidden shadow-2xl">
+              <video
+                className="w-full"
+                controls
+                playsInline
+                preload="metadata"
+                style={{ display: 'block', width: '100%', height: 'auto' }}
+              >
+                <source src="/poster1.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+
+            {/* Video 2 */}
+            <div className="relative w-full rounded-lg overflow-hidden shadow-2xl">
+              <video
+                className="w-full"
+                controls
+                playsInline
+                preload="metadata"
+                style={{ display: 'block', width: '100%', height: 'auto' }}
+              >
+                <source src="/poster2.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing Section */}
       <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
