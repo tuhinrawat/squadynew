@@ -146,7 +146,8 @@ export async function POST(
     // Enforce purse and squad-size feasibility at sale time as a safety net
     const rules = auction.rules as any
     const mandatoryTeamSize = Number(rules?.mandatoryTeamSize) || null
-    const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
+    // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
+    const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : (rules?.mandatoryTeamSize ? Number(rules.mandatoryTeamSize) : null)
     const minPerPlayerReserve = Number(rules?.minPerPlayerReserve) || Number(rules?.minBidIncrement) || 0
 
     // OPTIMIZED: Count already-bought players with status filter for faster query

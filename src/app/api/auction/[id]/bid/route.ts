@@ -148,7 +148,8 @@ export async function POST(
     // Always use base increment (1000)
     const minIncrement = baseIncrement
     const mandatoryTeamSize = Number(rules?.mandatoryTeamSize) || null
-    const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : null
+    // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
+    const maxTeamSize = rules?.maxTeamSize ? Number(rules.maxTeamSize) : (rules?.mandatoryTeamSize ? Number(rules.mandatoryTeamSize) : null)
     // Auction purchases exclude the bidder (team size includes captain/bidder)
     const targetAuctionPlayers = mandatoryTeamSize ? Math.max(mandatoryTeamSize - 1, 0) : null
     const maxAuctionPlayers = maxTeamSize ? Math.max(maxTeamSize - 1, 0) : null

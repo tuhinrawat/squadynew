@@ -400,8 +400,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const isTeamFull = useMemo(() => {
     if (!userBidder) return false
     const rules = auction.rules as any
-    const maxTeamSize = rules?.maxTeamSize
+    // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (if available)
+    const maxTeamSize = rules?.maxTeamSize || rules?.mandatoryTeamSize
     if (!maxTeamSize) {
+      console.log('[Team Full Check] No maxTeamSize or mandatoryTeamSize set in rules - team size limit not enforced')
       return false
     }
     
@@ -420,6 +422,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         maxTeamSize,
         maxPlayersCanBuy: maxTeamSize - 1,
         isFull,
+        usingMandatoryTeamSize: !rules?.maxTeamSize && !!rules?.mandatoryTeamSize,
         currentPlayerName: currentPlayer ? ((currentPlayer.data as any)?.Name || (currentPlayer.data as any)?.name) : 'none',
         allPlayers: players.length,
         soldPlayers: players.filter(p => p.status === 'SOLD').length
@@ -935,7 +938,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         if (userBidder) {
           setTimeout(() => {
             const rules = auction.rules as any
-            const maxTeamSize = rules?.maxTeamSize
+            // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
+            const maxTeamSize = rules?.maxTeamSize || rules?.mandatoryTeamSize
             if (maxTeamSize) {
               // Access players state via a function to get latest value
               setPlayers(currentPlayers => {
@@ -994,7 +998,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         // Log team size check after players are updated
         if (userBidder) {
           const rules = auction.rules as any
-          const maxTeamSize = rules?.maxTeamSize
+          // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
+          const maxTeamSize = rules?.maxTeamSize || rules?.mandatoryTeamSize
           if (maxTeamSize) {
             // Use the updated players from data, not prev state
             const playersBought = data.players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
@@ -2066,7 +2071,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       
                       // Check team size BEFORE allowing bid
                       const rules = auction.rules as any
-                      const maxTeamSize = rules?.maxTeamSize
+                      // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
+                      const maxTeamSize = rules?.maxTeamSize || rules?.mandatoryTeamSize
                       if (maxTeamSize) {
                         const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
                         console.log('[Raise Bid] Team size check:', { playersBought, maxTeamSize, maxPlayersCanBuy: maxTeamSize - 1 })
@@ -2148,7 +2154,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
                           // Check team size BEFORE allowing bid
                           const rules = auction.rules as any
-                          const maxTeamSize = rules?.maxTeamSize
+                          // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
+                          const maxTeamSize = rules?.maxTeamSize || rules?.mandatoryTeamSize
                           if (maxTeamSize) {
                             const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
                             if (playersBought >= maxTeamSize - 1) {
