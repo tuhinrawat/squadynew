@@ -137,17 +137,22 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         // Get or subscribe to the channel
         const existingChannel = pusher.channel(channelName)
         let channel: any
+        let isNewChannel = false
         
         if (existingChannel) {
           channel = existingChannel
           channelRef.current = existingChannel
+          console.log('[Pusher] Using existing channel', { channelName, subscribed: channel.subscribed })
         } else {
           channel = pusher.subscribe(channelName)
           channelRef.current = channel
+          isNewChannel = true
+          console.log('[Pusher] Subscribing to new channel', { channelName })
         }
         
         // Function to bind all event listeners (defined here so it can be used in both branches)
         const bindAllEvents = (channel: any) => {
+            console.log('[Pusher] bindAllEvents called', { channelName, hasOnNewBid: !!callbacksRef.current.onNewBid })
             // Unbind existing handlers first to avoid duplicates
             channel.unbind('new-bid')
             channel.unbind('bid-undo')
@@ -164,6 +169,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             
             // Bind all event handlers
             channel.bind('new-bid', (data: any) => {
+              console.log('[Pusher] new-bid event received, calling callback', { hasCallback: !!callbacksRef.current.onNewBid })
               callbacksRef.current.onNewBid?.(data)
             })
             
@@ -226,9 +232,14 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         channel.unbind('pusher:subscription_error')
         
         channel.bind('pusher:subscription_succeeded', () => {
+          console.log('[Pusher] Subscription succeeded, binding events', { channelName })
           setIsConnected(true)
           // Bind events after subscription succeeds
           bindAllEvents(channel)
+          // Mark as bound
+          if (channelRef.current) {
+            channelRef.current.callbacksBound = true
+          }
         })
         
         channel.bind('pusher:subscription_error', (error: any) => {
@@ -236,11 +247,31 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
           setError('Subscription failed')
         })
         
-        // If channel is already subscribed, bind events immediately
-        // This handles the case where the channel was subscribed before this hook ran
+        // Always try to bind events immediately if channel is subscribed
+        // Also set up a delayed bind as a fallback in case subscription happens asynchronously
         if (channel.subscribed) {
+          console.log('[Pusher] Channel already subscribed, binding events immediately', { channelName })
           setIsConnected(true)
           bindAllEvents(channel)
+        } else {
+          console.log('[Pusher] Channel not yet subscribed, will bind after subscription', { channelName })
+          // Set up a fallback: bind events after a short delay in case subscription happens quickly
+          setTimeout(() => {
+            if (channel.subscribed && !channelRef.current?.callbacksBound) {
+              console.log('[Pusher] Fallback: binding events after delay', { channelName })
+              bindAllEvents(channel)
+              // Mark as bound to avoid duplicate bindings
+              if (channelRef.current) {
+                channelRef.current.callbacksBound = true
+              }
+            }
+          }, 100)
+        }
+        
+        // Mark channel with a flag to track if we've bound events
+        // This helps prevent duplicate bindings
+        if (channelRef.current) {
+          channelRef.current.callbacksBound = channel.subscribed
         }
       }
       

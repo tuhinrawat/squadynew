@@ -293,6 +293,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Real-time subscriptions
   usePusher(auction.id, {
     onNewBid: (data) => {
+      console.log('[PublicAuctionView] onNewBid callback triggered', data)
       logger.log('PublicAuctionView onNewBid')
       
       // Batch critical state updates - React 18 automatically batches these
