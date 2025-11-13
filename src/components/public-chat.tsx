@@ -334,12 +334,12 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
         </div>
       )}
 
-      {/* Mobile Chat Sheet - Only render on mobile to avoid overlay on desktop */}
+      {/* Mobile Chat Sheet - Full screen on mobile */}
       {isMobile && (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetContent
             side="bottom"
-            className="max-h-[90vh] h-[90vh] p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden flex flex-col"
+            className="h-screen max-h-screen p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden flex flex-col rounded-none"
             style={{
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
