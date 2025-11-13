@@ -189,11 +189,11 @@ export default function Home() {
             {/* Video 1 */}
             <div className="relative w-full rounded-lg overflow-hidden shadow-2xl">
               <video
-                className="w-full"
+                className="w-full h-auto"
                 controls
                 playsInline
                 preload="metadata"
-                style={{ display: 'block', width: '100%', height: 'auto' }}
+                style={{ display: 'block' }}
               >
                 <source src="/poster1.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
@@ -203,11 +203,11 @@ export default function Home() {
             {/* Video 2 */}
             <div className="relative w-full rounded-lg overflow-hidden shadow-2xl">
               <video
-                className="w-full"
+                className="w-full h-auto"
                 controls
                 playsInline
                 preload="metadata"
-                style={{ display: 'block', width: '100%', height: 'auto' }}
+                style={{ display: 'block' }}
               >
                 <source src="/poster2.mp4" type="video/mp4" />
                 Your browser does not support the video tag.
