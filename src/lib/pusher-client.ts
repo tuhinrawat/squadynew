@@ -133,55 +133,38 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
 
       const channelName = `auction-${auctionId}`
       
-      const setupChannel = () => {
-        // Get or subscribe to the channel
-        const existingChannel = pusher.channel(channelName)
-        let channel: any
-        let isNewChannel = false
-        
-        if (existingChannel) {
-          channel = existingChannel
-          channelRef.current = existingChannel
-          console.log('[Pusher] Using existing channel', { channelName, subscribed: channel.subscribed })
-        } else {
-          channel = pusher.subscribe(channelName)
-          channelRef.current = channel
-          isNewChannel = true
-          console.log('[Pusher] Subscribing to new channel', { channelName })
-        }
-        
-        // Function to bind all event listeners (defined here so it can be used in both branches)
-        const bindAllEvents = (channel: any) => {
-            console.log('[Pusher] bindAllEvents called', { channelName, hasOnNewBid: !!callbacksRef.current.onNewBid })
+      // Function to bind all event listeners (defined outside so it can be used in interval)
+      const bindAllEvents = (channelToBind: any) => {
+            console.log('[Pusher] bindAllEvents called', { channelName, hasOnNewBid: !!callbacksRef.current.onNewBid, channelSubscribed: channelToBind?.subscribed })
             // Unbind existing handlers first to avoid duplicates
-            channel.unbind('new-bid')
-            channel.unbind('bid-undo')
-            channel.unbind('player-sold')
-            channel.unbind('sale-undo')
-            channel.unbind('new-player')
-            channel.unbind('timer-update')
-            channel.unbind('auction-paused')
-            channel.unbind('auction-resumed')
-            channel.unbind('auction-ended')
-            channel.unbind('auction-reset')
-            channel.unbind('players-updated')
-            channel.unbind('bid-error')
+            channelToBind.unbind('new-bid')
+            channelToBind.unbind('bid-undo')
+            channelToBind.unbind('player-sold')
+            channelToBind.unbind('sale-undo')
+            channelToBind.unbind('new-player')
+            channelToBind.unbind('timer-update')
+            channelToBind.unbind('auction-paused')
+            channelToBind.unbind('auction-resumed')
+            channelToBind.unbind('auction-ended')
+            channelToBind.unbind('auction-reset')
+            channelToBind.unbind('players-updated')
+            channelToBind.unbind('bid-error')
             
             // Bind all event handlers
-            channel.bind('new-bid', (data: any) => {
-              console.log('[Pusher] new-bid event received, calling callback', { hasCallback: !!callbacksRef.current.onNewBid })
+            channelToBind.bind('new-bid', (data: any) => {
+              console.log('[Pusher] new-bid event received, calling callback', { hasCallback: !!callbacksRef.current.onNewBid, amount: data.amount })
               callbacksRef.current.onNewBid?.(data)
             })
             
-            channel.bind('bid-undo', (data: any) => {
+            channelToBind.bind('bid-undo', (data: any) => {
               callbacksRef.current.onBidUndo?.(data)
             })
             
-            channel.bind('player-sold', (data: any) => {
+            channelToBind.bind('player-sold', (data: any) => {
               callbacksRef.current.onPlayerSold?.(data)
             })
             
-            channel.bind('sale-undo', (data: any) => {
+            channelToBind.bind('sale-undo', (data: any) => {
               try {
                 callbacksRef.current.onSaleUndo?.(data)
               } catch (error) {
@@ -189,7 +172,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
               }
             })
             
-            channel.bind('new-player', (data: any) => {
+            channelToBind.bind('new-player', (data: any) => {
               try {
                 callbacksRef.current.onNewPlayer?.(data)
               } catch (error) {
@@ -197,34 +180,51 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
               }
             })
             
-            channel.bind('timer-update', (data: any) => {
+            channelToBind.bind('timer-update', (data: any) => {
               callbacksRef.current.onTimerUpdate?.(data)
             })
             
-            channel.bind('auction-paused', (data: any) => {
+            channelToBind.bind('auction-paused', (data: any) => {
               callbacksRef.current.onAuctionPaused?.(data)
             })
             
-            channel.bind('auction-resumed', (data: any) => {
+            channelToBind.bind('auction-resumed', (data: any) => {
               callbacksRef.current.onAuctionResumed?.(data)
             })
             
-            channel.bind('auction-ended', (data: any) => {
+            channelToBind.bind('auction-ended', (data: any) => {
               callbacksRef.current.onAuctionEnded?.(data)
             })
             
-            channel.bind('auction-reset', (data: any) => {
+            channelToBind.bind('auction-reset', (data: any) => {
               callbacksRef.current.onAuctionReset?.(data)
             })
             
-            channel.bind('players-updated', (data: any) => {
+            channelToBind.bind('players-updated', (data: any) => {
               callbacksRef.current.onPlayersUpdated?.(data)
             })
             
-            channel.bind('bid-error', (data: any) => {
+            channelToBind.bind('bid-error', (data: any) => {
               callbacksRef.current.onBidError?.(data)
             })
           }
+      
+      const setupChannel = () => {
+        // Always get the current channel instance (in case it was recreated)
+        let channel: any = pusher.channel(channelName)
+        let isNewChannel = false
+        
+        if (channel) {
+          // Channel exists - use it
+          channelRef.current = channel
+          console.log('[Pusher] Using existing channel', { channelName, subscribed: channel.subscribed })
+        } else {
+          // Channel doesn't exist - subscribe to create it
+          channel = pusher.subscribe(channelName)
+          channelRef.current = channel
+          isNewChannel = true
+          console.log('[Pusher] Subscribing to new channel', { channelName })
+        }
           
         // Always bind subscription events (for both new and existing channels)
         // Unbind first to avoid duplicate bindings
@@ -253,30 +253,50 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
           console.log('[Pusher] Channel already subscribed, binding events immediately', { channelName })
           setIsConnected(true)
           bindAllEvents(channel)
+          if (channelRef.current) {
+            channelRef.current.callbacksBound = true
+          }
         } else {
           console.log('[Pusher] Channel not yet subscribed, will bind after subscription', { channelName })
           // Set up a fallback: bind events after a short delay in case subscription happens quickly
           setTimeout(() => {
-            if (channel.subscribed && !channelRef.current?.callbacksBound) {
+            const currentChannel = pusher.channel(channelName) as any
+            if (currentChannel && currentChannel.subscribed && !currentChannel.callbacksBound) {
               console.log('[Pusher] Fallback: binding events after delay', { channelName })
-              bindAllEvents(channel)
+              bindAllEvents(currentChannel)
               // Mark as bound to avoid duplicate bindings
-              if (channelRef.current) {
-                channelRef.current.callbacksBound = true
+              if (currentChannel) {
+                currentChannel.callbacksBound = true
               }
             }
           }, 100)
-        }
-        
-        // Mark channel with a flag to track if we've bound events
-        // This helps prevent duplicate bindings
-        if (channelRef.current) {
-          channelRef.current.callbacksBound = channel.subscribed
         }
       }
       
       // Setup channel immediately (Pusher will queue subscriptions if not connected yet)
       setupChannel()
+      
+      // Set up an interval to rebind events periodically (handles channel recreation)
+      // This ensures we always have event handlers even if the channel is recreated
+      const rebindInterval = setInterval(() => {
+        const currentChannel = pusher.channel(channelName) as any
+        if (currentChannel && currentChannel.subscribed) {
+          // Check if this is a different channel instance
+          if (channelRef.current !== currentChannel) {
+            console.log('[Pusher] Channel instance changed, rebinding events', { channelName })
+            channelRef.current = currentChannel
+            bindAllEvents(currentChannel)
+            if (currentChannel) {
+              currentChannel.callbacksBound = true
+            }
+          } else if (!currentChannel.callbacksBound) {
+            // Same channel but events not bound - rebind them
+            console.log('[Pusher] Events not bound, rebinding', { channelName })
+            bindAllEvents(currentChannel)
+            currentChannel.callbacksBound = true
+          }
+        }
+      }, 500) // Check every 500ms
       
       // Connection error handler
       const handleError = (err: any) => {
@@ -288,7 +308,8 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
 
       // Cleanup
       return () => {
-        // Do NOTHING in cleanup
+        clearInterval(rebindInterval)
+        // Do NOTHING else in cleanup
         // React 18 Strict Mode will call this and remount immediately
         // If we unbind anything, the channel bindings break and never recover
         // The channel and all bindings will persist across remounts
