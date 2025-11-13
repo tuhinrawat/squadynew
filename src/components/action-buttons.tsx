@@ -10,9 +10,10 @@ export interface ActionButtonsProps {
 	isDisabled?: boolean
 	isMarkingSold?: boolean
 	isMarkingUnsold?: boolean
+	hasBids?: boolean // Disable "Mark Unsold" when there are bids
 }
 
-export default function ActionButtons({ onMarkSold, onMarkUnsold, onUndoSale, isDisabled, isMarkingSold, isMarkingUnsold }: ActionButtonsProps) {
+export default function ActionButtons({ onMarkSold, onMarkUnsold, onUndoSale, isDisabled, isMarkingSold, isMarkingUnsold, hasBids = false }: ActionButtonsProps) {
 	return (
 		<div className="flex flex-col sm:flex-row gap-3 w-full">
 			<Button 
@@ -26,8 +27,9 @@ export default function ActionButtons({ onMarkSold, onMarkUnsold, onUndoSale, is
 			
 			<Button 
 				onClick={onMarkUnsold} 
-				disabled={isDisabled || isMarkingSold || isMarkingUnsold} 
-				className="flex-1 bg-gray-700 hover:bg-gray-800 text-white font-semibold text-base sm:text-lg rounded-lg h-16 sm:h-20 min-h-[64px] sm:min-h-[80px]"
+				disabled={isDisabled || isMarkingSold || isMarkingUnsold || hasBids} 
+				className="flex-1 bg-gray-700 hover:bg-gray-800 text-white font-semibold text-base sm:text-lg rounded-lg h-16 sm:h-20 min-h-[64px] sm:min-h-[80px] disabled:opacity-50 disabled:cursor-not-allowed"
+				title={hasBids ? 'Cannot mark as unsold when bids exist. Undo all bids first.' : undefined}
 			>
 				{isMarkingUnsold && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
 				{isMarkingUnsold ? 'Marking...' : 'Mark Unsold'}

@@ -14,7 +14,6 @@ import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { useViewerCount } from '@/hooks/use-viewer-count'
-import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
@@ -108,6 +107,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const errorIdRef = useRef(0)
   const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const [bidErrors, setBidErrors] = useState<Array<{ id: number; message: string }>>([])
+  
+  // Bid history modal state
+  const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
 
   // Optimized timer for smoother countdown (updates less frequently when not critical)
   const displayTimer = useOptimizedTimer(timer)
@@ -1012,20 +1014,191 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 ))}
               </div>
             )}
-            
-            <Card>
-              <CardHeader className="p-3 sm:p-4">
-                <CardTitle className="text-sm sm:text-base text-gray-900 dark:text-gray-100">Live Activity</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto px-3 sm:px-4 py-2">
-                  <ActivityLog items={bidHistory as any} />
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
+
+      {/* Mobile Bid History Floating Button */}
+      <div className="lg:hidden fixed bottom-4 right-4 z-50">
+        <Button 
+          onClick={() => setBidHistoryModalOpen(true)}
+          className="rounded-full px-5 py-6 shadow-2xl bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap"
+        >
+          <Clock className="h-5 w-5 mr-2" />
+          <span className="text-sm font-semibold">History</span>
+        </Button>
+      </div>
+
+      {/* Mobile Bid History Bottom Modal */}
+      <Dialog open={bidHistoryModalOpen} onOpenChange={setBidHistoryModalOpen}>
+        <DialogContent className="!fixed !bottom-0 !left-0 !right-0 !top-auto !translate-x-0 !translate-y-0 !w-full !max-w-full rounded-t-lg p-0 sm:hidden" style={{ maxHeight: '70vh', display: 'flex', flexDirection: 'column' }} showCloseButton={false}>
+          <div className="bg-gray-50 dark:bg-gray-900 rounded-t-lg flex flex-col" style={{ maxHeight: '70vh' }}>
+            {/* Drag Handle */}
+            <div className="w-12 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mt-2 mb-4" />
+            
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">Live Bid History</DialogTitle>
+              <DialogDescription className="sr-only">View the live bidding history for this player</DialogDescription>
+            </div>
+            
+            {/* Bid History Content */}
+            <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto">
+              {bidHistory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <p>No bids yet</p>
+                </div>
+              ) : (
+                bidHistory.map((bid, index) => {
+                  // Handle sold/unsold events
+                  if (bid.type === 'sold') {
+                    const bidTime = new Date(bid.timestamp)
+                    let timeAgo = ''
+                    if (isClient) {
+                      const now = new Date()
+                      const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                      timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    } else {
+                      timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }
+                    
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-sm border-l-4 border-green-500 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 rounded-lg p-3 mb-2 shadow-lg"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">🎉</span>
+                          <div className="font-bold text-lg text-green-800 dark:text-green-300">
+                            {bid.playerName || 'Player'} SOLD!
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1 text-sm">
+                          <span className="text-gray-700 dark:text-gray-300">To:</span>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                          {bid.teamName && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200">({bid.teamName})</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {bid.amount && (
+                            <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                              ₹{bid.amount.toLocaleString('en-IN')}
+                            </span>
+                          )}
+                          <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
+                        </div>
+                      </motion.div>
+                    )
+                  }
+                  
+                  if (bid.type === 'unsold') {
+                    const bidTime = new Date(bid.timestamp)
+                    let timeAgo = ''
+                    if (isClient) {
+                      const now = new Date()
+                      const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                      timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    } else {
+                      timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }
+                    
+                    return (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-sm border-l-4 border-orange-500 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/40 dark:to-red-900/40 rounded-lg p-3 mb-2 shadow-md"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">⏭️</span>
+                          <div className="font-bold text-lg text-orange-800 dark:text-orange-300">
+                            {bid.playerName || 'Player'} - UNSOLD
+                          </div>
+                        </div>
+                        <div className="text-sm text-orange-700 dark:text-orange-400 mb-1">
+                          No buyer found • Moving to next player
+                        </div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400">
+                          ⏰ {timeAgo}
+                        </div>
+                      </motion.div>
+                    )
+                  }
+                  
+                  // Handle regular bids
+                  if (!bid.amount) {
+                    return null
+                  }
+                  
+                  const bidTime = new Date(bid.timestamp)
+                  let timeAgo = ''
+                  if (isClient) {
+                    const now = new Date()
+                    const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                    
+                    if (timeDiff < 60) {
+                      timeAgo = `${timeDiff} second${timeDiff !== 1 ? 's' : ''} ago`
+                    } else if (timeDiff < 3600) {
+                      const minutes = Math.floor(timeDiff / 60)
+                      timeAgo = `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
+                    } else {
+                      timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }
+                  } else {
+                    timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  }
+                  
+                  const isLatestBid = index === 0
+                  const increment = isLatestBid && bidHistory.length > 1
+                    ? bid.amount - (bidHistory[1]?.amount || 0)
+                    : null
+                  
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className={`text-sm rounded-lg p-3 mb-2 ${
+                        isLatestBid
+                          ? 'border-l-4 border-blue-500 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/40 dark:to-cyan-900/40 shadow-lg'
+                          : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                          {bid.teamName && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                              {bid.teamName}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                          ₹{bid.amount.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      {increment && increment > 0 && (
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">
+                          +₹{increment.toLocaleString('en-IN')} increment
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        ⏰ {timeAgo}
+                      </div>
+                    </motion.div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
       )}
     </>

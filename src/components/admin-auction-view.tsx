@@ -1740,6 +1740,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     onUndoSale={hasSoldPlayers ? () => setUndoSaleDialogOpen(true) : undefined}
                     isMarkingSold={isMarkingSold}
                     isMarkingUnsold={isMarkingUnsold}
+                    hasBids={bidHistory.length > 0 || currentBid !== null}
                   />
                 </div>
               )}
