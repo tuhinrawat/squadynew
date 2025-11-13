@@ -1056,13 +1056,18 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             </div>
             
             {/* Bid History Content */}
-            <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto">
+            <div className="px-4 py-2 space-y-2 flex-1 overflow-y-auto" key={`bid-history-content-${bidHistory.length}-${currentPlayer?.id}`}>
               {bidHistory.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <p>No bids yet</p>
                 </div>
               ) : (
                 bidHistory.map((bid, index) => {
+                  // Use unique key for each bid entry
+                  const bidKey = bid.bidderId && bid.amount && bid.timestamp 
+                    ? `${bid.bidderId}-${bid.amount}-${new Date(bid.timestamp).getTime()}-${index}`
+                    : `bid-${index}-${bid.type || 'bid'}`
+                  
                   // Handle sold/unsold events
                   if (bid.type === 'sold') {
                     const bidTime = new Date(bid.timestamp)
@@ -1077,7 +1082,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     
                     return (
                       <motion.div
-                        key={index}
+                        key={bidKey}
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.3 }}
@@ -1121,7 +1126,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     
                     return (
                       <motion.div
-                        key={index}
+                        key={bidKey}
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.3 }}
@@ -1173,7 +1178,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   
                   return (
                     <motion.div
-                      key={index}
+                      key={bidKey}
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.3 }}
