@@ -360,11 +360,12 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
         }
       }
 
-      // For LIVE and PAUSED status, show full auction view
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-          {/* Header for Public View with Chat */}
-          <PublicHeaderWithChat auctionId={auction.id} />
+      // For LIVE, PAUSED, and MOCK_RUN status, show full auction view
+      if (isLiveStatus(auction.status) || auction.status === 'PAUSED') {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+            {/* Header for Public View with Chat */}
+            <PublicHeaderWithChat auctionId={auction.id} />
           
           {/* Breadcrumbs - Hidden on mobile for public view */}
           <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -419,7 +420,8 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             </div>
           </footer>
         </div>
-      )
+        )
+      }
     }
   }
 
