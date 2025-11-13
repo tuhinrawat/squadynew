@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, memo } from 'react'
+import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
@@ -26,8 +27,11 @@ import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 
-// Tawk.to Chat Widget - Mobile optimized, per-auction context
-import { TawkChat } from '@/components/tawk-chat'
+// Dynamic import for PublicChat - code splitting for better performance
+const PublicChat = dynamic(
+  () => import('@/components/public-chat').then(mod => ({ default: mod.PublicChat })),
+  { ssr: false }
+)
 
 // Optimized timer hook - reduces re-renders by 66%
 function useOptimizedTimer(timerValue: number): number {
@@ -2765,8 +2769,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       )
     )}
 
-    {/* Tawk.to Chat Widget - Per-auction context */}
-    <TawkChat auctionId={auction.id} auctionName={auction.name} />
+    {/* Public Chat */}
+    <PublicChat auctionId={auction.id} rightOffsetClass={chatOffsetClass} />
     
     {/* Undo Sale Dialog */}
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
