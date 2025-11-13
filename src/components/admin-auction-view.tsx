@@ -2077,7 +2077,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
                         console.log('[Raise Bid] Team size check:', { playersBought, maxTeamSize, maxPlayersCanBuy: maxTeamSize - 1 })
                         if (playersBought >= maxTeamSize - 1) {
-                          showBidError(`Team is full (max ${maxTeamSize} players including you). Cannot bid on more players.`)
+                          // Don't show error here - let backend handle it to avoid duplicate messages
+                          // The button should already be disabled via isTeamFull, but if clicked, backend will show error
                           return
                         }
                       }
@@ -2153,13 +2154,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           }
 
                           // Check team size BEFORE allowing bid
+                          // Note: Backend also validates this, but we check here to prevent unnecessary API calls
                           const rules = auction.rules as any
                           // Use maxTeamSize if set, otherwise fall back to mandatoryTeamSize (for existing auctions)
                           const maxTeamSize = rules?.maxTeamSize || rules?.mandatoryTeamSize
                           if (maxTeamSize) {
                             const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
                             if (playersBought >= maxTeamSize - 1) {
-                              showBidError(`Team is full (max ${maxTeamSize} players including you). Cannot bid on more players.`)
+                              // Don't show error here - let backend handle it to avoid duplicate messages
+                              // The button should already be disabled via isTeamFull, but if clicked, backend will show error
                               return
                             }
                           }
