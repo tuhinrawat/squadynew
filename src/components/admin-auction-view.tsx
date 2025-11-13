@@ -2092,6 +2092,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           setIsPlacingBid(true)
                           setError('')
 
+                          // Optimistically update currentBid immediately
+                          const previousBid = currentBid
+                          setCurrentBid({
+                            bidderId: userBidder.id,
+                            amount: bidAmount,
+                            bidderName: userBidder.user?.name || userBidder.username,
+                            teamName: userBidder.teamName || undefined
+                          })
+
                           try {
                             const response = await fetch(`/api/auction/${auction.id}/bid`, {
                               method: 'POST',
@@ -2108,9 +2117,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                               setBidAmount(0)
                               toast.success('Bid placed successfully!')
                             } else {
+                              // Revert optimistic update on error
+                              setCurrentBid(previousBid)
                               showBidError(data.error || 'Failed to place bid')
                             }
                           } catch {
+                            // Revert optimistic update on error
+                            setCurrentBid(previousBid)
                             showBidError('Network error. Please try again.')
                           } finally {
                             setIsPlacingBid(false)
