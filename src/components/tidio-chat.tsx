@@ -24,12 +24,8 @@ interface TidioChatProps {
 export function TidioChat({ tidioId }: TidioChatProps) {
   useEffect(() => {
     // Get Tidio ID from prop or environment variable
-    const tidioWidgetId = tidioId || process.env.NEXT_PUBLIC_TIDIO_ID
-
-    if (!tidioWidgetId) {
-      console.warn('Tidio ID not provided. Set NEXT_PUBLIC_TIDIO_ID in .env.local or pass tidioId prop.')
-      return
-    }
+    // Default to the provided widget ID if not set
+    const tidioWidgetId = tidioId || process.env.NEXT_PUBLIC_TIDIO_ID || 'byvbbwq5anuy2vhczx6eg2hinrlps3mn'
 
     // Check if Tidio script is already loaded
     if (document.getElementById('tidio-script')) {
