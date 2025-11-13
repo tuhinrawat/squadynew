@@ -141,9 +141,6 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         if (existingChannel) {
           channel = existingChannel
           channelRef.current = existingChannel
-          if (existingChannel.subscribed) {
-            setIsConnected(true)
-          }
         } else {
           channel = pusher.subscribe(channelName)
           channelRef.current = channel
@@ -151,6 +148,21 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         
         // Function to bind all event listeners (defined here so it can be used in both branches)
         const bindAllEvents = (channel: any) => {
+            // Unbind existing handlers first to avoid duplicates
+            channel.unbind('new-bid')
+            channel.unbind('bid-undo')
+            channel.unbind('player-sold')
+            channel.unbind('sale-undo')
+            channel.unbind('new-player')
+            channel.unbind('timer-update')
+            channel.unbind('auction-paused')
+            channel.unbind('auction-resumed')
+            channel.unbind('auction-ended')
+            channel.unbind('auction-reset')
+            channel.unbind('players-updated')
+            channel.unbind('bid-error')
+            
+            // Bind all event handlers
             channel.bind('new-bid', (data: any) => {
               callbacksRef.current.onNewBid?.(data)
             })
@@ -225,7 +237,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         })
         
         // If channel is already subscribed, bind events immediately
-        // Otherwise, events will be bound after subscription succeeds
+        // This handles the case where the channel was subscribed before this hook ran
         if (channel.subscribed) {
           setIsConnected(true)
           bindAllEvents(channel)
