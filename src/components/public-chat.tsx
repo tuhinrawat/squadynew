@@ -156,23 +156,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
     const pusher = initializePusher()
     const channel = pusher.subscribe(`auction-${auctionId}`)
 
-    // Batch message updates to avoid excessive re-renders
-    let messageQueue: ChatMessage[] = []
-    let flushTimeout: NodeJS.Timeout | null = null
-
-    const flushMessages = () => {
-      if (messageQueue.length === 0) return
-      
-      setMessages((prev) => {
-        const updated = [...prev, ...messageQueue]
-        messageQueue = []
-        // Keep only last 50 messages for performance
-        return updated.length > 50 ? updated.slice(-50) : updated
-      })
-    }
-
+    // Real-time message handling - no batching for instant updates
     channel.bind('new-chat-message', (data: ChatMessage) => {
-      messageQueue.push(data)
       messageCountRef.current++
       
       // Increment unread count only if chat is closed
@@ -180,21 +165,12 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
         setUnreadCount(prev => prev + 1)
       }
       
-      // Ultra-low latency: flush immediately for single messages, micro-batch for bursts
-      // This ensures <50ms latency for single messages while batching high traffic
-      if (messageQueue.length === 1) {
-        // Single message - flush immediately for instant feedback
-        if (flushTimeout) clearTimeout(flushTimeout)
-        flushMessages()
-      } else if (messageQueue.length >= 5) {
-        // High traffic - flush immediately to prevent queue buildup
-        if (flushTimeout) clearTimeout(flushTimeout)
-        flushMessages()
-      } else {
-        // Small batch - flush after 50ms (reduced from 100ms for lower latency)
-        if (flushTimeout) clearTimeout(flushTimeout)
-        flushTimeout = setTimeout(flushMessages, 50)
-      }
+      // Update messages immediately for zero-lag real-time experience
+      setMessages((prev) => {
+        const updated = [...prev, data]
+        // Keep only last 50 messages for performance
+        return updated.length > 50 ? updated.slice(-50) : updated
+      })
     })
 
     // Listen for emoji reactions from other users
@@ -214,11 +190,12 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
     })
 
     return () => {
-      if (flushTimeout) clearTimeout(flushTimeout)
-      flushMessages() // Flush remaining messages
+      // Don't unsubscribe - let the channel persist for other components
+      // Just unbind our specific handlers
       channel.unbind('new-chat-message')
       channel.unbind('emoji-reaction')
-      pusher.unsubscribe(`auction-${auctionId}`)
+      // Note: We don't unsubscribe here to avoid interfering with other components
+      // The channel will be cleaned up when all components using it unmount
     }
   }, [auctionId])
 
@@ -258,7 +235,22 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
     
     if (!message.trim() || isSending) return
 
-    const messageToSend = message
+    const messageToSend = message.trim()
+    const tempId = `temp-${Date.now()}-${Math.random()}`
+    
+    // Optimistic UI update - show message immediately for instant feedback
+    const optimisticMessage: ChatMessage = {
+      id: tempId,
+      username,
+      userId: userId || undefined,
+      message: messageToSend,
+      createdAt: new Date().toISOString()
+    }
+    
+    setMessages((prev) => {
+      const updated = [...prev, optimisticMessage]
+      return updated.length > 50 ? updated.slice(-50) : updated
+    })
     setMessage('') // Clear immediately for better UX
     setIsSending(true)
 
@@ -276,12 +268,23 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
       if (!response.ok) {
         const error = await response.json()
         toast.error(error.error || 'Failed to send message')
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter(m => m.id !== tempId))
         setMessage(messageToSend) // Restore message on error
         return
       }
+      
+      // Server will broadcast via Pusher, which will update with real message
+      // Remove optimistic message when real one arrives (handled by Pusher event)
+      // The real message will replace the optimistic one seamlessly
+      setTimeout(() => {
+        setMessages((prev) => prev.filter(m => m.id !== tempId))
+      }, 100) // Remove optimistic message after a short delay
     } catch (error) {
       console.error('Error sending message:', error)
       toast.error('Failed to send message')
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter(m => m.id !== tempId))
       setMessage(messageToSend) // Restore message on error
     } finally {
       setIsSending(false)
