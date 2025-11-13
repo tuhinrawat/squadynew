@@ -342,6 +342,10 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
             className="h-screen max-h-screen p-0 bg-gradient-to-br from-teal-50 via-emerald-50 to-cyan-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 overflow-hidden flex flex-col rounded-none"
             style={{
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+              height: '100dvh', // Use dynamic viewport height to account for mobile browser UI
+              maxHeight: '100dvh',
+              position: 'fixed', // Ensure fixed positioning
+              touchAction: 'pan-y', // Allow vertical scrolling but prevent zoom gestures
             }}
           >
           {/* Flying Emojis Overlay */}
@@ -380,8 +384,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
           </div>
 
           <div className="flex flex-col h-full relative min-h-0">
-            {/* Header - Compact - Fixed at top */}
-            <SheetHeader className="flex-shrink-0 px-4 py-2.5 border-b border-teal-200 dark:border-teal-800 bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 shadow-md">
+            {/* Header - Compact - Fixed at top - Ensure visibility */}
+            <SheetHeader className="flex-shrink-0 px-4 py-2.5 border-b border-teal-200 dark:border-teal-800 bg-gradient-to-r from-teal-600 via-emerald-600 to-cyan-600 shadow-md relative z-20">
               <div className="w-12 h-1 bg-white/50 rounded-full mx-auto mb-1.5" />
               <SheetTitle className="text-white flex items-center justify-center gap-2 text-base font-bold">
                 <MessageCircle className="h-4 w-4" />
@@ -425,7 +429,7 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
             ) : (
               <>
                 {/* Messages - Scrollable area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-br from-white/50 to-transparent overscroll-contain">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-br from-white/50 to-transparent overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                   {messages.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="text-5xl mb-4">💬</div>
