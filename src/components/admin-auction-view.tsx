@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, memo } from 'react'
-import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
@@ -27,11 +26,8 @@ import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 
-// Dynamic import for PublicChat - code splitting for better performance
-const PublicChat = dynamic(
-  () => import('@/components/public-chat').then(mod => ({ default: mod.PublicChat })),
-  { ssr: false }
-)
+// Tidio Chat Widget - Mobile optimized
+import { TidioChat } from '@/components/tidio-chat'
 
 // Optimized timer hook - reduces re-renders by 66%
 function useOptimizedTimer(timerValue: number): number {
@@ -2770,7 +2766,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     )}
 
     {/* Public Chat */}
-    <PublicChat auctionId={auction.id} rightOffsetClass={chatOffsetClass} />
+    <TidioChat />
     
     {/* Undo Sale Dialog */}
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>

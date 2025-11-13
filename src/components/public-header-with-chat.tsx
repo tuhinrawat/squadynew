@@ -1,17 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, Instagram, Clock } from 'lucide-react'
-import dynamic from 'next/dynamic'
+import { Instagram, Clock } from 'lucide-react'
+import { TidioChat } from '@/components/tidio-chat'
 import { PROFESSIO_URL_HEADER } from '@/lib/constants'
-
-const PublicChat = dynamic(
-  () => import('@/components/public-chat').then(mod => ({ default: mod.PublicChat })),
-  { ssr: false }
-)
 
 interface PublicHeaderWithChatProps {
   auctionId: string
@@ -19,7 +13,7 @@ interface PublicHeaderWithChatProps {
 }
 
 export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHeaderWithChatProps) {
-  const [isChatOpen, setIsChatOpen] = useState(false)
+  // Tidio handles its own chat UI with a floating button, so we don't need a chat icon in header
 
   return (
     <>
@@ -61,16 +55,7 @@ export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHead
                 <span className="hidden md:inline">Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
-              {/* Chat Icon - Always visible */}
-              <Button
-                onClick={() => setIsChatOpen(true)}
-                variant="ghost"
-                size="sm"
-                className="relative text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 h-7 sm:h-9 px-1.5 sm:px-3"
-                aria-label="Open Chat"
-              >
-                <MessageCircle className="h-4 w-4" />
-              </Button>
+              {/* Chat handled by Tidio widget - no icon needed */}
               {/* Register & Sign In - Desktop only */}
               <div className="hidden md:flex items-center gap-3">
                 <Link href="/register">
@@ -89,13 +74,8 @@ export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHead
         </div>
       </header>
       
-      {/* Public Chat Component */}
-      <PublicChat 
-        auctionId={auctionId} 
-        hideFloatingButton={true}
-        externalIsOpen={isChatOpen}
-        externalSetIsOpen={setIsChatOpen}
-      />
+      {/* Tidio Chat Widget - Mobile optimized */}
+      <TidioChat />
     </>
   )
 }
