@@ -20,6 +20,11 @@ interface TawkChatProps {
  * 
  * Tawk.to Property ID: 691629cc61b59b195ec6e69f
  * Tawk.to Widget ID: 1j9v96iie
+ * 
+ * NOTE: To change the widget title from "Customer Support" to "Auction Chat",
+ * edit it in the Tawk.to dashboard:
+ * Administration > Channels > Chat Widget > Edit Content > Header Cards > Heading
+ * See TAWK_SETUP.md for detailed instructions.
  */
 export function TawkChat({ auctionId, auctionName }: TawkChatProps) {
   useEffect(() => {
