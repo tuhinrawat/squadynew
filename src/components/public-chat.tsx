@@ -408,6 +408,7 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                              maxLength={50}
                              className="text-center text-lg font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-12"
                              style={{ fontSize: '16px' }}
+                             inputMode="text"
                            />
                            <Button
                              onClick={handleSetUsername}
@@ -486,6 +487,7 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                       spellCheck="true"
                       className="flex-1 text-gray-900 dark:text-white bg-white dark:bg-gray-700 border-2 border-teal-300 dark:border-teal-700 focus:border-teal-500 rounded-xl h-10 text-base px-3"
                       style={{ fontSize: '16px' }}
+                      inputMode="text"
                     />
                     <Button
                       type="submit"
@@ -576,6 +578,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                   required
                   minLength={2}
                   maxLength={20}
+                  style={{ fontSize: '16px' }}
+                  inputMode="text"
                 />
                 <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700">
                   Start Chatting
@@ -631,6 +635,8 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                     disabled={isSending}
                     className="flex-1 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     maxLength={500}
+                    style={{ fontSize: '16px' }}
+                    inputMode="text"
                   />
                   <Button
                     type="submit"
