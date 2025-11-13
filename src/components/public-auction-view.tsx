@@ -386,6 +386,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       window.location.reload()
     },
     onBidUndo: (data) => {
+      console.log('[PublicAuctionView] onBidUndo callback triggered', data)
       logger.log('PublicAuctionView onBidUndo', { data, currentBidHistoryLength: bidHistory.length })
       
       // Update bid history: remove the undone bid and add "BID UNDONE" entry
@@ -1145,6 +1146,51 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         <div className="text-xs text-orange-600 dark:text-orange-400">
                           ⏰ {timeAgo}
                         </div>
+                      </motion.div>
+                    )
+                  }
+                  
+                  // Handle bid-undo events
+                  if (bid.type === 'bid-undo') {
+                    const bidTime = new Date(bid.timestamp)
+                    let timeAgo = ''
+                    if (isClient) {
+                      const now = new Date()
+                      const timeDiff = Math.floor((now.getTime() - bidTime.getTime()) / 1000)
+                      timeAgo = timeDiff < 60 ? `${timeDiff}s ago` : timeDiff < 3600 ? `${Math.floor(timeDiff / 60)}m ago` : bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    } else {
+                      timeAgo = bidTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    }
+                    
+                    return (
+                      <motion.div
+                        key={bidKey}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-sm border-l-4 border-red-500 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/40 dark:to-orange-900/40 rounded-lg p-3 mb-2 shadow-md"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">↩️</span>
+                          <div className="font-bold text-lg text-red-800 dark:text-red-300">
+                            BID UNDONE
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1 text-sm">
+                          <span className="text-gray-700 dark:text-gray-300">From:</span>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">{bid.bidderName}</span>
+                          {bid.teamName && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200">({bid.teamName})</span>
+                          )}
+                        </div>
+                        {bid.amount && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-red-600 dark:text-red-400">
+                              ₹{bid.amount.toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-xs text-red-600 dark:text-red-400">⏰ {timeAgo}</span>
+                          </div>
+                        )}
                       </motion.div>
                     )
                   }
