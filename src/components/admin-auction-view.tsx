@@ -396,6 +396,20 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // Find current user's bidder profile (for bidder view)
   const userBidder = bidders.find((b) => b.userId === session?.user?.id)
   
+  // Calculate if userBidder has reached max team size
+  const isTeamFull = useMemo(() => {
+    if (!userBidder) return false
+    const rules = auction.rules as any
+    const maxTeamSize = rules?.maxTeamSize
+    if (!maxTeamSize) return false
+    
+    // Count players bought by this bidder
+    const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
+    
+    // Team size includes the bidder, so if they've bought (maxTeamSize - 1) players, team is full
+    return playersBought >= maxTeamSize - 1
+  }, [userBidder, players, auction.rules])
+  
   // Open custom bid modal when bidder is selected (for admin view)
   useEffect(() => {
     if (selectedBidderForBid) {
@@ -2027,9 +2041,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         setIsPlacingBid(false)
                       }
                     }}
-                    disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id)}
+                    disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id) || isTeamFull}
                   >
-                    {isPlacingBid ? 'Placing Bid...' : (() => {
+                    {isPlacingBid ? 'Placing Bid...' : isTeamFull ? 'Team Full' : (() => {
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
                       const minIncrement = (rules?.minBidIncrement || 1000)
@@ -2130,9 +2144,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                             setIsPlacingBid(false)
                           }
                         }}
-                        disabled={isPlacingBid}
+                        disabled={isPlacingBid || isTeamFull}
                       >
-                        {isPlacingBid ? 'Placing...' : 'Place Bid'}
+                        {isPlacingBid ? 'Placing...' : isTeamFull ? 'Team Full' : 'Place Bid'}
                       </Button>
                     </div>
                   </div>
@@ -2251,7 +2265,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-700'
               }`}
-              disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id)}
+              disabled={isPlacingBid || !userBidder || (currentBid?.bidderId === userBidder.id) || isTeamFull}
             >
               <TrendingUp className="h-5 w-5" />
               <span className="font-semibold text-sm">{(() => {
