@@ -402,7 +402,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     const rules = auction.rules as any
     const maxTeamSize = rules?.maxTeamSize
     if (!maxTeamSize) {
-      console.log('[Team Full Check] No maxTeamSize set in rules')
       return false
     }
     
@@ -412,19 +411,23 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     // Team size includes the bidder, so if they've bought (maxTeamSize - 1) players, team is full
     const isFull = playersBought >= maxTeamSize - 1
     
-    console.log('[Team Full Check]', {
-      bidderId: userBidder.id,
-      bidderName: userBidder.teamName || userBidder.username,
-      playersBought,
-      maxTeamSize,
-      maxPlayersCanBuy: maxTeamSize - 1,
-      isFull,
-      allPlayers: players.length,
-      soldPlayers: players.filter(p => p.status === 'SOLD').length
-    })
+    // Log only when team becomes full or when current player changes
+    if (isFull || currentPlayer) {
+      console.log('[Team Full Check]', {
+        bidderId: userBidder.id,
+        bidderName: userBidder.teamName || userBidder.username,
+        playersBought,
+        maxTeamSize,
+        maxPlayersCanBuy: maxTeamSize - 1,
+        isFull,
+        currentPlayerName: currentPlayer ? ((currentPlayer.data as any)?.Name || (currentPlayer.data as any)?.name) : 'none',
+        allPlayers: players.length,
+        soldPlayers: players.filter(p => p.status === 'SOLD').length
+      })
+    }
     
     return isFull
-  }, [userBidder, players, auction.rules])
+  }, [userBidder, players, auction.rules, currentPlayer])
   
   // Open custom bid modal when bidder is selected (for admin view)
   useEffect(() => {
@@ -928,6 +931,31 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         setIsMarkingSold(false)
         setIsMarkingUnsold(false)
         
+        // Check team size when new player loads - use setTimeout to ensure players state is updated
+        if (userBidder) {
+          setTimeout(() => {
+            const rules = auction.rules as any
+            const maxTeamSize = rules?.maxTeamSize
+            if (maxTeamSize) {
+              // Access players state via a function to get latest value
+              setPlayers(currentPlayers => {
+                const playersBought = currentPlayers.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
+                const isFull = playersBought >= maxTeamSize - 1
+                console.log('[New Player Loaded] Team size check:', {
+                  bidderId: userBidder.id,
+                  bidderName: userBidder.teamName || userBidder.username,
+                  playersBought,
+                  maxTeamSize,
+                  maxPlayersCanBuy: maxTeamSize - 1,
+                  isFull,
+                  newPlayerName: (latestPendingPlayer.data as any)?.Name || (latestPendingPlayer.data as any)?.name
+                })
+                return currentPlayers // Return unchanged to not modify state
+              })
+            }
+          }, 200) // Delay to ensure players state is updated from Pusher
+        }
+        
         // Use setTimeout to ensure currentPlayer state update completes before clearing pending
         // This ensures the player card renders with the new player
         setTimeout(() => {
@@ -943,7 +971,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         // Still hide animation even if no pending player
         setShowPlayerReveal(false)
       }
-  }, [refreshAuctionState])
+  }, [refreshAuctionState, userBidder, auction.rules])
 
   const handleAuctionPaused = useCallback(() => setIsPaused(true), [])
   const handleAuctionResumed = useCallback(() => setIsPaused(false), [])
@@ -962,6 +990,25 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           })
           return updated
         })
+        
+        // Log team size check after players are updated
+        if (userBidder) {
+          const rules = auction.rules as any
+          const maxTeamSize = rules?.maxTeamSize
+          if (maxTeamSize) {
+            // Use the updated players from data, not prev state
+            const playersBought = data.players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
+            const isFull = playersBought >= maxTeamSize - 1
+            console.log('[Players Updated] Team size check:', {
+              bidderId: userBidder.id,
+              bidderName: userBidder.teamName || userBidder.username,
+              playersBought,
+              maxTeamSize,
+              maxPlayersCanBuy: maxTeamSize - 1,
+              isFull
+            })
+          }
+        }
       }
       
       if (data.bidders) {
@@ -970,7 +1017,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           return update ? { ...b, remainingPurse: update.remainingPurse } : b
         }))
       }
-  }, [])
+  }, [userBidder, auction.rules])
 
   const handleAuctionReset = useCallback(() => {
       toast.success('Auction has been reset! Reloading page...')
