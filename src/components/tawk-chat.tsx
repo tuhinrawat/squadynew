@@ -116,6 +116,13 @@ declare global {
   interface Window {
     Tawk_API?: {
       setAttributes?: (attributes: Record<string, string>, callback?: (error: any) => void) => void
+      addEventHandlers?: (handlers: { onLoad?: () => void; [key: string]: any }) => void
+      customStyle?: {
+        visibility?: {
+          desktop?: { position?: string }
+          mobile?: { position?: string }
+        }
+      }
       hideWidget?: () => void
       showWidget?: () => void
       [key: string]: any
