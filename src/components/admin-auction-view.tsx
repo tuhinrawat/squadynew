@@ -2593,8 +2593,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               className="text-lg font-semibold"
             />
             <p className="text-xs text-gray-500">
-              Current bid: ₹{(currentBid?.amount || 0).toLocaleString('en-IN')}. 
-              Enter the total amount you want to bid (must be higher than current bid).
+              {(() => {
+                const currentBidAmount = currentBid?.amount || 0
+                const rules = auction.rules as any
+                const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                return `Current: ₹${currentBidAmount.toLocaleString('en-IN')} • Minimum: ₹${(currentBidAmount + minInc).toLocaleString('en-IN')} • Must be in multiples of ₹1,000`
+              })()}
             </p>
           </div>
           
@@ -2632,13 +2636,16 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   return
                 }
 
+                // For custom bids, only check:
+                // 1. Must be at least minIncrement more than current bid
+                // 2. Must be in multiples of ₹1,000 (not increment)
                 if (difference < minIncrement) {
                   showBidError(`Bid must be at least ₹${(currentBidAmount + minIncrement).toLocaleString('en-IN')}`)
                   return
                 }
 
-                if (difference % minIncrement !== 0) {
-                  showBidError(`Bid increase must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
+                if (totalBid % 1000 !== 0) {
+                  showBidError('Bid must be in multiples of ₹1,000')
                   return
                 }
 
