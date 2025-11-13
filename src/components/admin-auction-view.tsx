@@ -26,8 +26,8 @@ import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 
-// Tidio Chat Widget - Mobile optimized
-import { TidioChat } from '@/components/tidio-chat'
+// Tawk.to Chat Widget - Mobile optimized, per-auction context
+import { TawkChat } from '@/components/tawk-chat'
 
 // Optimized timer hook - reduces re-renders by 66%
 function useOptimizedTimer(timerValue: number): number {
@@ -2765,8 +2765,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       )
     )}
 
-    {/* Public Chat */}
-    <TidioChat />
+    {/* Tawk.to Chat Widget - Per-auction context */}
+    <TawkChat auctionId={auction.id} auctionName={auction.name} />
     
     {/* Undo Sale Dialog */}
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>

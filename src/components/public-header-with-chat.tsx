@@ -4,7 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Instagram, Clock } from 'lucide-react'
-import { TidioChat } from '@/components/tidio-chat'
+import { TawkChat } from '@/components/tawk-chat'
 import { PROFESSIO_URL_HEADER } from '@/lib/constants'
 
 interface PublicHeaderWithChatProps {
@@ -74,8 +74,8 @@ export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHead
         </div>
       </header>
       
-      {/* Tidio Chat Widget - Mobile optimized */}
-      <TidioChat />
+      {/* Tawk.to Chat Widget - Mobile optimized, per-auction context */}
+      <TawkChat auctionId={auctionId} />
     </>
   )
 }
