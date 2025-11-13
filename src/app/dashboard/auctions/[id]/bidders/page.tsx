@@ -18,7 +18,8 @@ interface Bidder {
   username: string
   purseAmount: number
   remainingPurse: number
-  logoUrl: string | null
+  logoUrl: string | null // Team logo (from form upload)
+  bidderPhotoUrl?: string | null // Bidder photo (for retired players)
   user: {
     id: string
     email: string
@@ -255,13 +256,32 @@ export default function BidderManagement() {
         }
 
         // Log full results for debugging
-        console.log('Fix Bidder Images Results:', result)
+        console.log('Fix Bidder Images Results:', JSON.stringify(result, null, 2))
+        console.log('Summary:', result.summary)
+        if (result.results && result.results.length > 0) {
+          console.log('Individual Results:', result.results)
+          const errors = result.results.filter((r: any) => r.status === 'error')
+          if (errors.length > 0) {
+            console.error('Errors found:', errors)
+          }
+        }
 
         // Refresh bidders to show updated images
         await fetchBidders()
       } else {
-        setError(result.error || 'Failed to fix bidder images')
+        // Show full error details
+        const errorMessage = result.error || 'Failed to fix bidder images'
+        const errorDetails = result.details ? ` Details: ${result.details}` : ''
+        setError(errorMessage + errorDetails)
         console.error('Fix bidder images error:', result)
+        
+        // If it's a published auction error, provide helpful message
+        if (errorMessage.includes('published') || errorMessage.includes('live')) {
+          setError(
+            'Cannot fix images on published/live auctions. ' +
+            'Please unpublish the auction first, or contact support.'
+          )
+        }
       }
     } catch (error) {
       setError('Network error. Please try again.')
@@ -380,10 +400,11 @@ export default function BidderManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {bidder.logoUrl ? (
+                          {/* For retired players, show bidderPhotoUrl; otherwise show logoUrl (team logo) */}
+                          {(bidder.bidderPhotoUrl || bidder.logoUrl) ? (
                             <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-gray-200 dark:border-gray-700">
                               <Image
-                                src={bidder.logoUrl}
+                                src={bidder.bidderPhotoUrl || bidder.logoUrl || ''}
                                 alt={bidder.user.name || 'Bidder photo'}
                                 fill
                                 className="object-cover"

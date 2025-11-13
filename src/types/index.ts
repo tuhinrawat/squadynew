@@ -4,7 +4,7 @@ export type { User, Auction, Player, Bidder, Role, AuctionStatus, PlayerStatus }
 
 export interface UserWithRelations extends User {
   auctions?: Auction[]
-  bidderProfile?: Bidder | null
+  bidderProfiles?: Bidder[] // Changed from bidderProfile to bidderProfiles - users can be bidders in multiple auctions
 }
 
 export interface AuctionWithRelations extends Auction {

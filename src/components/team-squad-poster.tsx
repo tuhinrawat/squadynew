@@ -25,7 +25,8 @@ interface TeamSquadPosterProps {
     bidderId: string
     teamName: string
     bidderName: string
-    logoUrl: string | null
+    logoUrl: string | null // Team logo (from form upload)
+    bidderPhotoUrl?: string | null // Bidder photo (for retired players)
     username?: string // Bidder username to check if it's a retired player
     players: Array<{
       id: string
@@ -106,15 +107,12 @@ export function TeamSquadPoster({ team, auctionName, auctionDescription, auction
   // Retired players have username starting with "retired_"
   const isRetiredPlayerBidder = team.username?.startsWith('retired_') || false
   
-  // Get bidder photo URL - use logoUrl if it exists (retired players have their photo stored here)
-  // Also check if there's a RETIRED player that matches this bidder
-  let bidderPhotoUrl: string | null = null
+  // Get bidder photo URL - for retired players, use bidderPhotoUrl (from player profile photo)
+  // For regular bidders, bidderPhotoUrl will be null
+  let bidderPhotoUrl: string | null = team.bidderPhotoUrl || null
   
-  if (team.logoUrl) {
-    // If logoUrl exists, use it (retired players have their photo stored in logoUrl)
-    bidderPhotoUrl = team.logoUrl
-  } else if (auction?.players && isRetiredPlayerBidder) {
-    // Fallback: Find the RETIRED player and extract photo from player data
+  // If bidderPhotoUrl is not set but this is a retired player, try to get it from player data
+  if (!bidderPhotoUrl && auction?.players && isRetiredPlayerBidder) {
     const retiredPlayer = auction.players.find(p => {
       if (p.status !== 'RETIRED') return false
       // Match by checking if username contains player id
@@ -127,6 +125,9 @@ export function TeamSquadPoster({ team, auctionName, auctionDescription, auction
       bidderPhotoUrl = getProfilePhotoUrl(retiredPlayer.data) || null
     }
   }
+  
+  // Team logo is always from logoUrl (from form upload)
+  const teamLogoUrl = team.logoUrl
 
   // Generate hashtag from auction name
   const auctionHashtag = auctionName
@@ -251,26 +252,23 @@ export function TeamSquadPoster({ team, auctionName, auctionDescription, auction
                       >
                         {team.teamName || team.bidderName || 'Team'}
                       </p>
-                      {/* Team Logo - Next to Team Name - 50% larger, invisible border */}
-                      {/* Only show team logo if it's not a retired player bidder (they show photo in bidder card) */}
-                      {!isRetiredPlayerBidder && (
-                        <div className="w-12 h-12 sm:w-[60px] sm:h-[60px] md:w-[72px] md:h-[72px] lg:w-24 lg:h-24 rounded-full overflow-hidden shadow-lg border-0 bg-white/10 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
-                          {team.logoUrl ? (
-                            <img
-                              src={team.logoUrl}
-                              alt={team.teamName || 'Team Logo'}
-                              className="w-full h-full object-contain p-1 sm:p-1.5 md:p-2"
-                            />
-                          ) : (
-                            // Dummy team logo placeholder
-                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
-                              <span className="text-white font-black text-[8px] sm:text-[10px] md:text-xs lg:text-sm">
-                                {team.teamName?.charAt(0) || team.bidderName?.charAt(0) || 'T'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                      {/* Team Logo - Next to Team Name - Always show team logo from logoUrl */}
+                      <div className="w-12 h-12 sm:w-[60px] sm:h-[60px] md:w-[72px] md:h-[72px] lg:w-24 lg:h-24 rounded-full overflow-hidden shadow-lg border-0 bg-white/10 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                        {teamLogoUrl ? (
+                          <img
+                            src={teamLogoUrl}
+                            alt={team.teamName || 'Team Logo'}
+                            className="w-full h-full object-contain p-1 sm:p-1.5 md:p-2"
+                          />
+                        ) : (
+                          // Dummy team logo placeholder
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600">
+                            <span className="text-white font-black text-[8px] sm:text-[10px] md:text-xs lg:text-sm">
+                              {team.teamName?.charAt(0) || team.bidderName?.charAt(0) || 'T'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

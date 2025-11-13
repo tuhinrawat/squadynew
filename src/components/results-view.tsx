@@ -23,7 +23,8 @@ export function ResultsView({ auction }: ResultsViewProps) {
       bidderId: bidder.id,
       teamName: bidder.teamName || bidder.username,
       bidderName: bidder.user?.name || bidder.username,
-      logoUrl: bidder.logoUrl,
+      logoUrl: bidder.logoUrl, // Team logo (from form upload)
+      bidderPhotoUrl: bidder.bidderPhotoUrl, // Bidder photo (for retired players)
       username: bidder.username, // Add username to check if it's a retired player
       players: teamPlayers.sort((a: any, b: any) => (b.soldPrice || 0) - (a.soldPrice || 0)), // Sort by price desc
     }

@@ -81,6 +81,7 @@ export async function POST(
         select: {
           id: true,
           userId: true,
+          auctionId: true, // Include auctionId for validation
           username: true,
           teamName: true,
           remainingPurse: true,
@@ -100,6 +101,13 @@ export async function POST(
 
     if (!bidder) {
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
+    }
+
+    // Security: Ensure bidder belongs to this auction
+    if (bidder.auctionId !== params.id) {
+      return NextResponse.json({ 
+        error: 'Bidder does not belong to this auction' 
+      }, { status: 403 })
     }
 
     // Parse current bid from bid history - only for CURRENT player

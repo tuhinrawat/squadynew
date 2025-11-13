@@ -7,6 +7,9 @@ import { prisma } from '@/lib/prisma'
  * POST /api/debug/fix-bidder-images
  * Backfills logoUrl for bidders created from retired players
  * This fixes the issue where logoUrl was null when players were retired
+ * 
+ * NOTE: This endpoint works on published auctions since it only updates logoUrl
+ * (a data correction, not a structural change that would affect auction integrity)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -81,6 +84,9 @@ export async function POST(request: NextRequest) {
       }, { status: 404 })
     }
 
+    // Log auction status for debugging
+    console.log(`Fixing bidder images for auction: ${auction.id}, Published: ${auction.isPublished}, Status: ${(auction as any).status}`)
+
     const results = []
     let fixedCount = 0
     let skippedCount = 0
@@ -88,9 +94,24 @@ export async function POST(request: NextRequest) {
 
     // Process each bidder
     for (const bidder of auction.bidders) {
-      // Only process retired player bidders that don't have a logoUrl
-      if (!bidder.username?.startsWith('retired_') || bidder.logoUrl) {
+      // Process ALL retired player bidders, even if they already have a logoUrl
+      // This ensures we replace team logos with bidder photos
+      const isRetired = bidder.username?.startsWith('retired_') || false
+      
+      // Debug logging
+      console.log(`Bidder ${bidder.id}: username="${bidder.username}", isRetired=${isRetired}, currentLogoUrl="${bidder.logoUrl}"`)
+      
+      // Skip non-retired bidders
+      if (!isRetired) {
         skippedCount++
+        results.push({
+          bidderId: bidder.id,
+          username: bidder.username,
+          teamName: bidder.teamName,
+          status: 'skipped',
+          reason: 'Not a retired player bidder',
+          logoUrl: bidder.logoUrl
+        })
         continue
       }
 
@@ -182,23 +203,45 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        const logoUrl = `/api/proxy-image?id=${fileId}`
+        const bidderPhotoUrl = `/api/proxy-image?id=${fileId}`
 
-        // Update bidder with logoUrl
-        await prisma.bidder.update({
-          where: { id: bidder.id },
-          data: { logoUrl }
-        })
+        // Check if bidderPhotoUrl is different from current (to avoid unnecessary updates)
+        const currentBidderPhotoUrl = bidder.bidderPhotoUrl || null
+        const isDifferent = bidderPhotoUrl !== currentBidderPhotoUrl
 
-        fixedCount++
-        results.push({
-          bidderId: bidder.id,
-          username: bidder.username,
-          playerId,
-          teamName: bidder.teamName,
-          logoUrl,
-          status: 'fixed'
-        })
+        // Update bidder with bidderPhotoUrl (NOT logoUrl - logoUrl is for team logo from form upload)
+        // This works for published auctions since we're only updating bidderPhotoUrl (data correction, not structural change)
+        try {
+          await prisma.bidder.update({
+            where: { id: bidder.id },
+            data: { bidderPhotoUrl }
+          })
+          
+          fixedCount++
+          results.push({
+            bidderId: bidder.id,
+            username: bidder.username,
+            playerId,
+            teamName: bidder.teamName,
+            oldBidderPhotoUrl: currentBidderPhotoUrl,
+            newBidderPhotoUrl: bidderPhotoUrl,
+            teamLogoUrl: bidder.logoUrl, // Keep team logo separate
+            wasUpdated: isDifferent,
+            status: isDifferent ? 'fixed' : 'already-correct'
+          })
+        } catch (updateError) {
+          // If update fails, log the error and continue
+          console.error(`Failed to update bidder ${bidder.id}:`, updateError)
+          errorCount++
+          results.push({
+            bidderId: bidder.id,
+            username: bidder.username,
+            playerId,
+            status: 'error',
+            message: `Database update failed: ${updateError instanceof Error ? updateError.message : 'Unknown error'}`
+          })
+          continue
+        }
       } catch (error) {
         errorCount++
         results.push({
@@ -226,8 +269,14 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error fixing bidder images:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const errorStack = error instanceof Error ? error.stack : undefined
     return NextResponse.json(
-      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Internal server error', 
+        details: errorMessage,
+        stack: process.env.NODE_ENV === 'development' ? errorStack : undefined
+      },
       { status: 500 }
     )
   }

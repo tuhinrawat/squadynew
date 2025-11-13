@@ -86,11 +86,23 @@ export async function POST(
 
     // Get the bidder who purchased
     const bidder = await prisma.bidder.findUnique({
-      where: { id: lastSoldPlayer.soldTo }
+      where: { id: lastSoldPlayer.soldTo },
+      select: {
+        id: true,
+        auctionId: true, // Include auctionId for validation
+        remainingPurse: true
+      }
     })
 
     if (!bidder) {
       return NextResponse.json({ error: 'Bidder not found' }, { status: 404 })
+    }
+
+    // Security: Ensure bidder belongs to this auction
+    if (bidder.auctionId !== params.id) {
+      return NextResponse.json({ 
+        error: 'Bidder does not belong to this auction' 
+      }, { status: 403 })
     }
 
     // Ensure remainingPurse is a valid number

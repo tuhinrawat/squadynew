@@ -19,7 +19,8 @@ interface Bidder {
   teamName: string | null
   username: string
   remainingPurse: number
-  logoUrl: string | null
+  logoUrl: string | null // Team logo (from form upload)
+  bidderPhotoUrl?: string | null // Bidder photo (for retired players)
   user: {
     name: string
   }
@@ -92,10 +93,11 @@ function TeamsOverviewComponent({ auction }: TeamsOverviewProps) {
                   className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 cursor-pointer sm:cursor-default"
                   onClick={() => toggleTeam(team.bidder.id)}
                 >
-                  {team.bidder.logoUrl && (
+                  {/* For retired players, show bidderPhotoUrl; otherwise show logoUrl (team logo) */}
+                  {(team.bidder.bidderPhotoUrl || team.bidder.logoUrl) && (
                     <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
                       <Image
-                        src={team.bidder.logoUrl}
+                        src={team.bidder.bidderPhotoUrl || team.bidder.logoUrl || ''}
                         alt={team.bidder.teamName || team.bidder.username}
                         fill
                         className="rounded object-cover"

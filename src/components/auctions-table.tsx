@@ -404,12 +404,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     <Edit className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
-                  {auction.status === 'COMPLETED' && (
-                    <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate Auction
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate Auction
+                  </DropdownMenuItem>
                   {auction.status === 'DRAFT' && (
                     <>
                       <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>
@@ -553,12 +551,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     <Edit className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
-                  {auction.status === 'COMPLETED' && (
-                    <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Duplicate Auction
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
+                    <Copy className="mr-2 h-4 w-4" />
+                    Duplicate Auction
+                  </DropdownMenuItem>
                   {auction.status === 'DRAFT' && (
                     <>
                       <DropdownMenuItem onClick={() => handleStartAuction(auction.id, auction)}>

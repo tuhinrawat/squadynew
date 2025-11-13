@@ -179,29 +179,31 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     return undefined
   }
 
-  // Get bidder photo - checks retired player data first, then logoUrl
+  // Get bidder photo - for retired players use bidderPhotoUrl, otherwise use logoUrl (team logo)
   const getBidderPhotoUrl = (bidder: BidderWithUser) => {
-    // First check if bidder has a logoUrl set
+    // For retired players, use bidderPhotoUrl (bidder's personal photo)
+    // For regular bidders, use logoUrl (team logo)
+    // Check bidderPhotoUrl first (for retired players)
+    if (bidder.bidderPhotoUrl) return bidder.bidderPhotoUrl
+    
+    // Fallback to logoUrl (team logo) for regular bidders
     if (bidder.logoUrl) return bidder.logoUrl
     
-    // Check if this bidder was created from a retired player
-    // Match by username or user email
-    const retiredPlayer = auction.players.find(p => {
-      if (p.status !== 'RETIRED') return false
-      const playerData = p.data as any
-      const playerName = (playerData?.name || playerData?.Name || playerData?.player_name || '').toLowerCase()
-      const bidderName = (bidder.username || '').toLowerCase()
-      const bidderEmail = (bidder.user?.email || '').toLowerCase()
+    // Legacy fallback: Check if this bidder was created from a retired player
+    // Match by username or user email (only if bidderPhotoUrl is not set)
+    const isRetiredPlayer = bidder.username?.startsWith('retired_')
+    if (isRetiredPlayer) {
+      const retiredPlayer = auction.players.find(p => {
+        if (p.status !== 'RETIRED') return false
+        const playerIdMatch = bidder.username?.match(/retired_(.+)/)
+        if (playerIdMatch && playerIdMatch[1] === p.id) return true
+        return false
+      })
       
-      return playerName === bidderName || 
-             playerName === bidderEmail ||
-             playerName.includes(bidderName) ||
-             playerName.includes(bidderEmail.split('@')[0])
-    })
-    
-    if (retiredPlayer) {
-      const photoUrl = getProfilePhotoUrl(retiredPlayer.data as any)
-      if (photoUrl) return photoUrl
+      if (retiredPlayer) {
+        const photoUrl = getProfilePhotoUrl(retiredPlayer.data as any)
+        if (photoUrl) return photoUrl
+      }
     }
     
     return undefined

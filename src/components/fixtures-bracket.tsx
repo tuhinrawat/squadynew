@@ -11,7 +11,8 @@ interface Bidder {
   id: string
   teamName: string | null
   username: string
-  logoUrl: string | null
+  logoUrl: string | null // Team logo (from form upload)
+  bidderPhotoUrl?: string | null // Bidder photo (for retired players)
   user: {
     name: string
     email: string
@@ -339,7 +340,8 @@ function TeamCard({ team, isHighlighted = false }: { team: Bidder; isHighlighted
   const bidderName = team.user.name
   const displayName = teamName || bidderName
   const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  const profilePhoto = team.logoUrl
+  // For retired players, use bidderPhotoUrl; otherwise use logoUrl (team logo)
+  const profilePhoto = team.bidderPhotoUrl || team.logoUrl
 
   return (
     <div className={`flex items-center gap-2 p-1.5 rounded-md bg-white/5 hover:bg-white/10 transition-all ${

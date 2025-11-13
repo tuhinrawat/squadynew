@@ -54,38 +54,38 @@ model User {
 
   // Relations
   auctions      Auction[]
-  bidderProfile Bidder?
+  bidderProfiles Bidder[] // Changed from Bidder? to Bidder[] - users can be bidders in multiple auctions
 
   @@map("users")
 }
 
 model Auction {
-  id               String        @id @default(cuid())
-  name             String
-  slug             String?       @unique // URL-friendly slug for the auction
-  description      String?
-  image            String?       // Auction cover image URL
-  rules            Json
-  status           AuctionStatus @default(DRAFT)
-  isPublished      Boolean       @default(false)
-  customFields           Json? // Store custom field definitions for public registration
-  columnOrder            Json? // Store Excel column order as array
-  visibleColumns         Json? // Store visible columns for player table
+  id                      String        @id @default(cuid())
+  name                    String
+  slug                    String?       @unique // URL-friendly slug for the auction
+  description             String?
+  image                   String? // Auction cover image URL
+  rules                   Json
+  status                  AuctionStatus @default(DRAFT)
+  isPublished             Boolean       @default(false)
+  customFields            Json? // Store custom field definitions for public registration
+  columnOrder             Json? // Store Excel column order as array
+  visibleColumns          Json? // Store visible columns for player table
   analyticsVisibleColumns Json? // Store visible columns for analytics player table (separate from main table)
-  registrationOpen       Boolean       @default(true)
-  createdById      String
-  currentPlayerId  String?
-  bidHistory       Json?
-  createdAt        DateTime      @default(now())
+  registrationOpen        Boolean       @default(true)
+  createdById             String
+  currentPlayerId         String?
+  bidHistory              Json?
+  createdAt               DateTime      @default(now())
 
   // Analytics fields
-  totalViews       Int           @default(0) // Total page views
-  uniqueVisitors   Int           @default(0) // Unique visitors count
-  peakViewers      Int           @default(0) // Peak concurrent viewers
-  timerViews       Int           @default(0) // Countdown timer page views
+  totalViews     Int @default(0) // Total page views
+  uniqueVisitors Int @default(0) // Unique visitors count
+  peakViewers    Int @default(0) // Peak concurrent viewers
+  timerViews     Int @default(0) // Countdown timer page views
 
   // Scheduled start date/time for the auction
-  scheduledStartDate DateTime?   // When the auction is scheduled to start
+  scheduledStartDate DateTime? // When the auction is scheduled to start
 
   // Relations
   createdBy    User          @relation(fields: [createdById], references: [id])
@@ -93,7 +93,7 @@ model Auction {
   bidders      Bidder[]
   chatMessages ChatMessage[]
   views        AuctionView[] // Individual view records
-  fixtures     Fixture[]     // Fixtures/matches for this auction
+  fixtures     Fixture[] // Fixtures/matches for this auction
 
   // Performance indexes
   @@index([createdById])
@@ -126,13 +126,14 @@ model Player {
 
 model Bidder {
   id             String   @id @default(cuid())
-  userId         String   @unique
+  userId         String   // Removed @unique - users can be bidders in multiple auctions
   auctionId      String
   teamName       String?
   username       String
   purseAmount    Float
   remainingPurse Float
-  logoUrl        String?
+  logoUrl        String? // Team logo (from form upload)
+  bidderPhotoUrl String? // Bidder photo (for retired players, from player profile photo)
   createdAt      DateTime @default(now())
 
   // Relations
@@ -141,7 +142,8 @@ model Bidder {
   fixturesAsTeam1 Fixture[] @relation("Team1Fixtures")
   fixturesAsTeam2 Fixture[] @relation("Team2Fixtures")
 
-  @@unique([auctionId, username])
+  @@unique([auctionId, username]) // Username unique per auction
+  @@unique([auctionId, userId])    // User can only be bidder once per auction
   // Performance indexes
   @@index([auctionId])
   @@index([userId])
@@ -166,7 +168,7 @@ model ChatMessage {
   id        String   @id @default(cuid())
   auctionId String
   username  String
-  userId    String?  // Optional unique identifier for anonymous users
+  userId    String? // Optional unique identifier for anonymous users
   message   String   @db.Text
   createdAt DateTime @default(now())
 
@@ -179,13 +181,13 @@ model ChatMessage {
 }
 
 model AuctionView {
-  id          String   @id @default(cuid())
-  auctionId   String
-  visitorId   String   // Anonymous visitor identifier (from cookie/session)
-  userAgent   String?  // Browser user agent
-  ipAddress   String?  // IP address (hashed for privacy)
-  referrer    String?  // Where they came from
-  viewedAt    DateTime @default(now())
+  id        String   @id @default(cuid())
+  auctionId String
+  visitorId String // Anonymous visitor identifier (from cookie/session)
+  userAgent String? // Browser user agent
+  ipAddress String? // IP address (hashed for privacy)
+  referrer  String? // Where they came from
+  viewedAt  DateTime @default(now())
 
   // Relations
   auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
@@ -198,17 +200,17 @@ model AuctionView {
 }
 
 model Fixture {
-  id          String    @id @default(cuid())
-  auctionId   String
-  matchName   String    // Name of the match/fixture
-  team1Id     String    // Bidder 1
-  team2Id     String    // Bidder 2
-  matchDate   DateTime? // Optional scheduled date
-  venue       String?   // Optional venue
-  status      String    @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
-  result      String?   // Match result (optional)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  auctionId String
+  matchName String // Name of the match/fixture
+  team1Id   String // Bidder 1
+  team2Id   String // Bidder 2
+  matchDate DateTime? // Optional scheduled date
+  venue     String? // Optional venue
+  status    String    @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  result    String? // Match result (optional)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   // Relations
   auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)

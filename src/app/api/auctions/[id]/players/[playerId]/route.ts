@@ -181,19 +181,20 @@ export async function PUT(
           })
         }
 
-        // Get profile photo URL
+        // Get profile photo URL for bidderPhotoUrl (NOT logoUrl - logoUrl is for team logo from form upload)
         const photoKeys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
         const photoValue = photoKeys.map(key => playerData?.[key]).find(v => v && String(v).trim())
-        let logoUrl = null
+        let bidderPhotoUrl = null
         if (photoValue) {
           const photoStr = String(photoValue).trim()
           const match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
           if (match && match[1]) {
-            logoUrl = `/api/proxy-image?id=${match[1]}`
+            bidderPhotoUrl = `/api/proxy-image?id=${match[1]}`
           }
         }
 
         // Create bidder
+        // logoUrl should be null initially - admin will upload team logo separately via form
         await prisma.bidder.create({
           data: {
             userId: user.id,
@@ -202,7 +203,8 @@ export async function PUT(
             username,
             purseAmount,
             remainingPurse: purseAmount,
-            logoUrl
+            logoUrl: null, // Team logo - will be uploaded via form
+            bidderPhotoUrl // Bidder photo from player profile
           }
         })
       }

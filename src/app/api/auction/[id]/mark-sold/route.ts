@@ -129,6 +129,13 @@ export async function POST(
       return NextResponse.json({ error: 'Winning bidder not found' }, { status: 404 })
     }
 
+    // Security: Ensure winning bidder belongs to this auction
+    if (winningBidder.auctionId !== params.id) {
+      return NextResponse.json({ 
+        error: 'Winning bidder does not belong to this auction' 
+      }, { status: 403 })
+    }
+
     // Check if bidder has sufficient remaining purse for the bid amount
     if (winningBidder.remainingPurse < highestBid.amount) {
       return NextResponse.json({
