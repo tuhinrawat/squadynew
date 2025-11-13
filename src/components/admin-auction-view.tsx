@@ -401,13 +401,29 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     if (!userBidder) return false
     const rules = auction.rules as any
     const maxTeamSize = rules?.maxTeamSize
-    if (!maxTeamSize) return false
+    if (!maxTeamSize) {
+      console.log('[Team Full Check] No maxTeamSize set in rules')
+      return false
+    }
     
-    // Count players bought by this bidder
+    // Count players bought by this bidder - use ALL players, not just current state
     const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
     
     // Team size includes the bidder, so if they've bought (maxTeamSize - 1) players, team is full
-    return playersBought >= maxTeamSize - 1
+    const isFull = playersBought >= maxTeamSize - 1
+    
+    console.log('[Team Full Check]', {
+      bidderId: userBidder.id,
+      bidderName: userBidder.teamName || userBidder.username,
+      playersBought,
+      maxTeamSize,
+      maxPlayersCanBuy: maxTeamSize - 1,
+      isFull,
+      allPlayers: players.length,
+      soldPlayers: players.filter(p => p.status === 'SOLD').length
+    })
+    
+    return isFull
   }, [userBidder, players, auction.rules])
   
   // Open custom bid modal when bidder is selected (for admin view)
@@ -817,15 +833,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       }))
     }
     
-    // Update player status instantly
-    if (currentPlayer?.id === data.playerId) {
-      setPlayers(prev => prev.map(p => 
-        p.id === data.playerId 
-          ? { ...p, status: 'SOLD' as const, soldTo: data.bidderId, soldPrice: data.amount }
-          : p
-      ))
-    }
-  }, [currentPlayer])
+    // Update player status instantly - update ALL players, not just current
+    setPlayers(prev => prev.map(p => 
+      p.id === data.playerId 
+        ? { ...p, status: 'SOLD' as const, soldTo: data.bidderId, soldPrice: data.amount }
+        : p
+    ))
+  }, [])
 
   const handleNewPlayer = useCallback((data: PusherPlayerData) => {
       console.log('🎬 NEW PLAYER EVENT RECEIVED - Starting reveal animation:', data.player)
@@ -2003,9 +2017,20 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         return
                       }
                       
+                      // Check team size BEFORE allowing bid
+                      const rules = auction.rules as any
+                      const maxTeamSize = rules?.maxTeamSize
+                      if (maxTeamSize) {
+                        const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
+                        console.log('[Raise Bid] Team size check:', { playersBought, maxTeamSize, maxPlayersCanBuy: maxTeamSize - 1 })
+                        if (playersBought >= maxTeamSize - 1) {
+                          showBidError(`Team is full (max ${maxTeamSize} players including you). Cannot bid on more players.`)
+                          return
+                        }
+                      }
+                      
                       // Always use base increment (1000)
                       const currentBidAmount = currentBid?.amount || 0
-                      const rules = auction.rules as AuctionRules | undefined
                       const minIncrement = (rules?.minBidIncrement || 1000)
                       const totalBid = currentBidAmount + minIncrement
                       
@@ -2074,13 +2099,23 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                             return
                           }
 
+                          // Check team size BEFORE allowing bid
+                          const rules = auction.rules as any
+                          const maxTeamSize = rules?.maxTeamSize
+                          if (maxTeamSize) {
+                            const playersBought = players.filter(p => p.soldTo === userBidder.id && p.status === 'SOLD').length
+                            if (playersBought >= maxTeamSize - 1) {
+                              showBidError(`Team is full (max ${maxTeamSize} players including you). Cannot bid on more players.`)
+                              return
+                            }
+                          }
+
                           if (!bidAmount || bidAmount <= 0) {
                             showBidError('Please enter a valid bid amount')
                             return
                           }
 
                           const currentBidAmount = currentBid?.amount || 0
-                          const rules = auction.rules as AuctionRules | undefined
                           const minIncrement = (rules?.minBidIncrement || 1000)
                           const difference = bidAmount - currentBidAmount
 
