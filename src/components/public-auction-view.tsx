@@ -770,7 +770,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     nextMin={(() => {
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as any
-                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const minIncrement = (rules?.minBidIncrement || 1000)
                       return currentBidAmount + minIncrement
                     })()}
                   />

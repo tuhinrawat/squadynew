@@ -265,7 +265,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
-                      const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const minInc = (rules?.minBidIncrement || 1000)
                       const totalBid = currentBidAmount + minInc
 
                       // Batch all state updates together (React 18 auto-batches)
@@ -1935,7 +1935,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       nextMin={(() => {
                         const currentBidAmount = currentBid?.amount || 0
                         const rules = auction.rules as any
-                        const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                        const minIncrement = (rules?.minBidIncrement || 1000)
                         return currentBidAmount + minIncrement
                       })()}
                     />
@@ -1988,10 +1988,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         return
                       }
                       
-                      // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+                      // Always use base increment (1000)
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
-                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const minIncrement = (rules?.minBidIncrement || 1000)
                       const totalBid = currentBidAmount + minIncrement
                       
                       if (totalBid > userBidder.remainingPurse) {
@@ -2031,7 +2031,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     {isPlacingBid ? 'Placing Bid...' : (() => {
                       const currentBidAmount = currentBid?.amount || 0
                       const rules = auction.rules as AuctionRules | undefined
-                      const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                      const minIncrement = (rules?.minBidIncrement || 1000)
                       return `Raise Bid (+₹${(minIncrement / 1000).toFixed(0)}K)`
                     })()}
                     </Button>
@@ -2066,7 +2066,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
                           const currentBidAmount = currentBid?.amount || 0
                           const rules = auction.rules as AuctionRules | undefined
-                          const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                          const minIncrement = (rules?.minBidIncrement || 1000)
                           const difference = bidAmount - currentBidAmount
 
                           if (bidAmount <= currentBidAmount) {
@@ -2079,8 +2079,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                             return
                           }
 
-                          if (difference % minIncrement !== 0) {
-                            showBidError(`Bid increase must be in multiples of ₹${minIncrement.toLocaleString('en-IN')}`)
+                          if (bidAmount % 1000 !== 0) {
+                            showBidError('Bid must be in multiples of ₹1,000')
                             return
                           }
 
@@ -2199,10 +2199,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             {/* Quick Raise Bid Button */}
                     <Button
               onClick={() => {
-                // Dynamic increment: 2k when current bid >= 10000, otherwise use rules or default 1k
+                // Always use base increment (1000)
                 const currentBidAmount = currentBid?.amount || 0
                 const rules = auction.rules as AuctionRules | undefined
-                const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                const minIncrement = (rules?.minBidIncrement || 1000)
                 const totalBid = currentBidAmount + minIncrement
                 
                 if (totalBid > userBidder.remainingPurse) {
@@ -2243,7 +2243,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               <span className="font-semibold text-sm">{(() => {
                 const currentBidAmount = currentBid?.amount || 0
                 const rules = auction.rules as AuctionRules | undefined
-                const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                const minIncrement = (rules?.minBidIncrement || 1000)
                 return `+₹${(minIncrement / 1000).toFixed(0)}K`
               })()}</span>
                     </Button>
@@ -2596,7 +2596,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               {(() => {
                 const currentBidAmount = currentBid?.amount || 0
                 const rules = auction.rules as any
-                const minInc = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                const minInc = (rules?.minBidIncrement || 1000)
                 return `Current: ₹${currentBidAmount.toLocaleString('en-IN')} • Minimum: ₹${(currentBidAmount + minInc).toLocaleString('en-IN')} • Must be in multiples of ₹1,000`
               })()}
             </p>
@@ -2627,7 +2627,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
                 const currentBidAmount = currentBid?.amount || 0
                 const rules = auction.rules as AuctionRules | undefined
-                const minIncrement = currentBidAmount >= 10000 ? 2000 : (rules?.minBidIncrement || 1000)
+                const minIncrement = (rules?.minBidIncrement || 1000)
                 const totalBid = bidAmount
                 const difference = totalBid - currentBidAmount
 

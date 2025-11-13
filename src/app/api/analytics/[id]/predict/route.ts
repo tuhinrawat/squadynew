@@ -882,7 +882,7 @@ Return ONLY valid JSON, no other text.`
         const currentBidForValidation = roundToNearestThousand(rawCurrentBid)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const basePriceForValidation = (currentPlayer.data as any)?.['Base Price'] || (currentPlayer.data as any)?.['base price'] || 1000
-        const minIncrementForValidation = currentBidForValidation >= 10000 ? 2000 : 1000
+        const minIncrementForValidation = 1000
         
         predictions = {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1265,8 +1265,8 @@ function generateFallbackPredictions(
     : 0
   const averageBid = roundToNearestThousand(rawAverageBid)
   
-  // Determine min increment based on dynamic rule
-  const minIncrement = currentBid >= 10000 ? 2000 : 1000
+  // Always use base increment (1000)
+  const minIncrement = 1000
 
   // Factor in upcoming brilliant players
   const hasBrilliantUpcoming = brilliantUpcomingPlayers && brilliantUpcomingPlayers.length > 0
