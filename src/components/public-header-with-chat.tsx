@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, Instagram } from 'lucide-react'
+import { MessageCircle, Instagram, Clock } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { PROFESSIO_URL_HEADER } from '@/lib/constants'
 
@@ -15,9 +15,10 @@ const PublicChat = dynamic(
 
 interface PublicHeaderWithChatProps {
   auctionId: string
+  onOpenBidHistory?: () => void // Callback to open bid history modal
 }
 
-export function PublicHeaderWithChat({ auctionId }: PublicHeaderWithChatProps) {
+export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHeaderWithChatProps) {
   const [isChatOpen, setIsChatOpen] = useState(false)
 
   return (
@@ -31,8 +32,20 @@ export function PublicHeaderWithChat({ auctionId }: PublicHeaderWithChatProps) {
                 <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
               </Link>
             </div>
-            {/* Right: Instagram + Chat Icon + Professio Badge + Buttons */}
+            {/* Right: Live Bids (mobile) + Instagram + Chat Icon + Professio Badge + Buttons */}
             <div className="flex items-center gap-0.5 sm:gap-3">
+              {/* Live Bids Button - Mobile only, first in sequence */}
+              {onOpenBidHistory && (
+                <Button
+                  onClick={onOpenBidHistory}
+                  size="sm"
+                  className="sm:hidden relative bg-red-600 hover:bg-red-700 text-white h-7 px-2 animate-pulse shadow-lg"
+                  aria-label="Open Live Bid History"
+                >
+                  <Clock className="h-4 w-4 mr-1" />
+                  <span className="text-xs font-semibold">Live Bids</span>
+                </Button>
+              )}
               {/* Instagram Icon - Always visible */}
               <a
                 href="https://www.instagram.com/squady.auction/"

@@ -4,7 +4,6 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { AdminAuctionView } from '@/components/admin-auction-view'
-import { PublicAuctionView } from '@/components/public-auction-view'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -12,7 +11,7 @@ import { ResultsView } from '@/components/results-view'
 import { ChevronRight, Home, Instagram } from 'lucide-react'
 import { PreAuctionBanner } from '@/components/pre-auction-banner'
 import { CountdownToLiveWrapper } from '@/components/countdown-to-live-wrapper'
-import { PublicHeaderWithChat } from '@/components/public-header-with-chat'
+import { PublicAuctionWrapper } from '@/components/public-auction-wrapper'
 import { isCuid } from '@/lib/slug'
 import { isLiveStatus } from '@/lib/auction-status'
 import type { Metadata } from 'next'
@@ -363,36 +362,34 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       // For LIVE, PAUSED, and MOCK_RUN status, show full auction view
       if (isLiveStatus(auction.status) || auction.status === 'PAUSED') {
         return (
-          <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-            {/* Header for Public View with Chat */}
-            <PublicHeaderWithChat auctionId={auction.id} />
-          
-          {/* Breadcrumbs - Hidden on mobile for public view */}
-          <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
-              <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
-                <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
-                  <Home className="h-4 w-4" />
-                  <span>Home</span>
-                </Link>
-                <ChevronRight className="h-4 w-4" />
-                <span className="text-gray-900 dark:text-gray-100 font-medium truncate max-w-xs">
-                  {auction.name} - Live Auction
-                </span>
-              </nav>
+          <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-20 sm:pb-0">
+            {/* Breadcrumbs - Hidden on mobile for public view */}
+            <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+              <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
+                <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
+                  <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
+                    <Home className="h-4 w-4" />
+                    <span>Home</span>
+                  </Link>
+                  <ChevronRight className="h-4 w-4" />
+                  <span className="text-gray-900 dark:text-gray-100 font-medium truncate max-w-xs">
+                    {auction.name} - Live Auction
+                  </span>
+                </nav>
+              </div>
             </div>
-          </div>
           
-          <PublicAuctionView 
-            auction={auctionWithRelations as unknown as Parameters<typeof PublicAuctionView>[0]['auction']}
+          <PublicAuctionWrapper
+            auctionId={auction.id}
+            auction={auctionWithRelations as unknown as Parameters<typeof PublicAuctionWrapper>[0]['auction']}
             currentPlayer={currentPlayer}
             stats={auctionStats}
             bidHistory={fullBidHistory}
-            bidders={auctionWithRelations.bidders as unknown as Parameters<typeof PublicAuctionView>[0]['bidders']}
+            bidders={auctionWithRelations.bidders as unknown as Parameters<typeof PublicAuctionWrapper>[0]['bidders']}
           />
           
           {/* Footer for Public View */}
-          <footer className="mt-8 bg-gray-900 dark:bg-black text-white py-6 px-4">
+          <footer className="mt-8 sm:mt-8 bg-gray-900 dark:bg-black text-white py-6 px-4 fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto sm:left-auto sm:right-auto z-30">
             <div className="max-w-7xl mx-auto">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-2">

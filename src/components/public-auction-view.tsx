@@ -14,6 +14,7 @@ import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { useViewerCount } from '@/hooks/use-viewer-count'
+import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
@@ -79,9 +80,10 @@ interface PublicAuctionViewProps {
   }
   bidHistory: BidHistoryEntry[]
   bidders: Bidder[]
+  onOpenBidHistoryRef?: React.MutableRefObject<(() => void) | null> // Ref to expose modal opener
 }
 
-export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders }: PublicAuctionViewProps) {
+export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
   const [timer, setTimer] = useState(30)
@@ -110,6 +112,13 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   
   // Bid history modal state
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
+
+  // Expose modal opener via ref
+  useEffect(() => {
+    if (onOpenBidHistoryRef) {
+      onOpenBidHistoryRef.current = () => setBidHistoryModalOpen(true)
+    }
+  }, [onOpenBidHistoryRef])
 
   // Optimized timer for smoother countdown (updates less frequently when not critical)
   const displayTimer = useOptimizedTimer(timer)
@@ -998,7 +1007,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             </div>
           </div>
 
-          {/* Bid History */}
+          {/* Bid History - Desktop shows Live Activity, Mobile uses floating button */}
           <div className="order-2 lg:order-1 space-y-3">
             {/* Bid Errors Display */}
             {bidErrors.length > 0 && (
@@ -1014,20 +1023,24 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 ))}
               </div>
             )}
+            
+            {/* Live Activity - Desktop only */}
+            <div className="hidden lg:block">
+              <Card>
+                <CardHeader className="p-3 sm:p-4">
+                  <CardTitle className="text-sm sm:text-base text-gray-900 dark:text-gray-100">Live Activity</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto px-3 sm:px-4 py-2">
+                    <ActivityLog items={bidHistory as any} />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Mobile Bid History Floating Button */}
-      <div className="lg:hidden fixed bottom-4 right-4 z-50">
-        <Button 
-          onClick={() => setBidHistoryModalOpen(true)}
-          className="rounded-full px-5 py-6 shadow-2xl bg-blue-600 hover:bg-blue-700 text-white whitespace-nowrap"
-        >
-          <Clock className="h-5 w-5 mr-2" />
-          <span className="text-sm font-semibold">History</span>
-        </Button>
-      </div>
 
       {/* Mobile Bid History Bottom Modal */}
       <Dialog open={bidHistoryModalOpen} onOpenChange={setBidHistoryModalOpen}>
