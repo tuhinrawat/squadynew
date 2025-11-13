@@ -180,6 +180,29 @@ export async function POST(
       )
     }
 
+    // CRITICAL: Check team size limit FIRST, before any other validations
+    // This prevents teams from bidding when they've reached max team size
+    if (maxTeamSize !== null) {
+      const playersBoughtByBidder = await prisma.player.count({
+        where: { 
+          auctionId: params.id, 
+          soldTo: bidder.id,
+          status: 'SOLD' // Add status filter for faster query
+        }
+      })
+      
+      // Team size includes the bidder, so if they've bought (maxTeamSize - 1) players,
+      // their team is full. Check BEFORE allowing the bid.
+      if (playersBoughtByBidder >= maxTeamSize - 1) {
+        return broadcastBidError(
+          params.id,
+          `Team is full (max ${maxTeamSize} players including you). Cannot bid on more players.`,
+          bidder.user?.name || bidder.username,
+          bidder.id
+        )
+      }
+    }
+
     // Enforce roster-size financial feasibility: ensure enough purse remains
     // to reach mandatoryTeamSize with at least minPerPlayerReserve per remaining slot
     // OPTIMIZED: Only check if mandatoryTeamSize is set (skip if null)
@@ -193,16 +216,6 @@ export async function POST(
           status: 'SOLD' // Add status filter for faster query
         }
       })
-
-      // If maxTeamSize is set, prevent bidding that would exceed it after winning
-      if (maxAuctionPlayers !== null && playersBoughtByBidder + 1 > maxAuctionPlayers) {
-        return broadcastBidError(
-          params.id,
-          `Team is full (max ${maxTeamSize} players)`,
-          bidder.user?.name || bidder.username,
-          bidder.id
-        )
-      }
 
       const remainingSlotsAfterThis = Math.max(targetAuctionPlayers - (playersBoughtByBidder + 1), 0)
       
