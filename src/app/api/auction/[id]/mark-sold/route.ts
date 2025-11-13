@@ -158,9 +158,11 @@ export async function POST(
       }
     })
 
-    if (maxTeamSize && playersBoughtByBidder + 1 > maxTeamSize) {
+    // CRITICAL: Team size includes the bidder, so if they've bought (maxTeamSize - 1) players,
+    // their team is full. Use >= instead of > to catch the exact limit.
+    if (maxTeamSize && playersBoughtByBidder >= maxTeamSize - 1) {
       return NextResponse.json({
-        error: `Team size limit reached (max ${maxTeamSize}). Cannot acquire more players.`
+        error: `Team size limit reached (max ${maxTeamSize} players including you). Cannot acquire more players.`
       }, { status: 400 })
     }
 
