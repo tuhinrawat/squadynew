@@ -11,3 +11,4 @@ export const PROFESSIO_URL_HEADER = 'https://professio.ai/?utm_source=squady&utm
 export const PROFESSIO_URL_TIMER = 'https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=timer_page'
 export const PROFESSIO_URL_DASHBOARD = 'https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=dashboard'
 
+

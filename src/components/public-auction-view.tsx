@@ -609,7 +609,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-    <div className="p-1 sm:p-6">
+    <div className="p-1 sm:p-6 pb-40 sm:pb-6">
       <div className="max-w-7xl mx-auto space-y-1 sm:space-y-4">
         {/* Compact Dark Header (Desktop) / Stats Header (Mobile - appears after player card) */}
         <div className="hidden sm:block relative bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden px-4 py-3">
@@ -779,13 +779,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     amount={currentBid?.amount ?? null}
                     bidderName={currentBid?.bidderName}
                     teamName={currentBid?.teamName}
-                    timerSeconds={displayTimer}
-                    nextMin={(() => {
-                      const currentBidAmount = currentBid?.amount || 0
-                      const rules = auction.rules as any
-                      const minIncrement = (rules?.minBidIncrement || 1000)
-                      return currentBidAmount + minIncrement
-                    })()}
+                    auctionId={auction.id}
                   />
                 )}
               </CardContent>
@@ -998,15 +992,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               </CardContent>
             </Card>
             
-            {/* Mobile Only: View All Players & Teams Button */}
-            <div className="lg:hidden mt-2 px-1">
-              <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer" className="block">
-                <Button className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg" size="lg">
-                  <Trophy className="h-4 w-4 mr-2" />
-                  View All Players & Teams
-                </Button>
-              </Link>
-            </div>
+            {/* Mobile Only: View All Players & Teams Button - NOW MOVED TO BID AMOUNT STRIP */}
           </div>
 
           {/* Bid History - Desktop shows Live Activity, Mobile uses floating button */}

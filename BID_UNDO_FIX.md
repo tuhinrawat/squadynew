@@ -83,3 +83,4 @@ onBidUndo: (data) => {
 1. `src/components/activity-log.tsx` - Added bid-undo type and display logic
 2. `src/components/public-auction-view.tsx` - Updated onBidUndo handler to add visible entry
 
+

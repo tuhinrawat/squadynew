@@ -179,18 +179,16 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     return undefined
   }
 
-  // Get bidder photo - for retired players use bidderPhotoUrl, otherwise use logoUrl (team logo)
+  // Get bidder logo/photo - prioritize team logo (logoUrl), fallback to bidderPhotoUrl for retired players
   const getBidderPhotoUrl = (bidder: BidderWithUser) => {
-    // For retired players, use bidderPhotoUrl (bidder's personal photo)
-    // For regular bidders, use logoUrl (team logo)
-    // Check bidderPhotoUrl first (for retired players)
-    if (bidder.bidderPhotoUrl) return bidder.bidderPhotoUrl
-    
-    // Fallback to logoUrl (team logo) for regular bidders
+    // FIRST: Check logoUrl (team logo) - this is what should be displayed in team cards
     if (bidder.logoUrl) return bidder.logoUrl
     
-    // Legacy fallback: Check if this bidder was created from a retired player
-    // Match by username or user email (only if bidderPhotoUrl is not set)
+    // SECOND: For retired players, use bidderPhotoUrl (bidder's personal photo) as fallback
+    if (bidder.bidderPhotoUrl) return bidder.bidderPhotoUrl
+    
+    // THIRD: Legacy fallback - Check if this bidder was created from a retired player
+    // Match by username or user email
     const isRetiredPlayer = bidder.username?.startsWith('retired_')
     if (isRetiredPlayer) {
       const retiredPlayer = auction.players.find(p => {

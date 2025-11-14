@@ -388,28 +388,42 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             bidders={auctionWithRelations.bidders as unknown as Parameters<typeof PublicAuctionWrapper>[0]['bidders']}
           />
           
-          {/* Footer for Public View */}
-          <footer className="mt-8 sm:mt-8 bg-gray-900 dark:bg-black text-white py-6 px-4 fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto sm:left-auto sm:right-auto z-30">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-6 w-auto brightness-0 invert" />
-                  <span className="text-xs sm:text-sm text-gray-400">© 2025 Squady. All rights reserved.</span>
+          {/* Footer for Public View - Professional Single Line */}
+          <footer className="mt-8 sm:mt-8 bg-gradient-to-b from-gray-900 to-black border-t border-gray-800 fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto sm:left-auto sm:right-auto z-20">
+            <div className="max-w-7xl mx-auto px-3 py-3">
+              <div className="flex items-center justify-between gap-2">
+                {/* Left: Logo & Copyright */}
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <Image src="/squady-logo.svg" alt="Squady" width={80} height={26} className="h-4 sm:h-5 w-auto brightness-0 invert flex-shrink-0" />
+                  <div className="hidden sm:block w-px h-3 bg-gray-700" />
+                  <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">© 2025</span>
                 </div>
-                <div className="flex items-center gap-3">
+                
+                {/* Right: Social & Powered By */}
+                <div className="flex items-center gap-2 sm:gap-3">
                   <a 
                     href="https://www.instagram.com/squady.auction/" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-pink-400 hover:text-pink-300 transition-colors"
-                    aria-label="Follow us on Instagram"
+                    className="text-gray-400 hover:text-pink-400 transition-colors"
+                    aria-label="Instagram"
                   >
-                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                     </svg>
                   </a>
-                  <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-purple-600 text-white border-purple-500 shadow-sm hover:bg-purple-700">
-                    <span>Powered by</span>
+                  
+                  <div className="w-px h-3 bg-gray-700" />
+                  
+                  <a 
+                    href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-[10px] sm:text-xs font-medium shadow-sm hover:shadow-md transition-all whitespace-nowrap"
+                  >
+                    <svg className="h-2.5 w-2.5 sm:h-3 sm:w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
                     <span className="font-semibold">Professio AI</span>
                   </a>
                 </div>
@@ -557,27 +571,32 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
         viewMode={viewMode}
       />
       
-      {/* Footer */}
-      <footer className="mt-auto bg-gray-900 dark:bg-black text-white py-6 px-4 sticky top-[100vh]">
+      {/* Footer - Professional Single Line */}
+      <footer className="mt-auto bg-gradient-to-b from-gray-900 to-black border-t border-gray-800 py-3 px-4 sticky top-[100vh]">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-6 w-auto brightness-0 invert" />
-              <span className="text-sm text-gray-400">© 2025 Squady. All rights reserved.</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Image src="/squady-logo.svg" alt="Squady" width={80} height={26} className="h-4 sm:h-5 w-auto brightness-0 invert" />
+              <div className="hidden sm:block w-px h-3 bg-gray-700" />
+              <span className="text-xs text-gray-500">© 2025</span>
             </div>
-            <div className="flex items-center gap-4 sm:gap-6 text-sm text-gray-400">
+            <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500">
               <a 
                 href="https://www.instagram.com/squady.auction/" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-pink-400 hover:text-pink-300 transition-colors"
-                aria-label="Follow us on Instagram"
+                className="text-gray-400 hover:text-pink-400 transition-colors"
+                aria-label="Instagram"
               >
-                <Instagram className="h-5 w-5" />
+                <Instagram className="h-4 w-4" />
               </a>
-              <span>Status: {auction.status}</span>
+              <div className="w-px h-3 bg-gray-700" />
+              <span className="hidden sm:inline text-gray-500">Status: <span className="text-gray-400">{auction.status}</span></span>
               {session?.user?.role === 'SUPER_ADMIN' && (
-                <span>Super Admin Mode</span>
+                <>
+                  <div className="w-px h-3 bg-gray-700 hidden sm:block" />
+                  <span className="text-purple-400 text-xs hidden sm:inline">Admin</span>
+                </>
               )}
             </div>
           </div>

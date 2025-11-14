@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, Instagram, Clock } from 'lucide-react'
+import { MessageCircle, Instagram, Clock, Tv, MessageSquare } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { PROFESSIO_URL_HEADER } from '@/lib/constants'
 
@@ -16,9 +16,11 @@ const PublicChat = dynamic(
 interface PublicHeaderWithChatProps {
   auctionId: string
   onOpenBidHistory?: () => void // Callback to open bid history modal
+  chatMode: 'traditional' | 'livestream'
+  setChatMode: (mode: 'traditional' | 'livestream') => void
 }
 
-export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHeaderWithChatProps) {
+export function PublicHeaderWithChat({ auctionId, onOpenBidHistory, chatMode, setChatMode }: PublicHeaderWithChatProps) {
   const [isChatOpen, setIsChatOpen] = useState(false)
 
   return (
@@ -29,7 +31,7 @@ export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHead
             {/* Left: Logo */}
             <div className="flex items-center flex-shrink-0">
               <Link href="/" className="flex items-center">
-                <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
+                <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" priority />
               </Link>
             </div>
             {/* Right: Live Bids (mobile) + Instagram + Chat Icon + Professio Badge + Buttons */}
@@ -61,12 +63,38 @@ export function PublicHeaderWithChat({ auctionId, onOpenBidHistory }: PublicHead
                 <span className="hidden md:inline">Powered by</span>
                 <span className="font-semibold">Professio AI</span>
               </a>
-              {/* Chat Icon - Always visible */}
+              {/* Chat Mode Toggle - Mobile only */}
+              <Button
+                onClick={() => {
+                  if (chatMode === 'traditional') {
+                    setChatMode('livestream')
+                  } else {
+                    setChatMode('traditional')
+                  }
+                }}
+                size="sm"
+                variant="ghost"
+                className="lg:hidden relative text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 h-7 px-2 gap-1"
+                aria-label="Toggle Chat Mode"
+              >
+                {chatMode === 'traditional' ? (
+                  <>
+                    <Tv className="h-4 w-4" />
+                    <span className="text-xs font-semibold hidden sm:inline">Live</span>
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="h-4 w-4" />
+                    <span className="text-xs font-semibold hidden sm:inline">Chat</span>
+                  </>
+                )}
+              </Button>
+              {/* Traditional Chat Icon - Desktop only */}
               <Button
                 onClick={() => setIsChatOpen(true)}
                 variant="ghost"
                 size="sm"
-                className="relative text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 h-7 sm:h-9 px-1.5 sm:px-3"
+                className="hidden lg:flex relative text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/20 h-9 px-3"
                 aria-label="Open Chat"
               >
                 <MessageCircle className="h-4 w-4" />

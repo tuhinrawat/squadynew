@@ -251,3 +251,4 @@ Already implemented, but ensure it's used effectively
 - Admin view typically has fewer concurrent users (1-5 admins vs 100s of viewers)
 - Focus on smooth UI for admin operations over extreme scalability
 
+
