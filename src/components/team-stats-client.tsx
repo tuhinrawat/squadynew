@@ -548,7 +548,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             <span className="text-sm sm:text-lg font-semibold text-white drop-shadow-lg">{team.totalPlayers}</span>
                           </div>
                           <div className="flex items-center justify-between bg-black/20 -mx-2 px-2 py-1 rounded">
-                            <span className="text-[11px] sm:text-sm text-white font-semibold">Max Spend Now</span>
+                            <span className="text-[6px] text-white font-semibold">Current Player Max Bid Allowed</span>
                             <span className="text-sm sm:text-lg font-bold text-lime-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                               {team.remainingSlots > 0
                                 ? `₹${team.maxSpendableNow.toLocaleString('en-IN')}`
@@ -556,7 +556,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             </span>
                           </div>
                           <div className="flex items-center justify-between bg-black/20 -mx-2 px-2 py-1 rounded">
-                            <span className="text-[11px] sm:text-sm text-white/90 font-medium">Reserved ({team.remainingSlots} slots)</span>
+                            <span className="text-[6px] text-white/90 font-medium">Reserve for remaining squad</span>
                             <span className="text-sm sm:text-base font-semibold text-orange-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                               {team.remainingSlots > 0
                                 ? `₹${team.requiredReserve.toLocaleString('en-IN')}`
@@ -596,14 +596,14 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                               <p className="text-xs sm:text-sm text-white font-medium truncate drop-shadow-md">
                                 ₹{team.remainingPurse.toLocaleString('en-IN')} remaining
                               </p>
-                              <p className="text-[10px] sm:text-xs text-lime-300 font-bold truncate drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                                Max Spend: {team.remainingSlots > 0
+                              <p className="text-[8px] sm:text-[9px] text-lime-300 font-bold truncate drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                                Current Player Max Bid Allowed: {team.remainingSlots > 0
                                   ? `₹${team.maxSpendableNow.toLocaleString('en-IN')}`
                                   : 'Team Full'}
                               </p>
-                              <p className="text-[10px] sm:text-xs text-orange-300 font-semibold truncate drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                                Reserved: {team.remainingSlots > 0
-                                  ? `₹${team.requiredReserve.toLocaleString('en-IN')} (${team.remainingSlots} slots)`
+                              <p className="text-[8px] sm:text-[9px] text-orange-300 font-semibold truncate drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                                Reserve for remaining squad: {team.remainingSlots > 0
+                                  ? `₹${team.requiredReserve.toLocaleString('en-IN')}`
                                   : 'N/A'}
                               </p>
                             </div>
@@ -1378,15 +1378,15 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     <p className="text-base sm:text-lg font-bold text-white">{selectedTeamData?.totalPlayers}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-white font-semibold">Max Spend Now</p>
+                    <p className="text-[9px] sm:text-[10px] text-white font-semibold">Current Player Max Bid Allowed</p>
                     <p className="text-base sm:text-lg font-bold text-lime-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                       {selectedTeamData && selectedTeamData.remainingSlots > 0
                         ? `₹${selectedTeamData.maxSpendableNow.toLocaleString('en-IN')}`
                         : 'Team Full'}
                     </p>
                     {selectedTeamData && (
-                      <p className="text-[10px] text-orange-300 font-semibold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                        Reserved: ₹{selectedTeamData.requiredReserve.toLocaleString('en-IN')} ({selectedTeamData.remainingSlots} slots)
+                      <p className="text-[8px] sm:text-[9px] text-orange-300 font-semibold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+                        Reserve for remaining squad: ₹{selectedTeamData.requiredReserve.toLocaleString('en-IN')}
                       </p>
                     )}
                   </div>
