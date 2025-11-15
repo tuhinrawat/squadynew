@@ -105,6 +105,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [localCurrentPlayer, setLocalCurrentPlayer] = useState(currentPlayer)
   
+  // Real-time stats calculated from players state
+  const stats = useMemo(() => {
+    const total = players.length
+    const sold = players.filter(p => p.status === 'SOLD').length
+    const unsold = players.filter(p => p.status === 'UNSOLD').length
+    const remaining = players.filter(p => p.status === 'AVAILABLE').length
+    return { total, sold, unsold, remaining }
+  }, [players])
+  
   // Bid error state for public view
   const errorIdRef = useRef(0)
   const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
@@ -334,6 +343,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     onPlayerSold: (data) => {
       logger.log('PublicAuctionView player sold')
       
+      // Update players state to reflect sold status (for real-time stats update)
+      if (data.playerId) {
+        setPlayers(prev => prev.map(p => 
+          p.id === data.playerId 
+            ? { ...p, status: 'SOLD' as const, soldTo: data.bidderId, soldPrice: data.amount }
+            : p
+        ))
+      }
+      
       // Add sold event to bid history using the latest bid in history
       setBidHistory(prev => {
         const latestBid = prev.length > 0 ? prev[0] : null // Latest is now first
@@ -446,6 +464,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       window.location.reload()
     },
     onPlayersUpdated: (data) => {
+      // Update players state if provided (for real-time stats update)
+      if (data.players) {
+        setPlayers(prev => prev.map(p => {
+          const update = data.players!.find(up => up.id === p.id)
+          return update || p
+        }))
+      }
+      
       // Update from Pusher data if available (no API call needed)
       if (data.bidders) {
         setBiddersState(prev => prev.map(b => {
@@ -453,7 +479,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           return update ? { ...b, remainingPurse: update.remainingPurse } : b
         }))
       }
-      // Note: players update handled via onPlayerSold
     },
     onBidError: (data) => {
       // Display error message in public view
@@ -618,23 +643,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             <div className="flex items-center gap-3">
               <h1 className="text-lg sm:text-xl font-black text-white uppercase">{auction.name}</h1>
               <Badge className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 animate-pulse">● LIVE</Badge>
-              <Badge className="bg-white/10 text-white border-white/20 text-[10px] font-semibold px-2 py-0.5 hidden sm:inline-flex">Public Viewer</Badge>
-              {viewerCount > 0 && (
-                <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] font-semibold px-2 py-0.5 animate-pulse">
-                  <Eye className="h-3 w-3 mr-1" />
-                  {viewerCount}
-                </Badge>
-              )}
             </div>
             
             {/* Right: Stats & Button */}
             <div className="flex items-center gap-4">
-              {/* Stats Display - Memoized for performance */}
+              {/* Stats Display - Memoized for performance - using real-time stats */}
               <StatsDisplay 
-                total={initialStats.total}
-                sold={initialStats.sold}
-                unsold={initialStats.unsold}
-                remaining={initialStats.remaining}
+                total={stats.total}
+                sold={stats.sold}
+                unsold={stats.unsold}
+                remaining={stats.remaining}
               />
               
               <div className="flex items-center gap-2">
