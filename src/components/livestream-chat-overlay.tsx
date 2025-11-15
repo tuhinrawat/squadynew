@@ -285,11 +285,6 @@ export function LiveStreamChatOverlay({ auctionId }: LiveStreamChatOverlayProps)
           transition={{ 
             duration: 0.3,
             delay: 0,
-            exit: { 
-              duration: 1.2, 
-              ease: [0.4, 0, 0.2, 1],
-              times: [0, 0.3, 0.6, 1]
-            },
             layout: { duration: 0.2 }
           }}
           layout

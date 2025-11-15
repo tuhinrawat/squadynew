@@ -49,6 +49,7 @@ export default function BidderManagement() {
   const [isCreating, setIsCreating] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [isFixingImages, setIsFixingImages] = useState(false)
+  const [isFixingBidderLength, setIsFixingBidderLength] = useState(false)
   const [editingBidder, setEditingBidder] = useState<Bidder | null>(null)
 
   const [formData, setFormData] = useState({
@@ -291,6 +292,71 @@ export default function BidderManagement() {
     }
   }
 
+  const handleFixBidderLength = async () => {
+    if (!confirm('This will validate retired players and create missing bidders to ensure database consistency. Continue?')) return
+
+    setError('')
+    setSuccess('')
+    setIsFixingBidderLength(true)
+
+    try {
+      const response = await fetch('/api/debug/fix-bidder-length', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auctionId })
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        // Show detailed results
+        const errorDetails = result.results
+          .filter((r: any) => r.status === 'error')
+          .map((r: any) => `${r.playerName || r.playerId}: ${r.message}`)
+          .join(', ')
+
+        if (result.summary.created > 0) {
+          setSuccess(
+            `Successfully created ${result.summary.created} missing bidder(s). ` +
+            `${result.summary.skipped} skipped (already exist), ${result.summary.errors} errors.` +
+            (errorDetails ? ` Errors: ${errorDetails}` : '')
+          )
+        } else {
+          setSuccess(
+            `All retired players have bidders. ` +
+            `${result.summary.skipped} skipped (bidders already exist), ${result.summary.errors} errors. ` +
+            (errorDetails ? `Details: ${errorDetails}` : '')
+          )
+        }
+
+        // Log full results for debugging
+        console.log('Fix Bidder Length Results:', JSON.stringify(result, null, 2))
+        console.log('Summary:', result.summary)
+        if (result.results && result.results.length > 0) {
+          console.log('Individual Results:', result.results)
+          const errors = result.results.filter((r: any) => r.status === 'error')
+          if (errors.length > 0) {
+            console.error('Errors found:', errors)
+          }
+        }
+
+        // Refresh bidders to show newly created bidders
+        await fetchBidders()
+      } else {
+        // Show full error details
+        const errorMessage = result.error || 'Failed to fix bidder length'
+        const errorDetails = result.details ? ` Details: ${result.details}` : ''
+        setError(errorMessage + errorDetails)
+        console.error('Fix bidder length error:', result)
+      }
+    } catch (error) {
+      setError('Network error. Please try again.')
+      console.error('Network error:', error)
+    } finally {
+      setIsFixingBidderLength(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -316,6 +382,24 @@ export default function BidderManagement() {
               <>
                 <ImageIcon className="h-4 w-4 mr-2" />
                 Fix Bidder Images
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={handleFixBidderLength}
+            disabled={isFixingBidderLength}
+            variant="outline"
+            className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+          >
+            {isFixingBidderLength ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Fixing...
+              </>
+            ) : (
+              <>
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Fix Bidder Length
               </>
             )}
           </Button>

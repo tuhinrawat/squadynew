@@ -417,7 +417,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     if (isFull || currentPlayer) {
       console.log('[Team Full Check]', {
         bidderId: userBidder.id,
-        bidderName: userBidder.teamName || userBidder.username,
+        bidderName: userBidder.user?.name || userBidder.teamName || userBidder.username,
         playersBought,
         maxTeamSize,
         maxPlayersCanBuy: maxTeamSize - 1,
@@ -545,11 +545,16 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       
       // Update current bid to the latest bid (only if it's a bid event)
       if (latestBid && latestBid.amount && latestBid.bidderId && latestBid.bidderName) {
+        // Get actual bidder name from bidders array to ensure we use name, not username
+        const actualBidder = bidders.find(b => b.id === latestBid.bidderId)
+        const actualBidderName = actualBidder?.user?.name || latestBid.bidderName || 'Bidder'
+        const actualTeamName = actualBidder?.teamName || latestBid.teamName
+        
         setCurrentBid({
           bidderId: latestBid.bidderId,
           amount: latestBid.amount,
-          bidderName: latestBid.bidderName,
-          teamName: latestBid.teamName
+          bidderName: actualBidderName,
+          teamName: actualTeamName
         })
         setHighestBidderId(latestBid.bidderId)
       } else {
@@ -562,7 +567,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       setCurrentBid(null)
       setHighestBidderId(null)
     }
-  }, [currentPlayer?.id, playerBidHistory])
+  }, [currentPlayer?.id, playerBidHistory, bidders])
 
   // Reset image loading when player changes (but not on initial load)
   useEffect(() => {
@@ -660,28 +665,39 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         // Remove the undone bid from history
         const withoutUndone = prev.filter((_, index) => index !== firstBidIndex)
 
+        // Get actual bidder name from bidders array (not from history entry which might have username)
+        const actualBidder = bidders.find(b => b.id === undoneBid.bidderId)
+        const actualBidderName = actualBidder?.user?.name || undoneBid.bidderName || 'Bidder'
+        const actualTeamName = actualBidder?.teamName || undoneBid.teamName
+
         // Add visible "BID UNDONE" entry at the beginning
         return [{
           bidderId: undoneBid.bidderId,
           amount: undoneBid.amount,
           timestamp: new Date(),
-          bidderName: undoneBid.bidderName,
-          teamName: undoneBid.teamName,
+          bidderName: actualBidderName,
+          teamName: actualTeamName,
           type: 'bid-undo' as const,
           playerId: undoneBid.playerId
         }, ...withoutUndone]
       })
       
-      // Update current bid
+      // Update current bid - validate bidderName from bidders array
       if (data.currentBid && data.currentBid.amount > 0) {
         console.log('Setting current bid to:', data.currentBid)
+        // Get actual bidder name from bidders array to ensure we use name, not username
+        const currentBid = data.currentBid // Store in local variable for TypeScript
+        const actualBidder = bidders.find(b => b.id === currentBid.bidderId)
+        const actualBidderName = actualBidder?.user?.name || currentBid.bidderName || 'Bidder'
+        const actualTeamName = actualBidder?.teamName || currentBid.teamName
+        
         setCurrentBid({
-          bidderId: data.currentBid.bidderId,
-          amount: data.currentBid.amount,
-          bidderName: data.currentBid.bidderName,
-          teamName: data.currentBid.teamName
+          bidderId: currentBid.bidderId,
+          amount: currentBid.amount,
+          bidderName: actualBidderName,
+          teamName: actualTeamName
         })
-        setHighestBidderId(data.currentBid.bidderId)
+        setHighestBidderId(currentBid.bidderId)
       } else {
         console.log('Clearing current bid (no previous bid)')
         setCurrentBid(null)
@@ -704,7 +720,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       }
       
       console.log('✅ handleBidUndo completed')
-  }, [])
+  }, [bidders])
 
   const handleSaleUndo = useCallback((data: PusherSaleUndoData) => {
       console.log('🔄 Sale undo event received:', data)
@@ -947,7 +963,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 const isFull = playersBought >= maxTeamSize - 1
                 console.log('[New Player Loaded] Team size check:', {
                   bidderId: userBidder.id,
-                  bidderName: userBidder.teamName || userBidder.username,
+                  bidderName: userBidder.user?.name || userBidder.teamName || userBidder.username,
                   playersBought,
                   maxTeamSize,
                   maxPlayersCanBuy: maxTeamSize - 1,
@@ -1006,7 +1022,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             const isFull = playersBought >= maxTeamSize - 1
             console.log('[Players Updated] Team size check:', {
               bidderId: userBidder.id,
-              bidderName: userBidder.teamName || userBidder.username,
+              bidderName: userBidder.user?.name || userBidder.teamName || userBidder.username,
               playersBought,
               maxTeamSize,
               maxPlayersCanBuy: maxTeamSize - 1,
@@ -1125,11 +1141,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const handleMarkSold = async () => {
     if (!currentPlayer || !currentBid) return
 
-    // Optimistic UI update - show sold animation immediately
+    // Set loading state - but DON'T show sold animation until API confirms success
     setIsMarkingSold(true)
-    setSoldAnimation(true)
     
-    // Fire-and-forget API call - don't block UI
+    // API call - wait for success before showing animation
     fetch(`/api/auction/${auction.id}/mark-sold`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1139,6 +1154,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         if (response.ok) {
           const data = await response.json()
           toast.success('Player marked as sold!')
+          
+          // Only show sold animation AFTER API confirms success
+          // The Pusher event will also trigger handlePlayerSold which shows the animation,
+          // but we show it here too in case Pusher is delayed
+          setSoldAnimation(true)
           
           // Trigger reveal animation immediately if we have next player
           if (data.nextPlayer) {
@@ -1178,6 +1198,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             }, 12000)
           }
           
+          // Auto-hide sold animation after 3 seconds (Pusher event will also handle this)
           setTimeout(() => {
             setSoldAnimation(false)
             setCurrentBid(null)
@@ -1185,16 +1206,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             setHighestBidderId(null)
           }, 3000)
         } else {
+          // API call failed - show error and don't show sold animation
           const errorData = await response.json()
           toast.error(errorData.error || 'Failed to mark as sold')
           setIsMarkingSold(false)
-          setSoldAnimation(false)
+          // Don't set soldAnimation here - it was never shown
         }
       })
       .catch(() => {
+        // Network error - show error and don't show sold animation
         toast.error('Network error')
         setIsMarkingSold(false)
-        setSoldAnimation(false)
+        // Don't set soldAnimation here - it was never shown
       })
   }
 

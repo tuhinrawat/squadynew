@@ -219,8 +219,10 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     // Bidder counts as 1 player in the squad, so they need to buy (mandatoryTeamSize - 1) players
     const remainingSlots = Math.max(0, (mandatoryTeamSize - 1) - soldPlayers.length)
     
-    // Calculate maximum spendable based on purse reinforcement logic
-    const requiredReserve = remainingSlots * minPerPlayerReserve
+    // Calculate maximum bid for current player being auctioned
+    // After buying current player, remaining slots = remainingSlots - 1
+    const remainingSlotsAfterCurrentPurchase = Math.max(0, remainingSlots - 1)
+    const requiredReserve = remainingSlotsAfterCurrentPurchase * minPerPlayerReserve
     const maxSpendableNow = Math.max(0, remainingPurse - requiredReserve)
 
     return {
