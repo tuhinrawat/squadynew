@@ -19,6 +19,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 	const batting = fields.find(f => f.label === 'Batting')?.value || ''
 	const bowling = fields.find(f => f.label === 'Bowling')?.value || ''
 	const fielding = fields.find(f => f.label === 'Fielding')?.value || ''
+	const wicketKeeper = fields.find(f => f.label === 'Wicket Keeper')?.value || ''
 	
 	return (
 		<div className="relative rounded-xl overflow-hidden w-full max-w-4xl mx-auto font-['Montserrat']">
@@ -95,20 +96,28 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							)}
 						</div>
 						
-					{/* Stats below image on mobile, hidden on desktop */}
+					{/* Stats below image on mobile, hidden on desktop - Two column format */}
 					<div className="flex flex-col lg:hidden items-center gap-1 sm:gap-4 mt-1 sm:mt-4 w-full">
-						{batting && (
-							<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
-								<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BATSMEN</span>
-								<span className="text-sm sm:text-2xl font-black text-white uppercase">{batting}</span>
-							</div>
-						)}
-						{bowling && (
-							<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
-								<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BOWLER</span>
-								<span className="text-sm sm:text-2xl font-black text-white uppercase">{bowling}</span>
-							</div>
-						)}
+						<div className="grid grid-cols-2 gap-2 sm:gap-4 w-full max-w-xs">
+							{batting && (
+								<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
+									<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BATSMEN</span>
+									<span className="text-sm sm:text-2xl font-black text-white uppercase">{batting}</span>
+								</div>
+							)}
+							{bowling && (
+								<div className="flex flex-col gap-0.5 sm:gap-1 items-center">
+									<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">BOWLER</span>
+									<span className="text-sm sm:text-2xl font-black text-white uppercase">{bowling}</span>
+								</div>
+							)}
+							{wicketKeeper && (
+								<div className="flex flex-col gap-0.5 sm:gap-1 items-center col-span-2">
+									<span className="text-[10px] sm:text-sm font-semibold text-white/70 uppercase tracking-widest">WICKET KEEPER</span>
+									<span className="text-sm sm:text-2xl font-black text-white uppercase">{wicketKeeper}</span>
+								</div>
+							)}
+						</div>
 						
 					{/* Cricheroes Profile Link - Mobile */}
 					{profileLink && (
@@ -136,6 +145,12 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], isL
 							<div className="flex flex-col gap-2">
 								<span className="text-sm sm:text-base font-semibold text-white/70 uppercase tracking-widest">BOWLER</span>
 								<span className="text-2xl sm:text-3xl lg:text-4xl font-black text-white uppercase">{bowling}</span>
+							</div>
+						)}
+						{wicketKeeper && (
+							<div className="flex flex-col gap-2">
+								<span className="text-sm sm:text-base font-semibold text-white/70 uppercase tracking-widest">WICKET KEEPER</span>
+								<span className="text-2xl sm:text-3xl lg:text-4xl font-black text-white uppercase">{wicketKeeper}</span>
 							</div>
 						)}
 						

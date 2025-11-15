@@ -766,6 +766,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       add('Bowling', ['Bowling', 'bowling', 'Bowling Type', 'bowling type', 'BOWL', 'Bowl'])
                       add('Fielding', ['Fielding', 'fielding', 'FIELD', 'Field'])
                       add('Speciality', ['Speciality', 'speciality', 'Specialty', 'specialty', 'Role', 'role'])
+                      add('Wicket Keeper', ['Wicket Keeper', 'wicket keeper', 'Wicket Keeper', 'WicketKeeper', 'wicketKeeper', 'WK', 'wk'])
                       return essentials
                     })()}
                   />
