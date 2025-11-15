@@ -138,8 +138,10 @@ export async function POST(
 
     // Check if bidder has sufficient remaining purse for the bid amount
     if (winningBidder.remainingPurse < highestBid.amount) {
+      const bidderName = winningBidder.user?.name || winningBidder.username
+      const teamName = winningBidder.teamName || 'No Team'
       return NextResponse.json({
-        error: `Insufficient funds. Bidder has ₹${winningBidder.remainingPurse.toLocaleString('en-IN')} remaining, but bid amount is ₹${highestBid.amount.toLocaleString('en-IN')}.`
+        error: `${bidderName} (${teamName}): Insufficient funds. Bidder has ₹${winningBidder.remainingPurse.toLocaleString('en-IN')} remaining, but bid amount is ₹${highestBid.amount.toLocaleString('en-IN')}.`
       }, { status: 400 })
     }
 
@@ -162,8 +164,10 @@ export async function POST(
     // CRITICAL: Team size includes the bidder, so if they've bought (maxTeamSize - 1) players,
     // their team is full. Use >= instead of > to catch the exact limit.
     if (maxTeamSize && playersBoughtByBidder >= maxTeamSize - 1) {
+      const bidderName = winningBidder.user?.name || winningBidder.username
+      const teamName = winningBidder.teamName || 'No Team'
       return NextResponse.json({
-        error: `Team size limit reached (max ${maxTeamSize} players including you). Cannot acquire more players.`
+        error: `${bidderName} (${teamName}): Team size limit reached (max ${maxTeamSize} players including you). Cannot acquire more players.`
       }, { status: 400 })
     }
 
@@ -176,8 +180,10 @@ export async function POST(
       const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
       const remainingAfterBid = winningBidder.remainingPurse - highestBid.amount
       if (remainingAfterBid < requiredReserve) {
+        const bidderName = winningBidder.user?.name || winningBidder.username
+        const teamName = winningBidder.teamName || 'No Team'
         return NextResponse.json({
-          error: `Sale would leave insufficient purse to complete mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after sale: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`
+          error: `${bidderName} (${teamName}): Sale would leave insufficient purse to complete mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after sale: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`
         }, { status: 400 })
       }
     }

@@ -233,10 +233,11 @@ export async function POST(
         const canBidAllMoney = remainingSlotsAfterThis === 1 && remainingAfterBid === 0
         
         if (!canBidAllMoney && remainingAfterBid < requiredReserve) {
-          const bidderDisplayName = bidder.teamName || bidder.user?.name || bidder.username
+          const bidderName = bidder.user?.name || bidder.username
+          const teamName = bidder.teamName || 'No Team'
           return broadcastBidError(
             params.id,
-            `This bid would leave insufficient purse to complete the mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after bid: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`,
+            `${bidderName} (${teamName}): This bid would leave insufficient purse to complete the mandatory squad of ${mandatoryTeamSize}. Required reserve: ₹${requiredReserve.toLocaleString('en-IN')}, remaining after bid: ₹${Math.max(remainingAfterBid, 0).toLocaleString('en-IN')}.`,
             bidder.user?.name || bidder.username,
             bidder.id
           )
