@@ -170,8 +170,9 @@ export async function POST(
     if (mandatoryTeamSize) {
       // Calculate remaining slots after this purchase
       // mandatoryTeamSize includes the bidder, so players to buy = mandatoryTeamSize - 1
-      // After buying current player: remainingSlots = (mandatoryTeamSize - 1) - playersBoughtByBidder
-      const remainingSlotsAfterThis = Math.max((mandatoryTeamSize - 1) - playersBoughtByBidder, 0)
+      // After buying current player: remainingSlots = (mandatoryTeamSize - 1) - (playersBoughtByBidder + 1)
+      // The +1 accounts for the current player being purchased
+      const remainingSlotsAfterThis = Math.max((mandatoryTeamSize - 1) - (playersBoughtByBidder + 1), 0)
       const requiredReserve = remainingSlotsAfterThis * minPerPlayerReserve
       const remainingAfterBid = winningBidder.remainingPurse - highestBid.amount
       if (remainingAfterBid < requiredReserve) {
