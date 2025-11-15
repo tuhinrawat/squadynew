@@ -130,15 +130,13 @@ export async function POST(
 
     // Handle emoji reactions (lightweight, no DB write)
     if (emoji) {
-      if (!username || !userId) {
-        return NextResponse.json(
-          { error: 'Username and userId required for reactions' },
-          { status: 400 }
-        )
-      }
+      // Reactions don't require username - use anonymous if not provided
+      // userId is required for rate limiting (generate if not provided)
+      const reactionUserId = userId || `anon-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const reactionUsername = username || 'Anonymous'
 
-      // Rate limit reactions
-      const userKey = `reaction-${auctionId}-${userId}`
+      // Rate limit reactions using userId
+      const userKey = `reaction-${auctionId}-${reactionUserId}`
       const rateLimitResult = reactionRateLimiter.check(userKey)
       
       if (!rateLimitResult.allowed) {
@@ -151,8 +149,8 @@ export async function POST(
       // Broadcast reaction (fire and forget - no await for speed)
       pusher.trigger(`auction-${auctionId}`, 'emoji-reaction', {
         emoji,
-        username: sanitizeInput(username, 50),
-        userId,
+        username: sanitizeInput(reactionUsername, 50),
+        userId: reactionUserId,
         timestamp: Date.now()
       }).catch(err => console.error('Pusher error:', err))
 

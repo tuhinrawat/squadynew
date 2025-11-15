@@ -291,27 +291,22 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
     }
   }, [message, isSending, auctionId, username, userId])
 
-  const sendEmojiReaction = useCallback(async (emoji: string) => {
-    // Send emoji to server to broadcast to all users
+  const sendEmojiReaction = useCallback((emoji: string) => {
+    // Send emoji to server to broadcast to all users (fire-and-forget for speed)
     console.log('🎭 Sending emoji reaction:', emoji)
-    try {
-      const response = await fetch(`/api/auction/${auctionId}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          username, 
-          userId,
-          emoji 
-        })
+    // Use anonymous username if not set, or the set username
+    const reactionUsername = username || 'Anonymous'
+    
+    // Fire and forget - don't await for instant UI response
+    fetch(`/api/auction/${auctionId}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        username: reactionUsername, 
+        userId: userId || `anon-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        emoji 
       })
-      if (response.ok) {
-        console.log('✅ Emoji reaction sent successfully')
-      } else {
-        console.error('❌ Emoji reaction failed:', response.status)
-      }
-    } catch (error) {
-      console.error('Failed to send emoji reaction:', error)
-    }
+    }).catch(err => console.error('Failed to send emoji reaction:', err))
   }, [auctionId, username, userId])
 
   return (
@@ -463,12 +458,11 @@ export function PublicChat({ auctionId, rightOffsetClass, hideFloatingButton = f
                       <motion.button
                         key={emoji}
                         onClick={() => {
-                          console.log('🎯 Emoji clicked:', emoji, 'hasUsername:', hasSetUsername, 'username:', username)
+                          console.log('🎯 Emoji clicked:', emoji)
                           sendEmojiReaction(emoji)
                         }}
                         whileTap={{ scale: 1.5 }}
-                        disabled={!hasSetUsername}
-                        className="text-3xl hover:scale-125 transition-transform active:scale-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-3xl hover:scale-125 transition-transform active:scale-150"
                       >
                         {emoji}
                       </motion.button>
