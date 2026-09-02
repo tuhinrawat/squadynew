@@ -138,6 +138,177 @@ interface AuctionRules {
   // Add other rule properties as needed
 }
 
+interface BidConsolePanelProps {
+  bidders: BidderWithUser[]
+  highestBidderId: string | null
+  currentBid: { bidderId: string; amount: number; bidderName: string; teamName?: string } | null
+  isPlacingBid: boolean
+  minIncrement: number
+  selectedAmount: number | null
+  selectedBidderId: string | null
+  customInput: string
+  onSelectAmount: (amount: number | null) => void
+  onSelectBidder: (id: string) => void
+  onCustomInputChange: (raw: string) => void
+  onConfirm: () => void
+  showClose?: boolean
+  onClose?: () => void
+}
+
+// A real, stable, module-scope component - NOT a useCallback/useMemo defined
+// inline in AdminAuctionView's render. A component whose function identity
+// changes across renders (as a useCallback would, once its deps include
+// fast-changing state like typed input) makes React treat each render as a
+// different component TYPE, unmounting and remounting the whole subtree -
+// including the <input> DOM node, which drops focus after every keystroke.
+// Taking props instead of closing over parent state keeps this identity
+// stable while still reflecting every state change via normal re-renders.
+function BidConsolePanel({
+  bidders,
+  highestBidderId,
+  currentBid,
+  isPlacingBid,
+  minIncrement,
+  selectedAmount,
+  selectedBidderId,
+  customInput,
+  onSelectAmount,
+  onSelectBidder,
+  onCustomInputChange,
+  onConfirm,
+  showClose = false,
+  onClose
+}: BidConsolePanelProps) {
+  const currentBidAmount = currentBid?.amount || 0
+  // Chips are always expressed as "current bid + N increments" so they're
+  // always valid and always relevant, however high the price has climbed -
+  // but labeled with the resulting absolute total, since that's what gets
+  // called out on the floor ("ten thousand!", not "plus six thousand!").
+  const chipMultiples = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50]
+  const quickAmounts = chipMultiples.map(m => currentBidAmount + m * minIncrement)
+  const selectedBidder = bidders.find(b => b.id === selectedBidderId)
+  const amountInvalid = selectedAmount != null && selectedAmount <= currentBidAmount
+  const canConfirm = selectedAmount != null && !!selectedBidderId && !amountInvalid && !isPlacingBid
+
+  return (
+    <div className="h-screen w-full bg-[#0b0f16] shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto overflow-hidden">
+      <div className="p-3 bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg flex flex-col gap-1 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-white" />
+            <div className="text-sm font-bold text-white">Bidding Console</div>
+          </div>
+          {showClose && (
+            <button
+              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-2 py-1 text-xs font-medium transition-all"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          )}
+        </div>
+        <div className="flex items-baseline gap-1.5 text-white">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Current Bid</span>
+          <span className="text-base font-black tabular-nums">₹{currentBidAmount.toLocaleString('en-IN')}</span>
+          {currentBid?.bidderName && <span className="text-xs font-semibold text-white/85">&middot; {currentBid.bidderName}</span>}
+        </div>
+      </div>
+
+      {/* Amount composer */}
+      <div className="p-2.5 border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Amount Heard</span>
+          {selectedAmount != null && (
+            <button
+              className="text-[10px] font-bold text-gray-500 hover:text-gray-300"
+              onClick={() => onSelectAmount(null)}
+            >
+              Clear &times;
+            </button>
+          )}
+        </div>
+        <div className={`rounded-lg border px-3 py-2 mb-2 text-center ${amountInvalid ? 'border-red-500/50' : 'border-white/10'} bg-white/[0.04]`}>
+          <span className={`text-xl font-black tabular-nums ${selectedAmount == null ? 'text-gray-600' : amountInvalid ? 'text-red-400' : 'text-teal-400'}`}>
+            {selectedAmount != null ? `₹${selectedAmount.toLocaleString('en-IN')}` : 'Tap or type'}
+          </span>
+          {amountInvalid && (
+            <div className="text-[10px] font-bold text-red-400 mt-0.5">Must exceed ₹{(currentBidAmount + minIncrement).toLocaleString('en-IN')}</div>
+          )}
+        </div>
+        <div className="grid grid-cols-6 gap-1">
+          {quickAmounts.map(amt => (
+            <button
+              key={amt}
+              className={`h-7 rounded text-[10px] font-bold ${selectedAmount === amt ? 'bg-teal-500 text-gray-950' : 'bg-white/[0.06] text-gray-200 hover:bg-white/[0.12]'}`}
+              onClick={() => onSelectAmount(amt)}
+            >
+              {amt >= 100000 ? `${amt / 100000}L` : `${amt / 1000}K`}
+            </button>
+          ))}
+        </div>
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="Type an exact amount"
+          value={customInput}
+          onChange={(e) => onCustomInputChange(e.target.value)}
+          className="w-full mt-2 bg-white/[0.05] border border-white/15 rounded-md px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500"
+        />
+      </div>
+
+      {/* Bidder roster */}
+      <div className="p-2.5 flex-1 min-h-0 overflow-y-auto">
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tap Who Called It &middot; {bidders.length} Bidders</div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {bidders.map(bidder => {
+            const isLeader = bidder.id === highestBidderId
+            const isSelected = bidder.id === selectedBidderId
+            return (
+              <button
+                key={bidder.id}
+                disabled={isLeader}
+                onClick={() => onSelectBidder(bidder.id)}
+                className={`text-left p-1.5 rounded-lg border flex items-center gap-1.5 min-w-0 ${
+                  isLeader
+                    ? 'bg-green-500/10 border-green-500/40 cursor-not-allowed'
+                    : isSelected
+                    ? 'bg-teal-500/15 border-teal-500'
+                    : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
+                }`}
+              >
+                <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isLeader ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200'}`}>
+                  {(bidder.user?.name || bidder.username || '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className={`text-[10px] font-bold truncate ${isLeader ? 'text-green-300' : 'text-gray-100'}`}>{bidder.user?.name || bidder.username || 'Bidder'}</div>
+                  {bidder.teamName && <div className="text-[9px] font-medium truncate text-gray-500">{bidder.teamName}</div>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Confirm bar */}
+      <div className="p-2.5 border-t border-white/10 bg-[#0f141d] flex-shrink-0">
+        {canConfirm && selectedBidder && (
+          <div className="text-[11px] text-gray-400 text-center mb-1.5">
+            Confirm <span className="text-teal-400 font-bold">₹{selectedAmount!.toLocaleString('en-IN')}</span> for{' '}
+            <span className="text-white font-bold">{selectedBidder.user?.name || selectedBidder.username}</span>?
+          </div>
+        )}
+        <Button
+          className={`w-full h-11 font-bold ${canConfirm ? 'bg-teal-500 hover:bg-teal-600 text-gray-950' : 'bg-white/[0.06] text-gray-600'}`}
+          disabled={!canConfirm}
+          onClick={onConfirm}
+        >
+          {isPlacingBid ? 'Placing...' : 'Confirm Bid'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 interface AdminAuctionViewProps {
   auction: Auction & {
     players: Player[]
@@ -300,143 +471,18 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       })
   }, [consoleSelectedBidderId, consoleSelectedAmount, isPlacingBid, placingBidFor, sortedBidders, currentBid, highestBidderId, auction, currentPlayer, pushBidError])
 
-  // Bidding console panel component
-  const BidConsolePanel = useCallback(({ showClose = false, onClose }: { showClose?: boolean; onClose?: () => void }) => {
-    const rules = auction.rules as AuctionRules | undefined
-    const minIncrement = rules?.minBidIncrement || 1000
-    const currentBidAmount = currentBid?.amount || 0
-    // Chips are always expressed as "current bid + N increments" so they're
-    // always valid and always relevant, however high the price has climbed -
-    // but labeled with the resulting absolute total, since that's what gets
-    // called out on the floor ("ten thousand!", not "plus six thousand!").
-    const chipMultiples = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30, 40, 50]
-    const quickAmounts = chipMultiples.map(m => currentBidAmount + m * minIncrement)
-    const selectedBidder = sortedBidders.find(b => b.id === consoleSelectedBidderId)
-    const amountInvalid = consoleSelectedAmount != null && consoleSelectedAmount <= currentBidAmount
-    const canConfirm = consoleSelectedAmount != null && !!consoleSelectedBidderId && !amountInvalid && !isPlacingBid
+  // Picking an amount (chip tap or clear) always also resets any typed text,
+  // since the two represent the same underlying selection.
+  const handleConsoleSelectAmount = useCallback((amount: number | null) => {
+    setConsoleSelectedAmount(amount)
+    setConsoleCustomInput('')
+  }, [])
 
-    return (
-    <div className="h-screen w-full bg-[#0b0f16] shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto overflow-hidden">
-      <div className="p-3 bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg flex flex-col gap-1 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-white" />
-            <div className="text-sm font-bold text-white">Bidding Console</div>
-          </div>
-          {showClose && (
-            <button
-              className="text-white/90 hover:text-white hover:bg-white/20 rounded-lg px-2 py-1 text-xs font-medium transition-all"
-              onClick={onClose}
-            >
-              Close
-            </button>
-          )}
-        </div>
-        <div className="flex items-baseline gap-1.5 text-white">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Current Bid</span>
-          <span className="text-base font-black tabular-nums">₹{currentBidAmount.toLocaleString('en-IN')}</span>
-          {currentBid?.bidderName && <span className="text-xs font-semibold text-white/85">&middot; {currentBid.bidderName}</span>}
-        </div>
-      </div>
-
-      {/* Amount composer */}
-      <div className="p-2.5 border-b border-white/10 flex-shrink-0">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Amount Heard</span>
-          {consoleSelectedAmount != null && (
-            <button
-              className="text-[10px] font-bold text-gray-500 hover:text-gray-300"
-              onClick={() => { setConsoleSelectedAmount(null); setConsoleCustomInput('') }}
-            >
-              Clear &times;
-            </button>
-          )}
-        </div>
-        <div className={`rounded-lg border px-3 py-2 mb-2 text-center ${amountInvalid ? 'border-red-500/50' : 'border-white/10'} bg-white/[0.04]`}>
-          <span className={`text-xl font-black tabular-nums ${consoleSelectedAmount == null ? 'text-gray-600' : amountInvalid ? 'text-red-400' : 'text-teal-400'}`}>
-            {consoleSelectedAmount != null ? `₹${consoleSelectedAmount.toLocaleString('en-IN')}` : 'Tap or type'}
-          </span>
-          {amountInvalid && (
-            <div className="text-[10px] font-bold text-red-400 mt-0.5">Must exceed ₹{(currentBidAmount + minIncrement).toLocaleString('en-IN')}</div>
-          )}
-        </div>
-        <div className="grid grid-cols-6 gap-1">
-          {quickAmounts.map(amt => (
-            <button
-              key={amt}
-              className={`h-7 rounded text-[10px] font-bold ${consoleSelectedAmount === amt ? 'bg-teal-500 text-gray-950' : 'bg-white/[0.06] text-gray-200 hover:bg-white/[0.12]'}`}
-              onClick={() => { setConsoleSelectedAmount(amt); setConsoleCustomInput('') }}
-            >
-              {amt >= 100000 ? `${amt / 100000}L` : `${amt / 1000}K`}
-            </button>
-          ))}
-        </div>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="Type an exact amount"
-          value={consoleCustomInput}
-          onChange={(e) => {
-            const raw = e.target.value.replace(/[^0-9]/g, '')
-            setConsoleCustomInput(raw)
-            setConsoleSelectedAmount(raw ? parseInt(raw, 10) : null)
-          }}
-          className="w-full mt-2 bg-white/[0.05] border border-white/15 rounded-md px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500"
-        />
-      </div>
-
-      {/* Bidder roster */}
-      <div className="p-2.5 flex-1 min-h-0 overflow-y-auto">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tap Who Called It &middot; {sortedBidders.length} Bidders</div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {sortedBidders.map(bidder => {
-            const isLeader = bidder.id === highestBidderId
-            const isSelected = bidder.id === consoleSelectedBidderId
-            return (
-              <button
-                key={bidder.id}
-                disabled={isLeader}
-                onClick={() => setConsoleSelectedBidderId(bidder.id)}
-                className={`text-left p-1.5 rounded-lg border flex items-center gap-1.5 min-w-0 ${
-                  isLeader
-                    ? 'bg-green-500/10 border-green-500/40 cursor-not-allowed'
-                    : isSelected
-                    ? 'bg-teal-500/15 border-teal-500'
-                    : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
-                }`}
-              >
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isLeader ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200'}`}>
-                  {(bidder.user?.name || bidder.username || '?').charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <div className={`text-[10px] font-bold truncate ${isLeader ? 'text-green-300' : 'text-gray-100'}`}>{bidder.user?.name || bidder.username || 'Bidder'}</div>
-                  {bidder.teamName && <div className="text-[9px] font-medium truncate text-gray-500">{bidder.teamName}</div>}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Confirm bar */}
-      <div className="p-2.5 border-t border-white/10 bg-[#0f141d] flex-shrink-0">
-        {canConfirm && selectedBidder && (
-          <div className="text-[11px] text-gray-400 text-center mb-1.5">
-            Confirm <span className="text-teal-400 font-bold">₹{consoleSelectedAmount!.toLocaleString('en-IN')}</span> for{' '}
-            <span className="text-white font-bold">{selectedBidder.user?.name || selectedBidder.username}</span>?
-          </div>
-        )}
-        <Button
-          className={`w-full h-11 font-bold ${canConfirm ? 'bg-teal-500 hover:bg-teal-600 text-gray-950' : 'bg-white/[0.06] text-gray-600'}`}
-          disabled={!canConfirm}
-          onClick={confirmConsoleBid}
-        >
-          {isPlacingBid ? 'Placing...' : 'Confirm Bid'}
-        </Button>
-      </div>
-    </div>
-    )
-  }, [sortedBidders, highestBidderId, isPlacingBid, placingBidFor, currentBid, auction, consoleSelectedAmount, consoleSelectedBidderId, consoleCustomInput, confirmConsoleBid])
+  const handleConsoleCustomInput = useCallback((raw: string) => {
+    const digitsOnly = raw.replace(/[^0-9]/g, '')
+    setConsoleCustomInput(digitsOnly)
+    setConsoleSelectedAmount(digitsOnly ? parseInt(digitsOnly, 10) : null)
+  }, [])
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -2965,7 +3011,20 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     {viewMode === 'admin' && (
       showPinnedConsole ? (
         <div className="hidden lg:flex fixed right-0 top-0 h-full w-[30%] z-40">
-          <BidConsolePanel />
+          <BidConsolePanel
+            bidders={sortedBidders}
+            highestBidderId={highestBidderId}
+            currentBid={currentBid}
+            isPlacingBid={isPlacingBid}
+            minIncrement={(auction.rules as AuctionRules)?.minBidIncrement || 1000}
+            selectedAmount={consoleSelectedAmount}
+            selectedBidderId={consoleSelectedBidderId}
+            customInput={consoleCustomInput}
+            onSelectAmount={handleConsoleSelectAmount}
+            onSelectBidder={setConsoleSelectedBidderId}
+            onCustomInputChange={handleConsoleCustomInput}
+            onConfirm={confirmConsoleBid}
+          />
         </div>
       ) : (
         <div className={`${isBidConsoleOpen ? 'fixed' : 'hidden'} inset-0 z-50`}>
@@ -2974,7 +3033,22 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             onClick={() => setIsBidConsoleOpen(false)}
           />
           <div className="absolute right-0 top-0 h-full w-full sm:w-2/3 lg:w-[30%]">
-            <BidConsolePanel showClose={true} onClose={() => setIsBidConsoleOpen(false)} />
+            <BidConsolePanel
+              bidders={sortedBidders}
+              highestBidderId={highestBidderId}
+              currentBid={currentBid}
+              isPlacingBid={isPlacingBid}
+              minIncrement={(auction.rules as AuctionRules)?.minBidIncrement || 1000}
+              selectedAmount={consoleSelectedAmount}
+              selectedBidderId={consoleSelectedBidderId}
+              customInput={consoleCustomInput}
+              onSelectAmount={handleConsoleSelectAmount}
+              onSelectBidder={setConsoleSelectedBidderId}
+              onCustomInputChange={handleConsoleCustomInput}
+              onConfirm={confirmConsoleBid}
+              showClose={true}
+              onClose={() => setIsBidConsoleOpen(false)}
+            />
           </div>
         </div>
       )
