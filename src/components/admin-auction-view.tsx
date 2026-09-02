@@ -1899,6 +1899,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 )}
                 <div className={auctionPhase ? 'pt-8 sm:pt-10' : ''}>
                   <PlayerCard
+                currentBid={currentBid}
                 name={playerName}
                 imageUrl={(() => {
                   const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
