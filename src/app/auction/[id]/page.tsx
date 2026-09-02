@@ -362,7 +362,14 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
       // For LIVE, PAUSED, and MOCK_RUN status, show full auction view
       if (isLiveStatus(auction.status) || auction.status === 'PAUSED') {
         return (
-          <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-20 sm:pb-0">
+          // The live auction page is a dark "broadcast stage" by design, not
+          // a light page with a dark card floating on it - forcing dark mode
+          // here (rather than only on the stage component) also activates
+          // the dark: variants already authored, but never triggered, on the
+          // breadcrumb bar and PublicHeaderWithChat below, so the whole page
+          // reads as one immersive surface instead of a dark box on white.
+          <div className="dark">
+          <div className="min-h-screen bg-[#05070a] pb-20 sm:pb-0">
             {/* Breadcrumbs - Hidden on mobile for public view */}
             <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
               <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
@@ -430,6 +437,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
               </div>
             </div>
           </footer>
+        </div>
         </div>
         )
       }

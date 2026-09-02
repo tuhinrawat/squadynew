@@ -642,7 +642,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-    <div className="p-1 sm:p-3 pb-40 sm:pb-3">
+    <div className="pb-40 sm:pb-3 bg-[#05070a]">
       <div className="max-w-7xl mx-auto">
         {/* Stage - a fixed-composition "broadcast" surface: every row below
             is sized off real content (not viewport units), specifically so
@@ -651,8 +651,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             Play-by-Play list, which gets its own small contained scroll for
             overflow bids, the same way the previous Live Activity card
             already scrolled internally (max-h + overflow-y-auto), not the
-            page. */}
-        <div className="relative bg-[#05070a] rounded-lg overflow-hidden mx-1 sm:mx-0">
+            page. Full-bleed, no card padding/rounding/margin - this is
+            meant to read as one continuous dark stage with the page around
+            it (which is also forced dark, see page.tsx), not a dark box
+            floating on a light page. */}
+        <div className="relative bg-[#05070a] overflow-hidden">
           {/* Ambient spotlight beams - decorative only */}
           <div className="hidden sm:block absolute -top-[20%] left-[3%] w-24 h-[130%] origin-top bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[-10deg] pointer-events-none" />
           <div className="hidden sm:block absolute -top-[20%] right-[3%] w-24 h-[130%] origin-top bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[10deg] pointer-events-none" />
