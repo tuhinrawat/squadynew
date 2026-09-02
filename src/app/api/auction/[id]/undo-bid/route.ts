@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resetTimer } from '@/lib/auction-timer'
 import { isLiveStatus } from '@/lib/auction-status'
+
+const undoBidSchema = z.object({
+  bidderId: z.string().trim().min(1),
+})
 
 export async function POST(
   request: NextRequest,
@@ -18,11 +23,13 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { bidderId } = body
+    const parsedBody = undoBidSchema.safeParse(body)
 
-    if (!bidderId) {
+    if (!parsedBody.success) {
       return NextResponse.json({ error: 'Missing bidderId' }, { status: 400 })
     }
+
+    const { bidderId } = parsedBody.data
 
     // Fetch auction
     const auction = await prisma.auction.findUnique({

@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
+
+const markSoldSchema = z.object({
+  playerId: z.string().trim().min(1),
+})
 
 export async function POST(
   request: NextRequest,
@@ -17,11 +22,13 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { playerId } = body
+    const parsedBody = markSoldSchema.safeParse(body)
 
-    if (!playerId) {
+    if (!parsedBody.success) {
       return NextResponse.json({ error: 'Player ID required' }, { status: 400 })
     }
+
+    const { playerId } = parsedBody.data
 
     // OPTIMIZED: Fetch only required fields in parallel
     const [auction, currentPlayer] = await Promise.all([

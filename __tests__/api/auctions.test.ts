@@ -229,6 +229,9 @@ describe('API: /api/auctions', () => {
       } as any)
 
       ;(prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: 'admin1' })
+      // The route generates a unique slug by checking existing auctions with a matching prefix.
+      // No existing auctions means the base slug is used as-is.
+      ;(prisma.auction.findMany as jest.Mock).mockResolvedValue([])
       ;(prisma.auction.create as jest.Mock).mockResolvedValue(mockAuction)
 
       const request = new Request('http://localhost:3000/api/auctions', {
@@ -250,7 +253,9 @@ describe('API: /api/auctions', () => {
       expect(prisma.auction.create).toHaveBeenCalledWith({
         data: {
           name: 'Test Auction',
+          slug: 'test-auction',
           description: 'Test Description',
+          image: null,
           rules: { minBidIncrement: 1000, countdownSeconds: 30 },
           isPublished: false,
           registrationOpen: true,

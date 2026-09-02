@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resetTimer } from '@/lib/auction-timer'
+import { RateLimiter } from '@/lib/rate-limiter'
+
+const bidSchema = z.object({
+  bidderId: z.string().trim().min(1),
+  amount: z.coerce.number().positive(),
+})
+
+// A genuine bidding war rarely produces more than a couple of bids per second from the
+// SAME bidder (the UI disables the button while a request is in flight, and someone else
+// has to outbid them in between). This is generous enough to never block a real bidder,
+// while stopping a runaway/looping client from hammering the DB and fanning out a Pusher
+// broadcast on every request.
+const bidRateLimiter = new RateLimiter(5000, 15) // 15 bid attempts per 5 seconds per bidder
 
 // Helper function to broadcast bid error and return error response
 function broadcastBidError(auctionId: string, errorMessage: string, bidderName?: string, bidderId?: string) {
@@ -30,10 +44,21 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { bidderId, amount } = body
+    const parsedBody = bidSchema.safeParse(body)
 
-    if (!bidderId || !amount) {
+    if (!parsedBody.success) {
       return NextResponse.json({ error: 'Invalid bid data' }, { status: 400 })
+    }
+
+    const { bidderId, amount } = parsedBody.data
+
+    // Rate limit per bidder per auction, before touching the database
+    const rateLimitKey = `bid-${params.id}-${bidderId}`
+    if (!bidRateLimiter.check(rateLimitKey).allowed) {
+      return NextResponse.json(
+        { error: 'Too many bid attempts. Please slow down.' },
+        { status: 429 }
+      )
     }
 
     // Validate bid amount is a multiple of 1000
@@ -52,6 +77,7 @@ export async function POST(
         currentPlayerId: true,
         rules: true,
         bidHistory: true,
+        createdById: true,
       }
     })
 
@@ -105,9 +131,24 @@ export async function POST(
 
     // Security: Ensure bidder belongs to this auction
     if (bidder.auctionId !== params.id) {
-      return NextResponse.json({ 
-        error: 'Bidder does not belong to this auction' 
+      return NextResponse.json({
+        error: 'Bidder does not belong to this auction'
       }, { status: 403 })
+    }
+
+    // Security: Only the bidder themselves, or the admin running this auction, may bid
+    // as this bidder. The admin console lets an auctioneer enter a bid on a team's
+    // behalf, which is why this isn't restricted to the bidder's own account only.
+    const isBidderSelf = !!session.user?.id && bidder.userId === session.user.id
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+
+    if (!isBidderSelf && !isAuctionAdmin) {
+      return NextResponse.json(
+        { error: 'You are not authorized to bid as this bidder' },
+        { status: 403 }
+      )
     }
 
     // Parse current bid from bid history - only for CURRENT player

@@ -42,21 +42,24 @@ class TestReportGenerator {
   async runTests() {
     console.log('🧪 Running comprehensive test suite...\n')
 
+    const jsonOutputPath = path.join(process.cwd(), 'test-reports', '.jest-results.json')
+
     try {
-      // Run Jest tests with coverage
+      // Run Jest tests with coverage, writing structured JSON to a dedicated file.
+      // Scraping stdout for a line starting with "{" is unreliable: any console.log
+      // from the code under test (routes/components log plenty) can land on stdout
+      // interleaved with Jest's own output and get mistaken for the results blob.
       console.log('📊 Running unit and integration tests...')
-      const testOutput = execSync(
-        'npm test -- --coverage --json --verbose 2>&1 || true',
+      execSync(
+        `npm test -- --coverage --json --outputFile="${jsonOutputPath}" || true`,
         { encoding: 'utf-8', cwd: process.cwd() }
       )
 
-      // Parse test results
       try {
-        const testResults = JSON.parse(testOutput.split('\n').find(line => line.startsWith('{')) || '{}')
+        const testResults = JSON.parse(fs.readFileSync(jsonOutputPath, 'utf-8'))
         this.processTestResults(testResults)
       } catch (e) {
-        console.warn('⚠️  Could not parse test results as JSON, using text output')
-        this.processTextTestResults(testOutput)
+        console.warn('⚠️  Could not read/parse Jest JSON output file:', e.message)
       }
 
       // Run performance tests if available
@@ -95,12 +98,23 @@ class TestReportGenerator {
       this.report.summary.skipped = results.numPendingTests || 0
     }
 
-    if (results.coverageMap) {
-      this.report.summary.coverage = {
-        statements: results.coverageMap.total.statements?.pct || 0,
-        branches: results.coverageMap.total.branches?.pct || 0,
-        functions: results.coverageMap.total.functions?.pct || 0,
-        lines: results.coverageMap.total.lines?.pct || 0,
+    // Jest's --json reporter doesn't include an aggregate coverage total; that lives
+    // in the separate coverage-summary.json produced by the json-summary reporter.
+    const coverageSummaryPath = path.join(process.cwd(), 'coverage', 'coverage-summary.json')
+    if (fs.existsSync(coverageSummaryPath)) {
+      try {
+        const coverageSummary = JSON.parse(fs.readFileSync(coverageSummaryPath, 'utf-8'))
+        const total = coverageSummary.total
+        if (total) {
+          this.report.summary.coverage = {
+            statements: total.statements?.pct || 0,
+            branches: total.branches?.pct || 0,
+            functions: total.functions?.pct || 0,
+            lines: total.lines?.pct || 0,
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️  Could not read coverage summary:', e.message)
       }
     }
 
@@ -116,17 +130,6 @@ class TestReportGenerator {
         })
       })
     }
-  }
-
-  processTextTestResults(output) {
-    // Extract test counts from text output
-    const passedMatch = output.match(/(\d+) passing/)
-    const failedMatch = output.match(/(\d+) failing/)
-    const totalMatch = output.match(/Tests:\s+(\d+)/)
-
-    if (passedMatch) this.report.summary.passed = parseInt(passedMatch[1])
-    if (failedMatch) this.report.summary.failed = parseInt(failedMatch[1])
-    if (totalMatch) this.report.summary.totalTests = parseInt(totalMatch[1])
   }
 
   analyzeArchitecture() {

@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { generateSlug, ensureUniqueSlug } from '@/lib/slug'
+
+const createAuctionSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().nullish(),
+  image: z.string().nullish(),
+  rules: z.object({
+    minBidIncrement: z.coerce.number().positive(),
+    countdownSeconds: z.coerce.number().positive(),
+  }).passthrough(),
+  isPublished: z.boolean().optional(),
+  registrationOpen: z.boolean().optional(),
+  scheduledStartDate: z.string().nullish(),
+})
 
 // GET /api/auctions - Fetch all auctions for logged-in admin user
 export async function GET(request: NextRequest) {
@@ -60,22 +74,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { name, description, image, rules, isPublished, registrationOpen, scheduledStartDate } = await request.json()
+    const body = await request.json()
 
-    // Validate input
-    if (!name || !rules) {
+    // Validate input (checked in two stages to keep specific, actionable error messages)
+    if (!body?.name || !body?.rules) {
       return NextResponse.json(
         { error: 'Name and rules are required' },
         { status: 400 }
       )
     }
 
-    if (!rules.minBidIncrement || !rules.countdownSeconds) {
+    if (!body.rules.minBidIncrement || !body.rules.countdownSeconds) {
       return NextResponse.json(
         { error: 'minBidIncrement and countdownSeconds are required' },
         { status: 400 }
       )
     }
+
+    const parsedBody = createAuctionSchema.safeParse(body)
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { error: 'Invalid auction data' },
+        { status: 400 }
+      )
+    }
+
+    const { name, description, image, rules, isPublished, registrationOpen, scheduledStartDate } = parsedBody.data
 
     // Verify user exists in database
     const dbUser = await prisma.user.findUnique({

@@ -1,62 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { pusher } from '@/lib/pusher'
+import { RateLimiter } from '@/lib/rate-limiter'
 
 export const dynamic = 'force-dynamic'
-
-// Advanced rate limiting with sliding window
-class RateLimiter {
-  private timestamps: Map<string, number[]> = new Map()
-  private readonly windowMs: number
-  private readonly maxRequests: number
-  private cleanupInterval: NodeJS.Timeout
-
-  constructor(windowMs: number, maxRequests: number) {
-    this.windowMs = windowMs
-    this.maxRequests = maxRequests
-    
-    // Cleanup old entries every minute to prevent memory leak
-    this.cleanupInterval = setInterval(() => this.cleanup(), 60000)
-  }
-
-  check(key: string): { allowed: boolean; remaining: number } {
-    const now = Date.now()
-    const userTimestamps = this.timestamps.get(key) || []
-    
-    // Remove timestamps outside the window
-    const recentTimestamps = userTimestamps.filter(t => now - t < this.windowMs)
-    
-    if (recentTimestamps.length >= this.maxRequests) {
-      this.timestamps.set(key, recentTimestamps)
-      return { allowed: false, remaining: 0 }
-    }
-    
-    // Add current timestamp
-    recentTimestamps.push(now)
-    this.timestamps.set(key, recentTimestamps)
-    
-    return { 
-      allowed: true, 
-      remaining: this.maxRequests - recentTimestamps.length 
-    }
-  }
-
-  private cleanup() {
-    const now = Date.now()
-    for (const [key, timestamps] of this.timestamps.entries()) {
-      const recent = timestamps.filter(t => now - t < this.windowMs)
-      if (recent.length === 0) {
-        this.timestamps.delete(key)
-      } else {
-        this.timestamps.set(key, recent)
-      }
-    }
-  }
-
-  destroy() {
-    clearInterval(this.cleanupInterval)
-  }
-}
 
 // Separate rate limiters for messages and reactions
 const messageRateLimiter = new RateLimiter(30000, 15) // 15 messages per 30 seconds

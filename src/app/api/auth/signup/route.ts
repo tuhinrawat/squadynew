@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth'
 
+const signupSchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.string().trim().min(1),
+  password: z.string().min(1),
+  invitationCode: z.string().trim().min(1),
+})
+
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password, invitationCode } = await request.json()
+    const body = await request.json()
+    const parsed = signupSchema.safeParse(body)
 
-    // Validate input
-    if (!name || !email || !password) {
-      return NextResponse.json(
-        { error: 'Name, email, and password are required' },
-        { status: 400 }
-      )
+    if (!parsed.success) {
+      const missingInvitationCode = parsed.error.issues.some(i => i.path[0] === 'invitationCode')
+      const message = missingInvitationCode && parsed.error.issues.length === 1
+        ? 'Invitation code is required'
+        : 'Name, email, and password are required'
+      return NextResponse.json({ error: message }, { status: 400 })
     }
 
-    // Check invitation code
-    if (!invitationCode) {
-      return NextResponse.json(
-        { error: 'Invitation code is required' },
-        { status: 400 }
-      )
-    }
+    const { name, email, password, invitationCode } = parsed.data
 
     // Validate invitation code
     const invitation = await prisma.invitation.findUnique({

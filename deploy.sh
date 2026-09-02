@@ -29,9 +29,9 @@ vercel env pull .env.local
 echo "🔧 Generating Prisma client..."
 npx prisma generate
 
-# Push database schema
-echo "📊 Pushing database schema..."
-npx prisma db push
+# Apply database migrations (uses prisma/migrations history, not a raw schema diff)
+echo "📊 Applying database migrations..."
+npx prisma migrate deploy
 
 # Seed database (optional)
 echo "🌱 Seeding database..."

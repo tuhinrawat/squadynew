@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/test-reports/.jest-results.json
 
 # next.js
 /.next/
