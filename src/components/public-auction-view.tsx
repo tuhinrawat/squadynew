@@ -594,6 +594,26 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return data?.name || data?.Name || data?.player_name || 'Unknown Player'
   }, [])
 
+  // Real sales, most recent first - fills the Play-by-Play panel with
+  // actual content between bids instead of empty space under "No bids
+  // yet", using data the page already has (players already carry
+  // soldTo/soldPrice once sold).
+  const recentlySold = useMemo(() => {
+    return players
+      .filter(p => p.status === 'SOLD' && p.soldTo)
+      .slice(-5)
+      .reverse()
+      .map(p => {
+        const bidder = biddersState.find(b => b.id === p.soldTo)
+        return {
+          id: p.id,
+          name: getPlayerName(p),
+          price: p.soldPrice ?? 0,
+          buyer: bidder?.teamName || bidder?.username || 'Unknown'
+        }
+      })
+  }, [players, biddersState, getPlayerName])
+
   const getProfilePhotoUrl = useCallback((playerData: any): string | undefined => {
     const possibleKeys = [
       'Profile Photo',
@@ -711,18 +731,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
             </div>
           </div>
 
-          {/* Moment banner - real auctionPhase content, styled as a bold
-              editorial flag rather than a full-width gradient bar */}
+          {/* Moment banner - real auctionPhase content. A solid pill, not a
+              second diagonal-cut shape - the header wedge is the page's one
+              diagonal accent, so this doesn't compete with it. */}
           {auctionPhase && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               className="relative flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5"
             >
-              <span
-                className="bg-white text-black font-black text-[9px] sm:text-[11px] uppercase tracking-wider px-3 sm:px-4 py-1 sm:py-1.5 whitespace-nowrap"
-                style={{ clipPath: 'polygon(0 0, 100% 0, 88% 100%, 0% 100%)' }}
-              >
+              <span className="bg-amber-400 text-black font-black text-[9px] sm:text-[11px] uppercase tracking-wider px-3 sm:px-4 py-1 sm:py-1.5 rounded-full whitespace-nowrap">
                 {auctionPhase.message}
               </span>
               <div className="h-px flex-1 bg-white/20" />
@@ -746,7 +764,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           )}
 
           {/* Main stage grid */}
-          <div className="relative grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-3 lg:gap-5 px-2 sm:px-4 pb-3 sm:pb-4">
+          <div className="relative grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 lg:gap-5 px-2 sm:px-4 pb-3 sm:pb-4">
             {/* Player podium */}
             <div className="relative">
               <AnimatePresence>
@@ -834,7 +852,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     })()}
                   />
 
-                  <div className="mt-2">
+                  {/* "All Players & Teams" already lives in the header
+                      (always visible, not just here) - a second copy of the
+                      same button right under the card was a duplicate entry
+                      point to the same destination, so it's gone rather than
+                      repeated. */}
+                  <div className="sm:hidden mt-2">
                     <BidAmountStrip
                       amount={currentBid?.amount ?? null}
                       bidderName={currentBid?.bidderName}
@@ -871,23 +894,49 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 <span className="text-white text-[11px] font-black uppercase tracking-widest">Play by Play</span>
                 <div className="h-px flex-1 bg-white/15" />
               </div>
-              <div className="flex-1 min-h-0 max-h-[460px] overflow-y-auto space-y-2.5 pr-1">
-                {bidHistory.length === 0 && (
-                  <div className="text-gray-600 text-xs font-semibold px-1 py-4">No bids yet</div>
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 pr-1">
+                {bidHistory.length === 0 ? (
+                  <>
+                    <div className="text-gray-500 text-xs font-semibold px-1 pb-3 mb-1 border-b border-white/10">
+                      No bids yet on this lot
+                    </div>
+                    {recentlySold.length > 0 ? (
+                      <>
+                        <div className="text-gray-600 text-[10px] font-black uppercase tracking-widest px-1 pb-1">
+                          Recently Sold
+                        </div>
+                        {recentlySold.map(sale => (
+                          <div key={sale.id} className="pl-3 border-l-[3px] border-white/10">
+                            <div className="font-black uppercase truncate text-gray-300 text-sm">
+                              {sale.name}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <span className="font-bold tabular-nums text-emerald-400">₹{sale.price.toLocaleString('en-IN')}</span>
+                              <span className="text-gray-600">&middot;</span>
+                              <span className="text-gray-500 truncate">{sale.buyer}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div className="text-gray-600 text-xs px-1">Bidding will appear here the moment it starts.</div>
+                    )}
+                  </>
+                ) : (
+                  bidHistory.map((bid, index) => (
+                    <div
+                      key={`${bid.bidderId}-${bid.amount}-${index}`}
+                      className={`pl-3 border-l-[3px] ${index === 0 ? 'border-amber-400' : 'border-white/10'}`}
+                    >
+                      <div className={`font-black uppercase truncate ${index === 0 ? 'text-white text-base' : 'text-gray-300 text-sm'}`}>
+                        {bid.bidderName}
+                      </div>
+                      <div className={`font-bold tabular-nums ${index === 0 ? 'text-amber-400 text-sm' : 'text-gray-500 text-xs'}`}>
+                        ₹{bid.amount.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  ))
                 )}
-                {bidHistory.map((bid, index) => (
-                  <div
-                    key={`${bid.bidderId}-${bid.amount}-${index}`}
-                    className={`pl-3 border-l-[3px] ${index === 0 ? 'border-amber-400' : 'border-white/10'}`}
-                  >
-                    <div className={`font-black uppercase truncate ${index === 0 ? 'text-white text-base' : 'text-gray-300 text-sm'}`}>
-                      {bid.bidderName}
-                    </div>
-                    <div className={`font-bold tabular-nums ${index === 0 ? 'text-amber-400 text-sm' : 'text-gray-500 text-xs'}`}>
-                      ₹{bid.amount.toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

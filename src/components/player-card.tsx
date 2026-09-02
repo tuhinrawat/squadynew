@@ -72,6 +72,13 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 						<span className="text-8xl sm:text-9xl font-black text-white/70">{name.charAt(0).toUpperCase()}</span>
 					</div>
 				)}
+				{/* Vignette - darkens the frame's edges so a narrow portrait
+				    photo against the wide blurred backdrop reads as a lit
+				    stage, not empty space around a small picture. */}
+				<div
+					className="absolute inset-0 pointer-events-none"
+					style={{ boxShadow: 'inset 0 0 120px 40px rgba(0,0,0,0.55)' }}
+				/>
 				{/* Fade into the content section below */}
 				<div className="absolute bottom-0 inset-x-0 h-16 sm:h-24 bg-gradient-to-t from-[#0a0d12] to-transparent pointer-events-none" />
 			</div>
