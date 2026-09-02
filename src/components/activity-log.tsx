@@ -3,6 +3,15 @@
 import { memo } from 'react'
 import { Clock } from 'lucide-react'
 
+function formatRelativeTime(ts: Date | string): string {
+	const d = typeof ts === 'string' ? new Date(ts) : ts
+	const diffSeconds = Math.floor((Date.now() - d.getTime()) / 1000)
+	if (diffSeconds < 0 || diffSeconds < 5) return 'now'
+	if (diffSeconds < 60) return `${diffSeconds}s ago`
+	if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
+	return formatTime(d)
+}
+
 export type ActivityLogEntry = {
 	// Common
 	timestamp: Date | string
@@ -54,25 +63,28 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
         <div className={className ?? ''}>
             <ul className="divide-y divide-transparent space-y-1">
                 {trimmed.map((it, idx) => {
-					const time = formatTime(it.timestamp)
+					const time = formatRelativeTime(it.timestamp)
 					const isBid = !it.type || it.type === 'bid'
 					const isSold = it.type === 'sold'
 					const isUnsold = it.type === 'unsold'
 					const isSaleUndo = it.type === 'sale-undo'
 					const isBidUndo = it.type === 'bid-undo'
+					const isNewestBid = idx === 0 && isBid
 					return (
                         <li
                             key={idx}
-                            className={`py-2 px-3 flex items-start gap-3
+                            className={`py-2 px-3 flex items-start gap-3 border-l-4
                                 ${isSold
-                                    ? 'bg-green-50/70 dark:bg-green-900/10'
+                                    ? 'border-transparent bg-green-50/70 dark:bg-green-900/10'
                                     : isUnsold
-                                    ? 'bg-orange-50/70 dark:bg-orange-900/10'
+                                    ? 'border-transparent bg-orange-50/70 dark:bg-orange-900/10'
                                     : isSaleUndo
-                                    ? 'bg-purple-50/70 dark:bg-purple-900/10'
+                                    ? 'border-transparent bg-purple-50/70 dark:bg-purple-900/10'
                                     : isBidUndo
-                                    ? 'bg-red-50/70 dark:bg-red-900/10'
-                                    : 'bg-white/60 dark:bg-gray-900/20 hover:bg-blue-50/40 dark:hover:bg-blue-900/10'}
+                                    ? 'border-transparent bg-red-50/70 dark:bg-red-900/10'
+                                    : isNewestBid
+                                    ? 'border-teal-500 bg-teal-50/60 dark:bg-teal-900/10'
+                                    : 'border-transparent bg-white/60 dark:bg-gray-900/20 hover:bg-teal-50/40 dark:hover:bg-teal-900/10'}
                             `}
                         >
 							{/* Avatar placeholder with initial */}
@@ -81,7 +93,7 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 								: isUnsold ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
 								: isSaleUndo ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
 								: isBidUndo ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-								: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+								: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300'
 							}`}>
 								{(it.bidderName || it.playerName || '•').charAt(0).toUpperCase()}
 							</div>
@@ -94,7 +106,7 @@ export const ActivityLog = memo(function ActivityLog({ items, className, maxItem
 									{isBid && (
 										<>
 											<span className="text-gray-500 dark:text-gray-400 hidden sm:inline">placed</span>
-                                            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-semibold text-[11px] sm:text-xs">
+                                            <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 font-semibold text-[11px] sm:text-xs">
                                                 ₹{(it.amount ?? 0).toLocaleString('en-IN')}
                                             </span>
                                             {it.teamName && (
