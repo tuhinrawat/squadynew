@@ -256,37 +256,57 @@ function BidConsolePanel({
         />
       </div>
 
-      {/* Bidder roster */}
+      {/* Bidder roster - grouped by first letter of name, like a contacts
+          list, so a specific bidder can be found by eye instead of
+          scanning the whole grid. Relies on `bidders` already arriving
+          sorted alphabetically (see sortedBidders in the parent). */}
       <div className="p-2.5 flex-1 min-h-0 overflow-y-auto">
         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tap Who Called It &middot; {bidders.length} Bidders</div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {bidders.map(bidder => {
-            const isLeader = bidder.id === highestBidderId
-            const isSelected = bidder.id === selectedBidderId
-            return (
-              <button
-                key={bidder.id}
-                disabled={isLeader}
-                onClick={() => onSelectBidder(bidder.id)}
-                className={`text-left p-1.5 rounded-lg border flex items-center gap-1.5 min-w-0 ${
-                  isLeader
-                    ? 'bg-green-500/10 border-green-500/40 cursor-not-allowed'
-                    : isSelected
-                    ? 'bg-teal-500/15 border-teal-500'
-                    : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
-                }`}
-              >
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isLeader ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200'}`}>
-                  {(bidder.user?.name || bidder.username || '?').charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <div className={`text-[10px] font-bold truncate ${isLeader ? 'text-green-300' : 'text-gray-100'}`}>{bidder.user?.name || bidder.username || 'Bidder'}</div>
-                  {bidder.teamName && <div className="text-[9px] font-medium truncate text-gray-500">{bidder.teamName}</div>}
-                </div>
-              </button>
-            )
-          })}
-        </div>
+        {(() => {
+          const groups: { letter: string; bidders: BidderWithUser[] }[] = []
+          bidders.forEach(bidder => {
+            const letter = (bidder.user?.name || bidder.username || '#').charAt(0).toUpperCase()
+            const lastGroup = groups[groups.length - 1]
+            if (lastGroup && lastGroup.letter === letter) {
+              lastGroup.bidders.push(bidder)
+            } else {
+              groups.push({ letter, bidders: [bidder] })
+            }
+          })
+          return groups.map(group => (
+            <div key={group.letter} className="mb-2 last:mb-0">
+              <div className="text-[9px] font-black text-teal-400/80 uppercase tracking-widest mb-1 px-0.5">{group.letter}</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {group.bidders.map(bidder => {
+                  const isLeader = bidder.id === highestBidderId
+                  const isSelected = bidder.id === selectedBidderId
+                  return (
+                    <button
+                      key={bidder.id}
+                      disabled={isLeader}
+                      onClick={() => onSelectBidder(bidder.id)}
+                      className={`text-left p-1.5 rounded-lg border flex items-center gap-1.5 min-w-0 ${
+                        isLeader
+                          ? 'bg-green-500/10 border-green-500/40 cursor-not-allowed'
+                          : isSelected
+                          ? 'bg-teal-500/15 border-teal-500'
+                          : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isLeader ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200'}`}>
+                        {(bidder.user?.name || bidder.username || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`text-[10px] font-bold truncate ${isLeader ? 'text-green-300' : 'text-gray-100'}`}>{bidder.user?.name || bidder.username || 'Bidder'}</div>
+                        {bidder.teamName && <div className="text-[9px] font-medium truncate text-gray-500">{bidder.teamName}</div>}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))
+        })()}
       </div>
 
       {/* Confirm bar */}
@@ -391,9 +411,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const canToggleConsole = !showPinnedConsole
   const chatOffsetClass = (showPinnedConsole || isBidConsoleOpen) ? 'lg:right-[calc(30%+2rem)]' : 'lg:right-20'
   
-  // Memoize sorted bidders to avoid sorting on every render - optimization
-  const sortedBidders = useMemo(() => 
-    bidders.slice().sort((a, b) => b.remainingPurse - a.remainingPurse),
+  // Alphabetical by display name, not by purse - the console's job is
+  // "find this specific bidder fast while the room is calling out names",
+  // which a name-sorted (and letter-grouped, see BidConsolePanel) list
+  // serves; purse ranking doesn't help you locate someone by name.
+  const sortedBidders = useMemo(() =>
+    bidders.slice().sort((a, b) =>
+      (a.user?.name || a.username).localeCompare(b.user?.name || b.username)
+    ),
     [bidders]
   )
   
