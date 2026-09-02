@@ -125,23 +125,23 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 			    value with wrapping instead of truncation, so a longer value
 			    (e.g. "Right Arm Medium Pace") always shows in full. */}
 			{(batting || bowling || wicketKeeper) && (
-				<div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 px-3 py-3 sm:px-4 sm:py-3.5 bg-white/[0.03] border border-white/10 rounded-lg mb-3 sm:mb-6">
+				<div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 px-3 py-3 sm:px-4 sm:py-3.5 bg-white/[0.03] border border-white/10 rounded-lg mb-3 sm:mb-6">
 					{batting && (
 						<div className="min-w-0 sm:text-center">
 							<div className="text-[10px] sm:text-xs font-semibold text-white/50 uppercase tracking-wider">Batting</div>
 							<div className="text-xs sm:text-sm font-bold text-gray-200 uppercase break-words">{batting}</div>
 						</div>
 					)}
-					{bowling && (
-						<div className="min-w-0 sm:text-center sm:border-l sm:border-white/10 sm:pl-4">
-							<div className="text-[10px] sm:text-xs font-semibold text-white/50 uppercase tracking-wider">Bowling</div>
-							<div className="text-xs sm:text-sm font-bold text-gray-200 uppercase break-words">{bowling}</div>
-						</div>
-					)}
 					{wicketKeeper && (
-						<div className="min-w-0 sm:text-center sm:border-l sm:border-white/10 sm:pl-4">
+						<div className="min-w-0 sm:text-center sm:border-l sm:border-white/10 sm:pl-4 sm:order-3">
 							<div className="text-[10px] sm:text-xs font-semibold text-white/50 uppercase tracking-wider">Keeper</div>
 							<div className="text-xs sm:text-sm font-bold text-gray-200 uppercase break-words">{wicketKeeper}</div>
+						</div>
+					)}
+					{bowling && (
+						<div className="min-w-0 col-span-2 sm:col-span-1 sm:order-2 sm:text-center sm:border-l sm:border-white/10 sm:pl-4 pt-3 sm:pt-0 border-t border-white/10 sm:border-t-0">
+							<div className="text-[10px] sm:text-xs font-semibold text-white/50 uppercase tracking-wider">Bowling</div>
+							<div className="text-xs sm:text-sm font-bold text-gray-200 uppercase break-words">{bowling}</div>
 						</div>
 					)}
 				</div>

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Clock, ChevronDown, ChevronUp, Eye, Trophy } from 'lucide-react'
+import { Clock, ChevronDown, ChevronUp, ChevronRight, Eye, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
@@ -113,7 +113,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const remaining = players.filter(p => p.status === 'AVAILABLE').length
     return { total, sold, unsold, remaining }
   }, [players])
-  
+
+  // How many bids landed in the last minute - drives the mobile "pulse"
+  // status line, which points at the existing Live Bids sheet rather than
+  // duplicating its content.
+  const recentBidCount = useMemo(() => {
+    const cutoff = Date.now() - 60000
+    return bidHistory.filter(b =>
+      (!b.type || b.type === 'bid') && new Date(b.timestamp).getTime() >= cutoff
+    ).length
+  }, [bidHistory])
+
   // Bid error state for public view
   const errorIdRef = useRef(0)
   const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
@@ -666,7 +676,28 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               </div>
             </div>
           </div>
-          
+
+        </div>
+
+        {/* Mobile auction context bar - the desktop header above is hidden
+            below the sm breakpoint (and StatsDisplay hides itself too), so
+            without this, mobile has no visibility into auction name/progress
+            at all. Condensed to one row + a thin progress line. */}
+        <div className="sm:hidden bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between gap-2 px-3 py-2">
+            <span className="text-[11px] font-bold text-gray-200 uppercase truncate min-w-0">{auction.name}</span>
+            <div className="flex items-center gap-2 flex-shrink-0 text-[10px] font-bold">
+              <span className="text-green-400">{stats.sold} sold</span>
+              <span className="text-gray-600">&middot;</span>
+              <span className="text-gray-400">{stats.remaining} left</span>
+            </div>
+          </div>
+          <div className="h-[3px] bg-gray-800">
+            <div
+              className="h-full bg-teal-500"
+              style={{ width: `${stats.total > 0 ? ((stats.sold + stats.unsold) / stats.total * 100) : 0}%` }}
+            />
+          </div>
         </div>
 
         {/* Main Layout */}
@@ -801,6 +832,23 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     teamName={currentBid?.teamName}
                     auctionId={auction.id}
                   />
+                )}
+
+                {/* Mobile-only pulse status. Not a second "Live Bids" button -
+                    it opens the same sheet, but isn't labeled as its own
+                    entry point, since the header button already is one. */}
+                {isClient && recentBidCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setBidHistoryModalOpen(true)}
+                    className="sm:hidden w-full flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                    <span className="flex-1 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">
+                      {recentBidCount} bid{recentBidCount !== 1 ? 's' : ''} in the last minute
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                  </button>
                 )}
               </CardContent>
             </Card>
