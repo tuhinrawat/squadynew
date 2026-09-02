@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw } from 'lucide-react'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher } from '@/lib/pusher-client'
@@ -26,6 +26,7 @@ import { GoingLiveBanner } from '@/components/going-live-banner'
 import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
+import { saveOfflineSnapshot } from '@/lib/offline-auction-store'
 
 // Dynamic import for PublicChat - code splitting for better performance
 const PublicChat = dynamic(
@@ -633,6 +634,35 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Mirror a lightweight snapshot to this device's local storage on every
+  // change - the safety net the offline fallback page (/auction/[id]/offline)
+  // reads from if the app itself becomes unreachable. Best-effort only: it
+  // must never be able to break the live console if storage is unavailable
+  // (private browsing, quota), which is why the store helper swallows its
+  // own errors rather than throwing here.
+  useEffect(() => {
+    saveOfflineSnapshot({
+      auctionId: auction.id,
+      auctionName: auction.name,
+      savedAt: new Date().toISOString(),
+      players: players.map(p => ({
+        id: p.id,
+        data: p.data as Record<string, unknown>,
+        status: p.status,
+        isIcon: p.isIcon,
+        soldTo: p.soldTo ?? null,
+        soldPrice: p.soldPrice ?? null
+      })),
+      bidders: bidders.map(b => ({
+        id: b.id,
+        username: b.username,
+        teamName: b.teamName ?? null,
+        name: b.user?.name ?? null,
+        remainingPurse: b.remainingPurse
+      }))
+    })
+  }, [auction.id, auction.name, players, bidders])
 
   // Detect when auction goes live and show banner
   useEffect(() => {
@@ -1771,15 +1801,22 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48 z-[100] bg-white dark:bg-gray-800 shadow-xl">
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           onSelect={() => setIsBidConsoleOpen(true)}
                           className="text-gray-900 dark:text-gray-100 cursor-pointer sm:hidden"
                         >
                           <TrendingUp className="h-4 w-4 mr-2" />
                           Bidding Console
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onSelect={handleStartAuction} 
+                        <DropdownMenuItem
+                          onSelect={() => window.open(`/auction/${auction.id}/offline`, '_blank')}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer"
+                        >
+                          <WifiOff className="h-4 w-4 mr-2" />
+                          Offline Fallback
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={handleStartAuction}
                           disabled={isLiveStatus(auction.status)}
                           className="text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
