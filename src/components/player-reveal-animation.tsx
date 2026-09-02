@@ -1,113 +1,137 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Sparkles } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 interface PlayerRevealAnimationProps {
   allPlayerNames: string[]
   finalPlayerName: string
   onComplete: () => void
-  duration?: number // Duration in milliseconds (default 5000ms)
+  duration?: number // Duration in milliseconds spent rumbling before the name locks in (default 5000ms)
 }
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-export function PlayerRevealAnimation({ 
-  allPlayerNames, 
-  finalPlayerName, 
+// The lock-in + camera-flash + hold sequence always fits inside this window,
+// no matter how long the player's name is - so the total time to onComplete
+// stays a fixed `duration + LOCK_WINDOW`, exactly like the previous version.
+// The admin console's stuck-reveal safety timeouts are tuned against that
+// same total, so this budget must not grow.
+const LOCK_WINDOW = 1500
+
+export function PlayerRevealAnimation({
+  finalPlayerName,
   onComplete,
-  duration = 5000 
+  duration = 5000
 }: PlayerRevealAnimationProps) {
-  const [displayText, setDisplayText] = useState<string[]>([])
-  const [isRevealing, setIsRevealing] = useState(false)
+  const [letters, setLetters] = useState<string[]>([])
+  const [lockedCount, setLockedCount] = useState(0)
+  const [isLocking, setIsLocking] = useState(false)
+  const [flash, setFlash] = useState(false)
+
   const animationFrameRef = useRef<number | null>(null)
-  const finalTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const animateRef = useRef<() => void>(() => {})
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([])
   const onCompleteRef = useRef(onComplete)
   const startTimeRef = useRef<number>(0)
   const lastUpdateRef = useRef<number>(0)
-  const phaseRef = useRef<'fast' | 'slow' | 'reveal'>('fast')
+  const phaseRef = useRef<'fast' | 'slow' | 'locking'>('fast')
   const finalNameRef = useRef<string>(finalPlayerName)
 
-  // Keep onComplete and finalName refs updated
   useEffect(() => {
     onCompleteRef.current = onComplete
     finalNameRef.current = finalPlayerName
   }, [onComplete, finalPlayerName])
 
-  // Generate random letter for each position
-  const getRandomLetter = useCallback(() => {
-    return ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+  const getRandomLetter = useCallback(() => ALPHABET[Math.floor(Math.random() * ALPHABET.length)], [])
+
+  const clearAllTimeouts = useCallback(() => {
+    timeoutsRef.current.forEach(clearTimeout)
+    timeoutsRef.current = []
   }, [])
 
-  // Initialize display text with random letters matching final name length
-  useEffect(() => {
-    const nameLength = finalNameRef.current.length
-    const initialLetters = Array.from({ length: nameLength }, () => getRandomLetter())
-    setDisplayText(initialLetters)
-  }, [getRandomLetter])
+  const after = useCallback((ms: number, fn: () => void) => {
+    timeoutsRef.current.push(setTimeout(fn, ms))
+  }, [])
 
-  // Optimized animation loop using requestAnimationFrame
+  // Locks the rumbling letters into the real name, left to right - like a
+  // scoreboard's columns clacking into place one at a time - then flashes
+  // and hands off to onComplete once the name has held for a beat.
+  const runLockSequence = useCallback(() => {
+    phaseRef.current = 'locking'
+    setIsLocking(true)
+    const name = finalNameRef.current
+    const chars = name.split('')
+    const lockable = chars.map((c, i) => ({ c, i })).filter(({ c }) => c !== ' ')
+    const perLetterDelay = lockable.length > 0 ? Math.min(120, (LOCK_WINDOW * 0.55) / lockable.length) : 0
+
+    lockable.forEach(({ i }, seq) => {
+      after(seq * perLetterDelay, () => {
+        setLetters(prev => {
+          const next = [...prev]
+          next[i] = chars[i]
+          return next
+        })
+        setLockedCount(seq + 1)
+      })
+    })
+
+    const lockFinishesAt = lockable.length * perLetterDelay
+    after(lockFinishesAt + 60, () => {
+      setFlash(true)
+      after(90, () => setFlash(false))
+    })
+
+    after(LOCK_WINDOW, () => {
+      onCompleteRef.current()
+    })
+  }, [after])
+
   const animate = useCallback(() => {
     const now = Date.now()
     const elapsed = now - startTimeRef.current
     const remaining = duration - elapsed
 
     if (remaining <= 0) {
-      // Final reveal - show actual player name
-      phaseRef.current = 'reveal'
-      setIsRevealing(true)
-      const finalName = finalNameRef.current
-      setDisplayText(finalName.split(''))
-      
-      finalTimeoutRef.current = setTimeout(() => {
-        onCompleteRef.current()
-      }, 1500)
+      runLockSequence()
       return
     }
 
     if (remaining <= 1500 && phaseRef.current === 'fast') {
-      // Switch to slow phase
       phaseRef.current = 'slow'
     }
 
-    // Update letters based on phase
     const timeSinceLastUpdate = now - lastUpdateRef.current
     const updateInterval = phaseRef.current === 'fast' ? 100 : 200
 
     if (timeSinceLastUpdate >= updateInterval) {
-      const nameLength = finalNameRef.current.length
-      const newLetters = Array.from({ length: nameLength }, () => getRandomLetter())
-      setDisplayText(newLetters)
+      const name = finalNameRef.current
+      setLetters(name.split('').map(c => (c === ' ' ? ' ' : getRandomLetter())))
       lastUpdateRef.current = now
     }
 
-    // Continue animation
-    animationFrameRef.current = requestAnimationFrame(animate)
-  }, [duration, getRandomLetter])
+    animationFrameRef.current = requestAnimationFrame(() => animateRef.current())
+  }, [duration, getRandomLetter, runLockSequence])
 
   useEffect(() => {
-    // Clear any existing animations
+    animateRef.current = animate
+  }, [animate])
+
+  useEffect(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
       animationFrameRef.current = null
     }
-    if (finalTimeoutRef.current) {
-      clearTimeout(finalTimeoutRef.current)
-      finalTimeoutRef.current = null
-    }
-    
+    clearAllTimeouts()
+
     const now = Date.now()
     startTimeRef.current = now
     lastUpdateRef.current = now
     phaseRef.current = 'fast'
 
-    // Initialize with random letters
-    const nameLength = finalNameRef.current.length
-    const initialLetters = Array.from({ length: nameLength }, () => getRandomLetter())
-    setDisplayText(initialLetters)
+    const name = finalNameRef.current
+    setLetters(name.split('').map(c => (c === ' ' ? ' ' : getRandomLetter())))
 
-    // Start animation loop
     animationFrameRef.current = requestAnimationFrame(animate)
 
     return () => {
@@ -115,176 +139,86 @@ export function PlayerRevealAnimation({
         cancelAnimationFrame(animationFrameRef.current)
         animationFrameRef.current = null
       }
-      if (finalTimeoutRef.current) {
-        clearTimeout(finalTimeoutRef.current)
-        finalTimeoutRef.current = null
-      }
+      clearAllTimeouts()
     }
-  }, [animate, getRandomLetter])
+  }, [animate, clearAllTimeouts, getRandomLetter])
+
+  const lockableTotal = letters.filter(l => l !== ' ').length
+  const fullyLocked = isLocking && lockableTotal > 0 && lockedCount >= lockableTotal
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md rounded-xl overflow-hidden"
       style={{ willChange: 'transform, opacity' }}
     >
-      <div className="relative w-full h-full flex items-center justify-center">
-        {/* Optimized background glow */}
+      <div className="relative w-full h-full overflow-hidden">
+        {/* Search-light beams sweeping the dark stage */}
         <motion.div
-          animate={{
-            scale: [1, 1.1, 1],
-            opacity: [0.2, 0.4, 0.2],
-          }}
-          transition={{
-            duration: 2,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute inset-0 bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 rounded-full blur-2xl"
+          className="absolute -top-[20%] left-[-10%] w-24 h-[160%] origin-top bg-gradient-to-b from-amber-400/20 to-transparent blur-sm"
+          animate={{ rotate: [-18, 10, -18] }}
+          transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+        />
+        <motion.div
+          className="absolute -top-[20%] right-[-10%] w-24 h-[160%] origin-top bg-gradient-to-b from-amber-400/20 to-transparent blur-sm"
+          animate={{ rotate: [18, -10, 18] }}
+          transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        {/* Ambient ground-level haze */}
+        <motion.div
+          animate={{ scale: [1, 1.08, 1], opacity: [0.15, 0.3, 0.15] }}
+          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-64 h-64 bg-teal-500/20 rounded-full blur-3xl"
           style={{ willChange: 'transform, opacity' }}
         />
 
-        {/* Card container */}
-        <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl p-6 sm:p-8 shadow-2xl border border-yellow-500/30 max-w-[90%] sm:max-w-md">
-          {/* Sparkles decoration */}
-          <div className="absolute top-4 right-4">
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-              style={{ willChange: 'transform' }}
-            >
-              <Sparkles className="h-6 w-6 text-yellow-400" />
-            </motion.div>
+        {/* Spotlight landing on center stage */}
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+          className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-72 h-72 sm:w-80 sm:h-80 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(circle, rgba(255,238,204,0.35) 0%, rgba(245,196,83,0.14) 45%, rgba(245,196,83,0) 72%)' }}
+        />
+
+        {/* Camera flash on lock */}
+        <div
+          className="absolute inset-0 bg-white pointer-events-none transition-opacity duration-75"
+          style={{ opacity: flash ? 0.5 : 0 }}
+        />
+
+        {/* Content */}
+        <div className="relative w-full h-full flex flex-col items-center justify-center px-4">
+          <span className="text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] text-amber-300/70 mb-3 sm:mb-4">
+            Next Lot
+          </span>
+
+          <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 max-w-full font-['Montserrat']">
+            {letters.map((letter, index) => (
+              <span
+                key={index}
+                className={
+                  letter === ' '
+                    ? 'inline-block w-3 sm:w-4'
+                    : `inline-block font-black uppercase text-2xl sm:text-4xl transition-colors duration-150 ${
+                        index < lockedCount
+                          ? 'animate-in zoom-in-50 duration-300 text-amber-300 drop-shadow-[0_0_14px_rgba(245,196,83,0.75)]'
+                          : 'text-amber-100/40'
+                      }`
+                }
+              >
+                {letter}
+              </span>
+            ))}
           </div>
 
-          {/* "Next Player" text */}
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-center mb-3 sm:mb-4"
-          >
-            <h3 className="text-xs sm:text-sm font-semibold text-yellow-400 uppercase tracking-wider">
-              {isRevealing ? `🎉 ${finalPlayerName} 🎉` : 'Next Player Coming...'}
-            </h3>
-          </motion.div>
-
-          {/* Letter shuffling display - timer style */}
-          <div className="relative h-20 sm:h-28 flex items-center justify-center overflow-hidden">
-            <div className="flex items-center justify-center gap-1 sm:gap-2">
-              {displayText.map((letter, index) => (
-                <AnimatePresence key={`${letter}-${index}`} mode="wait">
-                  <motion.div
-                    key={`${letter}-${index}-${Date.now()}`}
-                    initial={{ 
-                      opacity: 0, 
-                      y: isRevealing ? -30 : 20,
-                      scale: isRevealing ? 0.5 : 0.8
-                    }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0,
-                      scale: isRevealing ? 1.1 : 1
-                    }}
-                    exit={{ 
-                      opacity: 0, 
-                      y: isRevealing ? 30 : -20,
-                      scale: isRevealing ? 1.3 : 0.8
-                    }}
-                    transition={{ 
-                      duration: isRevealing ? 0.6 : 0.1,
-                      ease: isRevealing ? "easeOut" : "linear"
-                    }}
-                    className={`inline-block ${
-                      isRevealing 
-                        ? 'text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 drop-shadow-2xl' 
-                        : 'text-white font-extrabold drop-shadow-lg'
-                    }`}
-                    style={{ 
-                      willChange: 'transform, opacity',
-                      fontFamily: 'monospace'
-                    }}
-                  >
-                    <span className={`text-3xl sm:text-5xl font-black ${
-                      isRevealing ? '' : 'font-mono'
-                    }`}>
-                      {letter}
-                    </span>
-                  </motion.div>
-                </AnimatePresence>
-              ))}
-            </div>
-          </div>
-
-          {/* Loading dots (only when cycling) */}
-          {!isRevealing && (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              className="flex justify-center gap-2 mt-6"
-            >
-              {[0, 1, 2].map((i) => (
-                <motion.div
-                  key={i}
-                  animate={{
-                    scale: [1, 1.5, 1],
-                    opacity: [0.5, 1, 0.5],
-                  }}
-                  transition={{
-                    duration: 1,
-                    repeat: Infinity,
-                    delay: i * 0.2,
-                    ease: "easeInOut"
-                  }}
-                  className="w-2 h-2 bg-yellow-400 rounded-full"
-                  style={{ willChange: 'transform, opacity' }}
-                />
-              ))}
-            </motion.div>
-          )}
-
-          {/* Simplified confetti effect on reveal */}
-          {isRevealing && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 pointer-events-none overflow-hidden"
-            >
-              {[...Array(12)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ 
-                    x: '50%', 
-                    y: '50%',
-                    scale: 0,
-                    rotate: 0
-                  }}
-                  animate={{
-                    x: `${50 + (Math.random() - 0.5) * 200}%`,
-                    y: `${50 + (Math.random() - 0.5) * 200}%`,
-                    scale: [0, 1, 0],
-                    rotate: Math.random() * 360,
-                    opacity: [0, 1, 0]
-                  }}
-                  transition={{
-                    duration: 1.2,
-                    ease: "easeOut",
-                    delay: i * 0.05
-                  }}
-                  className="absolute w-3 h-3 rounded-full"
-                  style={{
-                    backgroundColor: ['#fbbf24', '#f97316', '#ef4444', '#8b5cf6'][Math.floor(Math.random() * 4)],
-                    willChange: 'transform, opacity'
-                  }}
-                />
-              ))}
-            </motion.div>
-          )}
+          <span className="mt-4 sm:mt-6 text-[10px] sm:text-xs font-bold uppercase tracking-wider text-gray-400">
+            {fullyLocked ? 'On the clock — bidding opens now' : isLocking ? 'Locking it in…' : 'Rolling the lot…'}
+          </span>
         </div>
       </div>
     </motion.div>
