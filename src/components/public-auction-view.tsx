@@ -3,18 +3,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { Auction, Player } from '@prisma/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { Clock, ChevronDown, ChevronUp, ChevronRight, Eye, Trophy } from 'lucide-react'
+import { ChevronRight, Eye, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { useViewerCount } from '@/hooks/use-viewer-count'
-import { ActivityLog } from '@/components/activity-log'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
@@ -644,68 +642,110 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-    <div className="p-1 sm:p-6 pb-40 sm:pb-6">
-      <div className="max-w-7xl mx-auto space-y-1 sm:space-y-4">
-        {/* Compact Dark Header (Desktop) / Stats Header (Mobile - appears after player card) */}
-        <div className="hidden sm:block relative bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {/* Left: Title & Badges */}
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg sm:text-xl font-black text-white uppercase">{auction.name}</h1>
-              <Badge className="bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 animate-pulse">● LIVE</Badge>
+    <div className="p-1 sm:p-3 pb-40 sm:pb-3">
+      <div className="max-w-7xl mx-auto">
+        {/* Stage - a fixed-composition "broadcast" surface: every row below
+            is sized off real content (not viewport units), specifically so
+            the whole stage fits without an extra page-level scroll on both
+            phones and laptops - the one intentional exception is the
+            Play-by-Play list, which gets its own small contained scroll for
+            overflow bids, the same way the previous Live Activity card
+            already scrolled internally (max-h + overflow-y-auto), not the
+            page. */}
+        <div className="relative bg-[#05070a] rounded-lg overflow-hidden mx-1 sm:mx-0">
+          {/* Ambient spotlight beams - decorative only */}
+          <div className="hidden sm:block absolute -top-[20%] left-[3%] w-24 h-[130%] origin-top bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[-10deg] pointer-events-none" />
+          <div className="hidden sm:block absolute -top-[20%] right-[3%] w-24 h-[130%] origin-top bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[10deg] pointer-events-none" />
+
+          {/* Desktop header */}
+          <div className="hidden sm:flex relative items-center justify-between px-4 py-2.5 border-b border-white/10">
+            <div
+              className="absolute inset-y-0 left-0 w-[30%] bg-amber-400/90 pointer-events-none"
+              style={{ clipPath: 'polygon(0 0, 70% 0, 40% 100%, 0 100%)' }}
+            />
+            <div className="relative flex items-center gap-3">
+              <h1 className="text-base font-black text-white uppercase tracking-tight">{auction.name}</h1>
+              <Badge className="bg-red-500 text-white text-[9px] font-bold px-2 py-0.5 gap-1 animate-pulse">● LIVE</Badge>
             </div>
-            
-            {/* Right: Stats & Button */}
-            <div className="flex items-center gap-4">
-              {/* Stats Display - Memoized for performance - using real-time stats */}
-              <StatsDisplay 
+            <div className="relative flex items-center gap-4">
+              <StatsDisplay
                 total={stats.total}
                 sold={stats.sold}
                 unsold={stats.unsold}
                 remaining={stats.remaining}
               />
-              
-              <div className="flex items-center gap-2">
-                <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
-                  <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
-                    <Trophy className="h-3 w-3 mr-1" />
-                    <span className="hidden sm:inline">View All Players & Teams</span>
-                    <span className="sm:hidden">Players</span>
-                  </Button>
-                </Link>
+              <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-semibold">
+                <Eye className="h-3 w-3" /> {viewerCount || 0}
+              </span>
+              <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
+                <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
+                  <Trophy className="h-3 w-3 mr-1" />
+                  All Players &amp; Teams
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Mobile header - same auction.name/stats data as desktop, compact */}
+          <div className="sm:hidden relative overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 w-[46%] h-[50px] bg-amber-400/90 pointer-events-none"
+              style={{ clipPath: 'polygon(0 0, 70% 0, 40% 100%, 0 100%)' }}
+            />
+            <div className="relative flex items-center justify-between gap-2 px-3 py-2">
+              <span className="text-[11px] font-black text-white uppercase truncate min-w-0">{auction.name}</span>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <Badge className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 gap-1 animate-pulse">● LIVE</Badge>
+                <span className="text-[9px] font-bold text-amber-400">{stats.sold} sold</span>
+                <span className="text-[9px] font-bold text-gray-500">&middot; {stats.remaining} left</span>
               </div>
             </div>
-          </div>
-
-        </div>
-
-        {/* Mobile auction context bar - the desktop header above is hidden
-            below the sm breakpoint (and StatsDisplay hides itself too), so
-            without this, mobile has no visibility into auction name/progress
-            at all. Condensed to one row + a thin progress line. */}
-        <div className="sm:hidden bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-lg overflow-hidden">
-          <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <span className="text-[11px] font-bold text-gray-200 uppercase truncate min-w-0">{auction.name}</span>
-            <div className="flex items-center gap-2 flex-shrink-0 text-[10px] font-bold">
-              <span className="text-green-400">{stats.sold} sold</span>
-              <span className="text-gray-600">&middot;</span>
-              <span className="text-gray-400">{stats.remaining} left</span>
+            <div className="relative h-[3px] bg-white/10 mx-3 mb-2 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-amber-400"
+                style={{ width: `${stats.total > 0 ? ((stats.sold + stats.unsold) / stats.total * 100) : 0}%` }}
+              />
             </div>
           </div>
-          <div className="h-[3px] bg-gray-800">
-            <div
-              className="h-full bg-teal-500"
-              style={{ width: `${stats.total > 0 ? ((stats.sold + stats.unsold) / stats.total * 100) : 0}%` }}
-            />
-          </div>
-        </div>
 
-        {/* Main Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-1 sm:gap-4">
-          {/* Center Stage */}
-          <div className="col-span-1 lg:col-span-2 order-1">
-            {/* Sold Animation */}
-            <Card className="min-h-[300px] sm:min-h-[500px] relative overflow-hidden mx-1 sm:mx-0">
+          {/* Moment banner - real auctionPhase content, styled as a bold
+              editorial flag rather than a full-width gradient bar */}
+          {auctionPhase && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5"
+            >
+              <span
+                className="bg-white text-black font-black text-[9px] sm:text-[11px] uppercase tracking-wider px-3 sm:px-4 py-1 sm:py-1.5 whitespace-nowrap"
+                style={{ clipPath: 'polygon(0 0, 100% 0, 88% 100%, 0% 100%)' }}
+              >
+                {auctionPhase.message}
+              </span>
+              <div className="h-px flex-1 bg-white/20" />
+            </motion.div>
+          )}
+
+          {/* Bid errors - real feature, kept visible on every breakpoint
+              (not just desktop) since it's not just an activity-panel item */}
+          {bidErrors.length > 0 && (
+            <div className="relative px-3 sm:px-4 pb-2 space-y-2">
+              {bidErrors.map(err => (
+                <div
+                  key={err.id}
+                  className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs sm:text-sm text-red-300 animate-in fade-in slide-in-from-top-2 duration-300"
+                >
+                  <span className="mt-0.5">⚠️</span>
+                  <span className="flex-1">{err.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Main stage grid */}
+          <div className="relative grid grid-cols-1 lg:grid-cols-[1.7fr_1fr] gap-3 lg:gap-5 px-2 sm:px-4 pb-3 sm:pb-4">
+            {/* Player podium */}
+            <div className="relative">
               <AnimatePresence>
                 {soldAnimation && (
                   <motion.div
@@ -718,51 +758,21 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   </motion.div>
                 )}
               </AnimatePresence>
-              
-              <CardContent className="p-0 sm:p-4 space-y-3">
-                {/* New Player Card */}
-                {isClient && (
-                  <div className="relative">
-                    {/* Player Reveal Animation - Inside Player Card */}
-                    <AnimatePresence>
-                      {showPlayerReveal && pendingPlayer && (
-                        <PlayerRevealAnimation
-                          allPlayerNames={allPlayerNames}
-                          finalPlayerName={pendingPlayerName}
-                          onComplete={handleRevealComplete}
-                          duration={5000}
-                        />
-                      )}
-                    </AnimatePresence>
-                    
-                    {/* Combined Auction Phase Banner + Live Badges */}
-                    {auctionPhase && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`absolute -top-0 left-0 right-0 z-10 bg-gradient-to-r ${auctionPhase.color} px-2 sm:px-4 py-1.5 sm:py-2 shadow-xl rounded-t-xl border-b-2 border-white/30`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          {/* Left: Auction Phase Message */}
-                          <div className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
-                            <span className="text-[9px] sm:text-xs md:text-sm font-bold text-white truncate">{auctionPhase.message}</span>
-                          </div>
-                          
-                          {/* Right: Live Status + Count */}
-                          <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-                            <Badge className="bg-green-500 text-white text-[9px] sm:text-[10px] font-bold px-1 py-0.5 sm:px-1.5 sm:py-0.5 animate-pulse">
-                              ● LIVE
-                            </Badge>
-                            <Badge className="bg-white/20 text-white border-white/30 text-[9px] sm:text-[10px] font-semibold px-1 py-0 sm:px-1.5 sm:py-0.5 animate-pulse">
-                              <Eye className="h-2 w-2 sm:h-2.5 sm:w-2.5 mr-0.5" />
-                              {viewerCount || 0}
-                            </Badge>
-                          </div>
-                        </div>
-                      </motion.div>
+
+              {isClient && (
+                <div className="relative">
+                  <AnimatePresence>
+                    {showPlayerReveal && pendingPlayer && (
+                      <PlayerRevealAnimation
+                        allPlayerNames={allPlayerNames}
+                        finalPlayerName={pendingPlayerName}
+                        onComplete={handleRevealComplete}
+                        duration={5000}
+                      />
                     )}
-                    <div className={auctionPhase ? 'pt-8 sm:pt-10' : ''}>
-                      <PlayerCard
+                  </AnimatePresence>
+
+                  <PlayerCard
                     currentBid={currentBid}
                     name={playerName}
                     imageUrl={(() => {
@@ -789,10 +799,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                     profileLink={(() => {
-                      const link = (playerData as any)?.['Cricheroes Profile link'] || 
+                      const link = (playerData as any)?.['Cricheroes Profile link'] ||
                                    (playerData as any)?.[' Cricheroes Profile link'] ||
                                    (playerData as any)?.['cricheroes profile link']
-                      
+
                       if (link && typeof link === 'string') {
                         const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
                         if (urlMatch && urlMatch[1]) {
@@ -820,71 +830,62 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       return essentials
                     })()}
                   />
-                    </div>
+
+                  <div className="mt-2">
+                    <BidAmountStrip
+                      amount={currentBid?.amount ?? null}
+                      bidderName={currentBid?.bidderName}
+                      teamName={currentBid?.teamName}
+                      auctionId={auction.id}
+                    />
                   </div>
-                )}
-                
-                {/* Bid Amount Strip */}
-                {isClient && (
-                  <BidAmountStrip
-                    amount={currentBid?.amount ?? null}
-                    bidderName={currentBid?.bidderName}
-                    teamName={currentBid?.teamName}
-                    auctionId={auction.id}
-                  />
-                )}
 
-                {/* Mobile-only pulse status. Not a second "Live Bids" button -
-                    it opens the same sheet, but isn't labeled as its own
-                    entry point, since the header button already is one. */}
-                {isClient && recentBidCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setBidHistoryModalOpen(true)}
-                    className="sm:hidden w-full flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
-                    <span className="flex-1 text-left text-xs font-semibold text-gray-700 dark:text-gray-200">
-                      {recentBidCount} bid{recentBidCount !== 1 ? 's' : ''} in the last minute
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                  </button>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Mobile Only: View All Players & Teams Button - NOW MOVED TO BID AMOUNT STRIP */}
-          </div>
+                  {/* Mobile-only pulse status. Not a second "Live Bids" button -
+                      it opens the same sheet the header link on desktop opens
+                      Play-by-Play for, but isn't labeled as its own entry point. */}
+                  {recentBidCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setBidHistoryModalOpen(true)}
+                      className="sm:hidden mt-2 w-full flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+                      <span className="flex-1 text-left text-xs font-semibold text-gray-200">
+                        {recentBidCount} bid{recentBidCount !== 1 ? 's' : ''} in the last minute
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
 
-          {/* Bid History - Desktop shows Live Activity, Mobile uses floating button */}
-          <div className="order-2 lg:order-1 space-y-3">
-            {/* Bid Errors Display */}
-            {bidErrors.length > 0 && (
-              <div className="space-y-2">
-                {bidErrors.map(err => (
+            {/* Play by Play - desktop only, same bidHistory data and same
+                job as the previous Live Activity card; mobile keeps using
+                the existing bottom-sheet modal below instead, unchanged. */}
+            <div className="hidden lg:flex lg:flex-col lg:min-h-0">
+              <div className="flex items-center gap-2 mb-2 flex-shrink-0">
+                <span className="text-white text-[11px] font-black uppercase tracking-widest">Play by Play</span>
+                <div className="h-px flex-1 bg-white/15" />
+              </div>
+              <div className="flex-1 min-h-0 max-h-[460px] overflow-y-auto space-y-2.5 pr-1">
+                {bidHistory.length === 0 && (
+                  <div className="text-gray-600 text-xs font-semibold px-1 py-4">No bids yet</div>
+                )}
+                {bidHistory.map((bid, index) => (
                   <div
-                    key={err.id}
-                    className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200 animate-in fade-in slide-in-from-top-2 duration-300"
+                    key={`${bid.bidderId}-${bid.amount}-${index}`}
+                    className={`pl-3 border-l-[3px] ${index === 0 ? 'border-amber-400' : 'border-white/10'}`}
                   >
-                    <span className="mt-0.5 text-red-600 dark:text-red-300">⚠️</span>
-                    <span className="flex-1">{err.message}</span>
+                    <div className={`font-black uppercase truncate ${index === 0 ? 'text-white text-base' : 'text-gray-300 text-sm'}`}>
+                      {bid.bidderName}
+                    </div>
+                    <div className={`font-bold tabular-nums ${index === 0 ? 'text-amber-400 text-sm' : 'text-gray-500 text-xs'}`}>
+                      ₹{bid.amount.toLocaleString('en-IN')}
+                    </div>
                   </div>
                 ))}
               </div>
-            )}
-            
-            {/* Live Activity - Desktop only */}
-            <div className="hidden lg:block">
-              <Card>
-                <CardHeader className="p-3 sm:p-4">
-                  <CardTitle className="text-sm sm:text-base text-gray-900 dark:text-gray-100">Live Activity</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="max-h-[200px] sm:max-h-[300px] lg:max-h-[500px] overflow-y-auto px-3 sm:px-4 py-2">
-                    <ActivityLog items={bidHistory as any} />
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </div>
         </div>
