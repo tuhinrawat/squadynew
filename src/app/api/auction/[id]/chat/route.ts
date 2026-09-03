@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { pusher } from '@/lib/pusher'
+import { triggerRawPusherEvent } from '@/lib/pusher'
 import { RateLimiter } from '@/lib/rate-limiter'
+import { logEventAsync } from '@/lib/observability'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,6 +88,7 @@ export async function POST(
       const rateLimitResult = reactionRateLimiter.check(userKey)
       
       if (!rateLimitResult.allowed) {
+        logEventAsync({ category: 'rate_limit', eventName: 'chat_reaction', auctionId, success: false, message: 'reaction rate limit exceeded' })
         return NextResponse.json(
           { error: 'Too many reactions. Please slow down!', remaining: 0 },
           { status: 429 }
@@ -94,7 +96,7 @@ export async function POST(
       }
 
       // Broadcast reaction (fire and forget - no await for speed)
-      pusher.trigger(`auction-${auctionId}`, 'emoji-reaction', {
+      triggerRawPusherEvent(auctionId, 'emoji-reaction', {
         emoji,
         username: sanitizeInput(reactionUsername, 50),
         userId: reactionUserId,
@@ -142,6 +144,7 @@ export async function POST(
     const rateLimitResult = messageRateLimiter.check(userKey)
     
     if (!rateLimitResult.allowed) {
+      logEventAsync({ category: 'rate_limit', eventName: 'chat_message', auctionId, success: false, message: 'message rate limit exceeded' })
       return NextResponse.json(
         { error: 'Too many messages. Please slow down!', remaining: 0 },
         { status: 429 }
@@ -189,7 +192,7 @@ export async function POST(
     })
 
     // Broadcast to all viewers (fire and forget for speed)
-    pusher.trigger(`auction-${auctionId}`, 'new-chat-message', {
+    triggerRawPusherEvent(auctionId, 'new-chat-message', {
       id: chatMessage.id,
       username: chatMessage.username,
       userId: chatMessage.userId,

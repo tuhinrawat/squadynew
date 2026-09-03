@@ -223,3 +223,26 @@ model Fixture {
   @@index([team2Id])
   @@map("fixtures")
 }
+
+// A single append-only event log for the observability dashboard. One flexible
+// table rather than one per signal (Pusher triggers, rate-limit rejections,
+// bid/sale timing, sync-lag pings) so a new signal is a new `category` value,
+// not a migration. This is telemetry, not business data - Player/Bidder/
+// Auction rows stay the source of truth for anything the app itself reads.
+model ObservabilityEvent {
+  id        String   @id @default(cuid())
+  category  String // 'pusher' | 'rate_limit' | 'bid' | 'sync_lag' | 'api_error'
+  eventName String // e.g. the Pusher event name, or the route/action name
+  auctionId String?
+  success   Boolean  @default(true)
+  latencyMs Int?
+  message   String? // short human-readable detail (error message, rejection reason)
+  metadata  Json? // free-form extra context (amount, bidderId, channel, etc.)
+  createdAt DateTime @default(now())
+
+  // Performance indexes - every dashboard query filters by category+time or
+  // by a specific auction's timeline
+  @@index([category, createdAt])
+  @@index([auctionId, createdAt])
+  @@map("observability_events")
+}

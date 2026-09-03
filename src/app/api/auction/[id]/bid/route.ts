@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resetTimer } from '@/lib/auction-timer'
 import { RateLimiter } from '@/lib/rate-limiter'
+import { logEventAsync } from '@/lib/observability'
 
 const bidSchema = z.object({
   bidderId: z.string().trim().min(1),
@@ -55,6 +56,7 @@ export async function POST(
     // Rate limit per bidder per auction, before touching the database
     const rateLimitKey = `bid-${params.id}-${bidderId}`
     if (!bidRateLimiter.check(rateLimitKey).allowed) {
+      logEventAsync({ category: 'rate_limit', eventName: 'bid', auctionId: params.id, success: false, message: 'bid rate limit exceeded', metadata: { bidderId } })
       return NextResponse.json(
         { error: 'Too many bid attempts. Please slow down.' },
         { status: 429 }

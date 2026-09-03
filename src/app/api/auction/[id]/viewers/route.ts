@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { pusher } from '@/lib/pusher'
+import { triggerRawPusherEvent } from '@/lib/pusher'
 import { prisma } from '@/lib/prisma'
 
 // In-memory store for viewer counts (in production, use Redis)
@@ -36,7 +36,7 @@ export async function POST(
       }
 
       // Broadcast new count to all viewers
-      await pusher.trigger(`auction-${auctionId}`, 'viewer-count-update', {
+      await triggerRawPusherEvent(auctionId, 'viewer-count-update', {
         count: newCount
       })
 
@@ -47,7 +47,7 @@ export async function POST(
       viewerCounts.set(auctionId, newCount)
 
       // Broadcast new count to all viewers
-      await pusher.trigger(`auction-${auctionId}`, 'viewer-count-update', {
+      await triggerRawPusherEvent(auctionId, 'viewer-count-update', {
         count: newCount
       })
 

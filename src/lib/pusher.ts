@@ -1,4 +1,5 @@
 import Pusher from 'pusher'
+import { logEventAsync } from '@/lib/observability'
 
 if (!process.env.PUSHER_APP_ID || !process.env.PUSHER_KEY || !process.env.PUSHER_SECRET || !process.env.PUSHER_CLUSTER) {
   throw new Error('Missing Pusher environment variables')
@@ -85,14 +86,32 @@ export function triggerAuctionEvent<T extends AuctionEventName>(
   // Fire and forget for critical path - don't wait for Pusher response
   // The promise will resolve in background
   const channelName = `auction-${auctionId}`
+  const start = Date.now()
   console.log(`🚀 Pusher trigger: channel=${channelName}, event=${eventName}`)
   return pusher.trigger(channelName, eventName, data)
     .then(response => {
       console.log(`✅ Pusher trigger successful: channel=${channelName}, event=${eventName}`, response)
+      logEventAsync({
+        category: 'pusher',
+        eventName,
+        auctionId,
+        success: true,
+        latencyMs: Date.now() - start,
+        metadata: { channel: channelName },
+      })
       return response
     })
     .catch(error => {
       console.error(`❌ Pusher trigger failed: channel=${channelName}, event=${eventName}`, error)
+      logEventAsync({
+        category: 'pusher',
+        eventName,
+        auctionId,
+        success: false,
+        latencyMs: Date.now() - start,
+        message: error instanceof Error ? error.message : String(error),
+        metadata: { channel: channelName },
+      })
       throw error
     })
 }
@@ -103,4 +122,41 @@ export function triggerAuctionEventToUser<T extends AuctionEventName>(
   data: AuctionEventData[T]
 ): Promise<Pusher.Response> {
   return pusher.trigger(`user-${userId}`, eventName, data)
+}
+
+// For the handful of call sites that trigger a channel/event pair
+// triggerAuctionEvent's typed AuctionEventData doesn't cover (viewer counts,
+// chat messages, emoji reactions) - same timing/success telemetry, no type
+// constraint on the event name or payload.
+export function triggerRawPusherEvent(
+  auctionId: string,
+  eventName: string,
+  data: unknown
+): Promise<Pusher.Response> {
+  const channelName = `auction-${auctionId}`
+  const start = Date.now()
+  return pusher.trigger(channelName, eventName, data)
+    .then(response => {
+      logEventAsync({
+        category: 'pusher',
+        eventName,
+        auctionId,
+        success: true,
+        latencyMs: Date.now() - start,
+        metadata: { channel: channelName },
+      })
+      return response
+    })
+    .catch(error => {
+      logEventAsync({
+        category: 'pusher',
+        eventName,
+        auctionId,
+        success: false,
+        latencyMs: Date.now() - start,
+        message: error instanceof Error ? error.message : String(error),
+        metadata: { channel: channelName },
+      })
+      throw error
+    })
 }
