@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff } from 'lucide-react'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher } from '@/lib/pusher-client'
@@ -1814,6 +1814,13 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         >
                           <WifiOff className="h-4 w-4 mr-2" />
                           Offline Fallback
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => window.open(`/api/auction/${auction.id}/export-results`, '_blank')}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer"
+                        >
+                          <Download className="h-4 w-4 mr-2" />
+                          Export Results
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={handleStartAuction}
