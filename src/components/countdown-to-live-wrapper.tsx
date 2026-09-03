@@ -39,6 +39,27 @@ interface CountdownToLiveWrapperProps {
   bidders: any[]
 }
 
+// Maps a player's existing role/speciality text to a discipline flag's label
+// and color - purely presentational, reusing the same substring checks the
+// filter buttons below already use, so a card's flag always agrees with
+// which filter bucket it falls into.
+function getRoleFlag(role?: string, specialty?: string): { label: string; background: string; color: string } | null {
+  const text = `${role || ''} ${specialty || ''}`.toLowerCase()
+  if (text.includes('wicket') || text.includes('keeper')) {
+    return { label: 'Wicketkeeper', background: 'rgba(255,255,255,0.92)', color: '#05070a' }
+  }
+  if (text.includes('all-rounder') || text.includes('allrounder') || text.includes('all rounder')) {
+    return { label: 'All-Rounder', background: 'linear-gradient(90deg,#a855f7,#ec4899)', color: '#ffffff' }
+  }
+  if (text.includes('bowler')) {
+    return { label: 'Bowler', background: '#14b8a6', color: '#04211d' }
+  }
+  if (text.includes('batsman') || text.includes('batter')) {
+    return { label: 'Batsman', background: '#fbbf24', color: '#1a1200' }
+  }
+  return null
+}
+
 export function CountdownToLiveWrapper({
   auction,
   initialCurrentPlayer,
@@ -340,40 +361,45 @@ export function CountdownToLiveWrapper({
           </div>
         </header>
 
-        {/* Centered Countdown Content */}
-        <div className="flex-1 flex items-center justify-center pt-2 sm:pt-8 pb-0">
-          <div className="text-center px-3 sm:px-4 w-full max-w-6xl">
+        {/* Centered Countdown Content - stadium-scoreboard treatment: floodlight
+            beams + a diagonal amber wedge, echoing the live auction stage's own
+            header wedge (public-auction-view.tsx) at hero scale. */}
+        <div className="flex-1 flex items-center justify-center pt-2 sm:pt-8 pb-0 relative overflow-hidden">
+          <div className="hidden sm:block absolute -top-[10%] left-[4%] w-32 h-[80%] origin-top bg-gradient-to-b from-amber-400/20 to-transparent blur-sm rotate-[-9deg] pointer-events-none" />
+          <div className="hidden sm:block absolute -top-[10%] right-[4%] w-32 h-[80%] origin-top bg-gradient-to-b from-teal-400/20 to-transparent blur-sm rotate-[9deg] pointer-events-none" />
+
+          <div className="text-center px-3 sm:px-4 w-full max-w-6xl relative">
             {/* Auction Logo & Name */}
             <div className="mb-3 sm:mb-8 md:mb-12 lg:mb-16 space-y-2 sm:space-y-6">
               {/* Auction Logo - Compact on mobile */}
               {auction.image && (
                 <div className="flex flex-col items-center">
-                  <div className="relative w-24 h-24 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/40 backdrop-blur-md rounded-2xl p-3 sm:p-4 border-2 border-white/60 shadow-2xl">
-                    <Image 
-                      src={auction.image} 
-                      alt={auction.name} 
+                  <div className="relative w-24 h-24 sm:w-40 sm:h-40 md:w-48 md:h-48 lg:w-56 lg:h-56 bg-white/40 backdrop-blur-md rounded-2xl p-3 sm:p-4 border-2 border-amber-400/50 shadow-2xl" style={{ boxShadow: '0 0 40px rgba(251,191,36,0.25)' }}>
+                    <Image
+                      src={auction.image}
+                      alt={auction.name}
                       fill
                       className="object-contain p-2"
                     />
                   </div>
                 </div>
               )}
-              
+
               {/* Auction Name - Compact on mobile */}
               <h1 className="text-2xl sm:text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-bold text-white mb-2 sm:mb-6 drop-shadow-lg px-2 break-words leading-tight">
                 {auction.name}
               </h1>
-              
+
               {/* Official Tech Partner Badge - Smaller */}
               <div className="flex flex-col items-center gap-2">
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-white/50 backdrop-blur-md rounded-md border border-white/60">
                   <span className="text-white text-[9px] sm:text-[10px] font-medium">Official Tech Partner</span>
                   <div className="h-3 w-px bg-white/70"></div>
-                  <Image 
-                    src="/squady-logo.svg" 
-                    alt="Squady" 
-                    width={60} 
-                    height={18} 
+                  <Image
+                    src="/squady-logo.svg"
+                    alt="Squady"
+                    width={60}
+                    height={18}
                     className="h-3 w-auto brightness-0 invert opacity-100"
                   />
                 </div>
@@ -388,14 +414,14 @@ export function CountdownToLiveWrapper({
                   <span>Follow Squady on Instagram</span>
                 </a>
               </div>
-              
+
               {/* Auction Description - Compact on mobile */}
               {auction.description && (
                 <p className="text-xs sm:text-base md:text-lg lg:text-xl text-white/80 px-4 max-w-3xl mx-auto leading-snug">
                   {auction.description}
                 </p>
               )}
-              
+
               {/* Action Buttons */}
               <div className="flex flex-row justify-center items-center gap-2 mt-2">
                 {/* Add to Calendar Button - Icon only on mobile, full on desktop */}
@@ -424,13 +450,12 @@ export function CountdownToLiveWrapper({
                     </div>
                   </>
                 )}
-                
+
                 {/* Know Your Players Button */}
                 <Button
                   type="button"
-                  variant="outline"
                   onClick={scrollToKnowPlayers}
-                  className="bg-white/35 hover:bg-white/45 text-white border-white/60 backdrop-blur-md text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5 h-9"
+                  className="bg-amber-400 hover:bg-amber-300 text-[#1a1200] font-bold border-0 text-xs sm:text-sm flex items-center gap-1 px-3 py-1.5 h-9"
                 >
                   <Eye className="h-4 w-4" />
                   <span className="hidden xs:inline sm:inline">Know Your Players</span>
@@ -440,7 +465,7 @@ export function CountdownToLiveWrapper({
             </div>
 
             {/* Countdown Timer - Full Screen Centered */}
-            <FullScreenCountdown 
+            <FullScreenCountdown
               scheduledStartDate={auction.scheduledStartDate!}
               auctionName={auction.name}
               onCountdownComplete={() => setShowCountdown(false)}
@@ -449,14 +474,14 @@ export function CountdownToLiveWrapper({
         </div>
 
         <div ref={knowPlayersSectionRef} id="know-your-players" className="px-4 sm:px-6 lg:px-8 -mt-4 pb-4">
-          <Card className="bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-800 shadow-lg">
+          <Card className="bg-[#0d1015]/95 border border-white/10 shadow-lg backdrop-blur-md">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">Know Your Players</CardTitle>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 mt-1">Explore the roster before the auction begins.</p>
+                  <CardTitle className="text-base sm:text-lg font-black uppercase tracking-tight text-white">Know Your Players</CardTitle>
+                  <p className="text-xs sm:text-sm text-white/50 mt-1">Walk the tunnel before the gates open.</p>
                 </div>
-                <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-[10px] sm:text-xs">Player Pool</Badge>
+                <Badge className="bg-amber-400/15 text-amber-400 border-amber-400/30 text-[10px] sm:text-xs">Player Pool</Badge>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
@@ -464,20 +489,20 @@ export function CountdownToLiveWrapper({
               <div className="mb-4 sm:mb-6 space-y-3">
                 {/* Search Input */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/35" />
                   <Input
                     type="text"
                     placeholder="Search players by name..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-sm"
+                    className="pl-10 bg-white/[0.06] border-white/15 text-white placeholder:text-white/35 text-sm"
                   />
                 </div>
-                
+
                 {/* Mobile Dropdown Filter */}
                 <div className="sm:hidden">
                   <Select value={playerFilter} onValueChange={(value: any) => setPlayerFilter(value)}>
-                    <SelectTrigger className="w-full bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                    <SelectTrigger className="w-full bg-white/[0.06] border-white/15 text-white">
                       <SelectValue placeholder="Filter by role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -508,30 +533,28 @@ export function CountdownToLiveWrapper({
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Desktop Filter Buttons */}
                 <div className="hidden sm:flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    variant={playerFilter === 'all' ? 'default' : 'outline'}
                     onClick={() => setPlayerFilter('all')}
                     className={`${
                       playerFilter === 'all'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                        ? 'bg-amber-400 text-[#1a1200] hover:bg-amber-300'
+                        : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
                     All ({knowYourPlayersCards.length})
                   </Button>
                   <Button
                     size="sm"
-                    variant={playerFilter === 'batsmen' ? 'default' : 'outline'}
                     onClick={() => setPlayerFilter('batsmen')}
                     className={`${
                       playerFilter === 'batsmen'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                        ? 'bg-amber-400 text-[#1a1200] hover:bg-amber-300'
+                        : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
                     Batsmen ({knowYourPlayersCards.filter(card => {
                       const roleStr = (card.role || '').toLowerCase()
@@ -541,13 +564,12 @@ export function CountdownToLiveWrapper({
                   </Button>
                   <Button
                     size="sm"
-                    variant={playerFilter === 'bowlers' ? 'default' : 'outline'}
                     onClick={() => setPlayerFilter('bowlers')}
                     className={`${
                       playerFilter === 'bowlers'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                        ? 'bg-amber-400 text-[#1a1200] hover:bg-amber-300'
+                        : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
                     Bowlers ({knowYourPlayersCards.filter(card => {
                       const roleStr = (card.role || '').toLowerCase()
@@ -557,13 +579,12 @@ export function CountdownToLiveWrapper({
                   </Button>
                   <Button
                     size="sm"
-                    variant={playerFilter === 'all-rounders' ? 'default' : 'outline'}
                     onClick={() => setPlayerFilter('all-rounders')}
                     className={`${
                       playerFilter === 'all-rounders'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
+                        ? 'bg-amber-400 text-[#1a1200] hover:bg-amber-300'
+                        : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold whitespace-nowrap`}
                   >
                     All Rounders ({knowYourPlayersCards.filter(card => {
                       const roleStr = (card.role || '').toLowerCase()
@@ -573,25 +594,23 @@ export function CountdownToLiveWrapper({
                   </Button>
                   <Button
                     size="sm"
-                    variant={playerFilter === 'bidders' ? 'default' : 'outline'}
                     onClick={() => setPlayerFilter('bidders')}
                     className={`${
                       playerFilter === 'bidders'
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
+                        ? 'bg-amber-400 text-[#1a1200] hover:bg-amber-300'
+                        : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
                     Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})
                   </Button>
                   <Button
                     size="sm"
-                    variant={playerFilter === 'bidder-choice' ? 'default' : 'outline'}
                     onClick={() => setPlayerFilter('bidder-choice')}
                     className={`${
                       playerFilter === 'bidder-choice'
-                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700 border-0'
-                        : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
+                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600 border-0'
+                        : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
+                    } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold whitespace-nowrap`}
                   >
                     ⭐ Bidder Choice ({knowYourPlayersCards.filter(card => card.isBidderChoice).length})
                   </Button>
@@ -599,45 +618,40 @@ export function CountdownToLiveWrapper({
               </div>
 
               {filteredKnowYourPlayersCards.length === 0 ? (
-                <div className="text-center py-10 text-gray-500 dark:text-gray-400 text-sm">
-                  {knowYourPlayersCards.length === 0 
-                    ? 'Player list not available yet. Check back soon!' 
+                <div className="text-center py-10 text-white/40 text-sm">
+                  {knowYourPlayersCards.length === 0
+                    ? 'Player list not available yet. Check back soon!'
                     : `No players found${playerFilter !== 'all' ? ` for ${playerFilter}` : ''}.`}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
                   {filteredKnowYourPlayersCards.map(card => {
                     const isBidder = card.statusLabel === 'Bidder'
+                    // Discipline flag on the top border - null for a bidder/team
+                    // card (it has no batting/bowling role) or when the source
+                    // data simply doesn't say what role a player plays.
+                    const roleFlag = !isBidder ? getRoleFlag(card.role, card.specialty) : null
                     return (
                       <div
                         key={card.id}
-                        className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${isBidder ? 'border-violet-400 shadow-[0_0_20px_rgba(168,85,247,0.6)] bg-gradient-to-br from-violet-900 via-purple-900 to-slate-950' : 'border-white/20 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950'} max-w-md mx-auto w-full`}
+                        className={`group relative rounded-2xl overflow-hidden border transition-all hover:scale-[1.02] max-w-md mx-auto w-full ${isBidder ? 'border-purple-400/50' : 'border-white/10'}`}
+                        style={{ background: isBidder ? 'linear-gradient(180deg,#1c1730,#05070a)' : 'linear-gradient(180deg,#12161d,#05070a)' }}
                       >
-                        {/* Bidder Choice Badge - Top Left */}
-                        {card.isBidderChoice && (
-                          <div className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20">
-                            <Badge
-                              variant="secondary"
-                              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border border-purple-300 backdrop-blur px-2 py-1 text-[9px] sm:text-xs font-bold"
-                            >
-                              ⭐ BIDDER CHOICE
-                            </Badge>
+                        {/* Discipline flag - on the card's top border, replacing
+                            the old plain role text line beneath the name */}
+                        {roleFlag && (
+                          <div
+                            className="absolute top-0 left-1/2 -translate-x-1/2 z-20 text-center"
+                            style={{ width: 96, padding: '7px 0 15px 0', background: roleFlag.background, clipPath: 'polygon(0% 0%,100% 0%,100% 66%,50% 100%,0% 66%)' }}
+                          >
+                            <span className="text-[9px] font-black uppercase tracking-wide" style={{ color: roleFlag.color }}>{roleFlag.label}</span>
                           </div>
                         )}
 
-                        {/* Status Badge - Top Right */}
-                        <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
-                          <Badge
-                            variant="secondary"
-                            className={`${isBidder ? 'bg-violet-200 text-violet-950 border border-violet-300' : 'bg-white/10 text-white'} backdrop-blur px-2 py-1 text-[9px] sm:text-xs font-bold`}
-                          >
-                            {card.statusLabel}
-                          </Badge>
-                        </div>
-
                         {/* Player Photo - Portrait Style */}
-                        <div 
-                          className="relative h-48 sm:h-56 bg-gradient-to-b from-slate-700 to-slate-900 flex items-center justify-center cursor-pointer group/photo"
+                        <div
+                          className="relative h-48 sm:h-56 flex items-center justify-center cursor-pointer group/photo"
+                          style={{ background: 'radial-gradient(circle at 50% 22%, #1b1f27, #05070a 75%)' }}
                           onClick={() => card.imageUrl && setFullScreenImage(card.imageUrl)}
                         >
                           {card.imageUrl ? (
@@ -659,13 +673,45 @@ export function CountdownToLiveWrapper({
                               </div>
                             </>
                           ) : (
-                            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white/20 flex items-center justify-center">
-                              <span className="text-4xl sm:text-5xl font-bold text-white">
+                            <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center ${isBidder ? 'bg-purple-500/20 border border-purple-400/40' : 'bg-white/[0.08]'}`}>
+                              <span className="text-3xl sm:text-4xl font-bold text-white">
                                 {card.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
                           )}
-                          <div className={`absolute inset-0 ${isBidder ? 'bg-gradient-to-t from-purple-900 via-transparent to-transparent' : 'bg-gradient-to-t from-slate-900 via-transparent to-transparent'}`} />
+
+                          {/* Bidder Choice - bottom-left of the photo box (moved
+                              off the top corners so it never collides with the
+                              discipline flag above) */}
+                          {card.isBidderChoice && (
+                            <div className="absolute bottom-2 left-2 z-20">
+                              <Badge
+                                variant="secondary"
+                                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border border-purple-300 px-2 py-1 text-[9px] sm:text-xs font-bold whitespace-nowrap"
+                              >
+                                ⭐ BIDDER CHOICE
+                              </Badge>
+                            </div>
+                          )}
+
+                          {/* Status badge - bottom-right of the photo box (same
+                              move, same reason) */}
+                          <div className="absolute bottom-2 right-2 z-20">
+                            <Badge
+                              variant="secondary"
+                              className={`${
+                                isBidder
+                                  ? 'bg-purple-200 text-purple-950 border border-purple-300'
+                                  : card.statusLabel === 'Sold'
+                                    ? 'bg-teal-500/20 text-teal-300 border border-teal-400/40'
+                                    : card.statusLabel === 'Unsold'
+                                      ? 'bg-red-500/20 text-red-300 border border-red-400/35'
+                                      : 'bg-white/10 text-white border border-white/15'
+                              } px-2 py-1 text-[9px] sm:text-xs font-bold whitespace-nowrap`}
+                            >
+                              {card.statusLabel}
+                            </Badge>
+                          </div>
                         </div>
 
                         {/* Player Info */}
@@ -681,7 +727,7 @@ export function CountdownToLiveWrapper({
                                   href={card.cricherosLink}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex-shrink-0 px-2 py-0.5 bg-green-600/20 hover:bg-green-600/40 text-green-400 hover:text-green-300 rounded transition-colors duration-200 border border-green-500/30 text-[9px] sm:text-[10px] font-semibold"
+                                  className="flex-shrink-0 px-2 py-0.5 bg-teal-500/20 hover:bg-teal-500/40 text-teal-300 hover:text-teal-200 rounded transition-colors duration-200 border border-teal-500/30 text-[9px] sm:text-[10px] font-semibold"
                                   onClick={(e) => e.stopPropagation()}
                                   title="View Cricheroes Profile"
                                 >
@@ -691,31 +737,31 @@ export function CountdownToLiveWrapper({
                           </div>
                             {/* Team Name for Bidders */}
                             {isBidder && card.teamName && (
-                              <p className="text-violet-300 text-[10px] sm:text-xs font-bold tracking-wide truncate mt-1">
+                              <p className="text-purple-300 text-[10px] sm:text-xs font-bold tracking-wide truncate mt-1">
                                 {card.teamName}
                               </p>
                             )}
                             {card.specialty && (
-                              <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
+                              <p className="text-white/40 text-[10px] sm:text-xs font-semibold truncate mt-1">{card.statsSummary || card.specialty}</p>
                             )}
                           </div>
 
                           {/* Price Info */}
                           <div className="space-y-1.5">
                             {isBidder ? (
-                              <div className="bg-violet-500/20 border border-violet-400/30 rounded-lg p-2 text-center">
-                                <p className="text-violet-200 text-[9px] sm:text-[10px] font-semibold">PARTICIPATING</p>
+                              <div className="bg-purple-500/20 border border-purple-400/30 rounded-lg p-2 text-center">
+                                <p className="text-purple-200 text-[9px] sm:text-[10px] font-semibold">PARTICIPATING</p>
                                 <p className="text-white text-xs sm:text-sm font-bold">As Bidder</p>
                               </div>
                             ) : card.purchasedPrice !== null ? (
-                              <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg p-2 text-center border-2 border-green-400/30">
-                                <p className="text-green-200 text-[9px] sm:text-[10px] font-semibold">PURCHASED FOR</p>
+                              <div className="rounded-lg p-2 text-center border border-teal-400/30" style={{ background: 'linear-gradient(90deg, rgba(20,184,166,0.25), rgba(20,184,166,0.08))' }}>
+                                <p className="text-teal-200 text-[9px] sm:text-[10px] font-semibold">PURCHASED FOR</p>
                                 <p className="text-white font-black text-base sm:text-lg break-words">₹{card.purchasedPrice.toLocaleString('en-IN')}</p>
                               </div>
                             ) : (
-                              <div className="bg-white/5 rounded-lg p-2 border border-white/10">
+                              <div className="bg-white/[0.05] rounded-lg p-2 border border-white/10">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-white/60 text-[9px] sm:text-[10px]">Base Price</span>
+                                  <span className="text-white/40 text-[9px] sm:text-[10px] uppercase">Base Price</span>
                                   <span className="text-white font-bold text-xs sm:text-sm">₹{card.basePrice.toLocaleString('en-IN')}</span>
                                 </div>
                               </div>
