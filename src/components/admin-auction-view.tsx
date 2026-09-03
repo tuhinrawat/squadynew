@@ -1820,7 +1820,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           className="text-gray-900 dark:text-gray-100 cursor-pointer"
                         >
                           <Download className="h-4 w-4 mr-2" />
-                          Export Results
+                          Export Results (with Photos &amp; Rules)
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={handleStartAuction}
