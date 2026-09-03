@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Hammer, Settings } from 'lucide-react'
+import { LayoutDashboard, Hammer, Settings, Activity } from 'lucide-react'
 
 interface SidebarProps {
   userRole: string
@@ -25,6 +25,11 @@ export function DashboardSidebar({ userRole }: SidebarProps) {
       icon: Hammer,
     },
     ...(userRole === 'SUPER_ADMIN' ? [
+      {
+        name: 'Observability',
+        href: '/dashboard/observability',
+        icon: Activity,
+      },
       {
         name: 'Settings',
         href: '/dashboard/settings',

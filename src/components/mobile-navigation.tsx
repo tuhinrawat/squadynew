@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Menu, LayoutDashboard, Hammer, Settings, LogOut, X } from 'lucide-react'
+import { Menu, LayoutDashboard, Hammer, Settings, LogOut, X, Activity } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 interface User {
@@ -37,6 +37,12 @@ export function MobileNavigation({ user, auctionCount }: MobileNavigationProps) 
       href: '/dashboard/auctions',
       icon: Hammer,
       show: true
+    },
+    {
+      name: 'Observability',
+      href: '/dashboard/observability',
+      icon: Activity,
+      show: user.role === 'SUPER_ADMIN'
     },
     {
       name: 'Settings',
