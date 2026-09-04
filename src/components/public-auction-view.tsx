@@ -132,11 +132,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     ).length
   }, [bidHistory])
 
-  // Bid error state for public view
-  const errorIdRef = useRef(0)
-  const bidErrorTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
-  const [bidErrors, setBidErrors] = useState<Array<{ id: number; message: string }>>([])
-  
   // Bid history modal state
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
 
@@ -153,13 +148,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setIsClient(true)
   }, [])
   
-  // Cleanup bid error timeouts on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(bidErrorTimeouts.current).forEach(clearTimeout)
-    }
-  }, [])
-
   // Update local current player when prop changes
   useEffect(() => {
     setLocalCurrentPlayer(currentPlayer)
@@ -543,16 +531,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         }))
       }
     },
-    onBidError: (data) => {
-      // Display error message in public view
-      const id = ++errorIdRef.current
-      setBidErrors(prev => [{ id, message: data.message }, ...prev])
-      const timeout = setTimeout(() => {
-        setBidErrors(prev => prev.filter(err => err.id !== id))
-        delete bidErrorTimeouts.current[id]
-      }, 10000)
-      bidErrorTimeouts.current[id] = timeout
-    },
   }, isPresenter)
 
   // Extract player data from JSON
@@ -830,22 +808,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               </span>
               <div className="h-px flex-1 bg-white/20" />
             </motion.div>
-          )}
-
-          {/* Bid errors - real feature, kept visible on every breakpoint
-              (not just desktop) since it's not just an activity-panel item */}
-          {bidErrors.length > 0 && (
-            <div className="relative px-3 sm:px-4 pb-2 space-y-2">
-              {bidErrors.map(err => (
-                <div
-                  key={err.id}
-                  className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs sm:text-sm text-red-300 animate-in fade-in slide-in-from-top-2 duration-300"
-                >
-                  <span className="mt-0.5">⚠️</span>
-                  <span className="flex-1">{err.message}</span>
-                </div>
-              ))}
-            </div>
           )}
 
           {/* Main stage grid */}

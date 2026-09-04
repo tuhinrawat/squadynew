@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerRawPusherEvent } from '@/lib/pusher'
 import { prisma } from '@/lib/prisma'
 
 // In-memory store for viewer counts (in production, use Redis)
@@ -35,21 +34,11 @@ export async function POST(
         console.error('Failed to update peak viewers:', err)
       }
 
-      // Broadcast new count to all viewers
-      await triggerRawPusherEvent(auctionId, 'viewer-count-update', {
-        count: newCount
-      })
-
       return NextResponse.json({ count: newCount })
     } else if (action === 'leave') {
       const currentCount = viewerCounts.get(auctionId) || 0
       const newCount = Math.max(0, currentCount - 1)
       viewerCounts.set(auctionId, newCount)
-
-      // Broadcast new count to all viewers
-      await triggerRawPusherEvent(auctionId, 'viewer-count-update', {
-        count: newCount
-      })
 
       return NextResponse.json({ count: newCount })
     } else if (action === 'get') {
@@ -67,12 +56,19 @@ export async function POST(
   }
 }
 
+// Polled by useViewerCount on an interval (not Pusher - see that hook for
+// why). Short edge cache so many viewers polling the same auction within
+// the same few seconds collapse into ~one real read of this instance's map,
+// the same tradeoff the snapshot endpoint makes.
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const auctionId = params.id
   const count = viewerCounts.get(auctionId) || 0
-  return NextResponse.json({ count })
+  return NextResponse.json(
+    { count },
+    { headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10' } }
+  )
 }
 

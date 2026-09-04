@@ -246,6 +246,12 @@ export async function POST(
       }
     })
     
+    // Collects players whose status changed this request (recycled UNSOLD ->
+    // AVAILABLE below, plus the just-sold player further down) so they go out
+    // in the single 'players-updated' broadcast at the end of this handler
+    // instead of a separate trigger per change.
+    let recycledPlayersForBroadcast: Array<{ id: string; auctionId: string; data: unknown; status: string; isIcon: boolean; soldTo: string | null; soldPrice: number | null }> = []
+
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
     if (availablePlayers.length === 0) {
@@ -293,15 +299,20 @@ export async function POST(
           },
           select: {
             id: true,
+            auctionId: true,
+            data: true,
             status: true,
-            isIcon: true
+            isIcon: true,
+            soldTo: true,
+            soldPrice: true
           }
         })
-        
+
         availablePlayers = recycledPlayers
-        
-        // Broadcast players updated event to notify clients of recycled players
-        triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
+        recycledPlayersForBroadcast = recycledPlayers
+
+        // Recycled players go out in the single combined 'players-updated'
+        // broadcast below (with the sold player) instead of their own trigger.
       }
     }
     
@@ -392,14 +403,19 @@ export async function POST(
       await triggerAuctionEvent(params.id, 'auction-pool-exhausted', {}).catch(err => console.error('Pusher error (non-critical):', err))
     }
 
-    // Broadcast players updated event with data to avoid fetch (fire and forget)
+    // Broadcast players updated event with data to avoid fetch (fire and forget).
+    // Combines the just-sold player with any UNSOLD players recycled back to
+    // AVAILABLE above into a single trigger, instead of one per change.
     triggerAuctionEvent(params.id, 'players-updated', {
-      players: [{
-        ...currentPlayer,
-        status: 'SOLD',
-        soldTo: winningBidder.id,
-        soldPrice: highestBid.amount
-      }],
+      players: [
+        ...recycledPlayersForBroadcast,
+        {
+          ...currentPlayer,
+          status: 'SOLD',
+          soldTo: winningBidder.id,
+          soldPrice: highestBid.amount
+        }
+      ],
       bidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }]
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
 

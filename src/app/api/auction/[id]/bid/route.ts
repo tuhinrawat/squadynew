@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
-import { triggerAuctionEvent } from '@/lib/pusher'
+import { triggerAuctionEvent, triggerAdminEvent } from '@/lib/pusher'
 import { RateLimiter } from '@/lib/rate-limiter'
 import { logEventAsync, describeError } from '@/lib/observability'
 
@@ -20,15 +20,18 @@ const bidSchema = z.object({
 // broadcast on every request.
 const bidRateLimiter = new RateLimiter(5000, 15) // 15 bid attempts per 5 seconds per bidder
 
-// Helper function to broadcast bid error and return error response
+// Helper function to notify the admin console of a bid error and return the
+// error response. Admin-only (not the shared auction channel) - the person
+// who attempted the bid already gets this in the HTTP response; the only
+// other party who needs to see it live is whoever is running the console,
+// not every public/presenter viewer.
 function broadcastBidError(auctionId: string, errorMessage: string, bidderName?: string, bidderId?: string) {
-  // Broadcast error via Pusher (non-blocking)
-  triggerAuctionEvent(auctionId, 'bid-error', {
+  triggerAdminEvent(auctionId, 'bid-error', {
     message: errorMessage,
     bidderName,
     bidderId
-  } as any).catch(err => console.error('Failed to broadcast bid error:', err))
-  
+  }).catch(err => console.error('Failed to notify admin of bid error:', err))
+
   return NextResponse.json({ error: errorMessage }, { status: 400 })
 }
 

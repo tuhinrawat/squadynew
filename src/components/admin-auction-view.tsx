@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { usePusher } from '@/lib/pusher-client'
+import { usePusher, useAdminPusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ActivityLog } from '@/components/activity-log'
 import { isLiveStatus } from '@/lib/auction-status'
@@ -1209,8 +1209,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     onAuctionEnded: handleAuctionEnded,
     onAuctionReset: handleAuctionReset,
     onAuctionPoolExhausted: () => setPoolExhausted(true),
+  })
+
+  // Bid errors arrive on a separate admin-only channel - see useAdminPusher.
+  useAdminPusher(auction.id, {
     onBidError: (data) => {
-      // Display error message via Pusher
       pushBidError(data.message)
     },
   })

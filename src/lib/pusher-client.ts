@@ -141,11 +141,6 @@ export interface AuctionEventData {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
   }
-  'bid-error': {
-    message: string
-    bidderId?: string
-    bidderName?: string
-  }
 }
 
 export type AuctionEventName = keyof AuctionEventData
@@ -162,7 +157,22 @@ export interface UsePusherOptions {
   onAuctionReset?: (data: AuctionEventData['auction-reset']) => void
   onAuctionPoolExhausted?: (data: AuctionEventData['auction-pool-exhausted']) => void
   onPlayersUpdated?: (data: AuctionEventData['players-updated']) => void
-  onBidError?: (data: AuctionEventData['bid-error']) => void
+}
+
+// Admin-only events - see AdminEventData in src/lib/pusher.ts for why
+// bid-error lives here instead of on the shared auction-{id} channel.
+export interface AdminEventData {
+  'bid-error': {
+    message: string
+    bidderId?: string
+    bidderName?: string
+  }
+}
+
+export type AdminEventName = keyof AdminEventData
+
+export interface UseAdminPusherOptions {
+  onBidError?: (data: AdminEventData['bid-error']) => void
 }
 
 // enabled defaults true; pass false to skip subscribing to the Pusher
@@ -210,8 +220,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             channelToBind.unbind('auction-reset')
             channelToBind.unbind('auction-pool-exhausted')
             channelToBind.unbind('players-updated')
-            channelToBind.unbind('bid-error')
-            
+
             // Bind all event handlers
             channelToBind.bind('new-bid', (data: any) => {
               console.log('[Pusher] new-bid event received, calling callback', { hasCallback: !!callbacksRef.current.onNewBid, amount: data.amount })
@@ -273,10 +282,6 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             
             channelToBind.bind('players-updated', (data: any) => {
               callbacksRef.current.onPlayersUpdated?.(data)
-            })
-            
-            channelToBind.bind('bid-error', (data: any) => {
-              callbacksRef.current.onBidError?.(data)
             })
           }
       
@@ -409,6 +414,36 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
     error,
     disconnect,
   }
+}
+
+// Subscribes to the admin-only channel (admin-{auctionId}) - a separate
+// channel from the shared auction-{auctionId} one usePusher subscribes to,
+// so events sent only here (currently just bid-error) never get delivered
+// to, or billed against, public/presenter viewers. Meant for the admin
+// console only.
+export function useAdminPusher(auctionId: string, options: UseAdminPusherOptions = {}) {
+  const callbacksRef = useRef<UseAdminPusherOptions>(options)
+
+  useEffect(() => {
+    callbacksRef.current = options
+  }, [options])
+
+  useEffect(() => {
+    if (!auctionId) return
+
+    const pusher = initializePusher()
+    const channelName = `admin-${auctionId}`
+    const channel = pusher.subscribe(channelName)
+
+    channel.bind('bid-error', (data: AdminEventData['bid-error']) => {
+      callbacksRef.current.onBidError?.(data)
+    })
+
+    return () => {
+      channel.unbind('bid-error')
+      pusher.unsubscribe(channelName)
+    }
+  }, [auctionId])
 }
 
 export function usePusherChannel(auctionId: string) {

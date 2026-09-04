@@ -70,6 +70,15 @@ export interface AuctionEventData {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
   }
+}
+
+export type AuctionEventName = keyof AuctionEventData
+
+// Events delivered only to the admin console, on a channel nobody else
+// subscribes to - so a rejected/invalid bid attempt (which can happen a lot
+// during a live event) never gets multiplied by the auction's public
+// viewer count the way a broadcast on the shared auction-{id} channel would.
+export interface AdminEventData {
   'bid-error': {
     message: string
     bidderId?: string
@@ -77,7 +86,7 @@ export interface AuctionEventData {
   }
 }
 
-export type AuctionEventName = keyof AuctionEventData
+export type AdminEventName = keyof AdminEventData
 
 // The pusher npm package throws a PusherRequestError with .status and .body
 // attached whenever Pusher's REST API responds with an HTTP error (verified
@@ -139,15 +148,15 @@ export function triggerAuctionEventToUser<T extends AuctionEventName>(
   return pusher.trigger(`user-${userId}`, eventName, data)
 }
 
-// For the handful of call sites that trigger a channel/event pair
-// triggerAuctionEvent's typed AuctionEventData doesn't cover (viewer counts) -
-// same timing/success telemetry, no type constraint on the event name or payload.
-export function triggerRawPusherEvent(
+// Same fire-and-forget/telemetry shape as triggerAuctionEvent, but targets
+// admin-{auctionId} instead of the shared auction-{auctionId} channel - see
+// AdminEventData above for why.
+export function triggerAdminEvent<T extends AdminEventName>(
   auctionId: string,
-  eventName: string,
-  data: unknown
+  eventName: T,
+  data: AdminEventData[T]
 ): Promise<Pusher.Response> {
-  const channelName = `auction-${auctionId}`
+  const channelName = `admin-${auctionId}`
   const start = Date.now()
   return pusher.trigger(channelName, eventName, data)
     .then(response => {

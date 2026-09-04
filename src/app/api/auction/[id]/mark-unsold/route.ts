@@ -76,6 +76,12 @@ export async function POST(
       }
     })
     
+    // Collects players whose status changed this request (recycled UNSOLD ->
+    // AVAILABLE below, plus this player's own UNSOLD update further down) so
+    // they go out in the single 'players-updated' broadcast at the end of
+    // this handler instead of a separate trigger per change.
+    let recycledPlayersForBroadcast: Array<{ id: string; auctionId: string; data: unknown; status: string; isIcon: boolean; soldTo: string | null; soldPrice: number | null }> = []
+
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
     if (availablePlayers.length === 0) {
@@ -115,20 +121,27 @@ export async function POST(
         })
         
         // OPTIMIZED: Fetch only AVAILABLE players after conversion
-        availablePlayers = await prisma.player.findMany({
+        const recycledPlayers = await prisma.player.findMany({
           where: {
             auctionId: params.id,
             status: 'AVAILABLE'
           },
           select: {
             id: true,
+            auctionId: true,
+            data: true,
             status: true,
-            isIcon: true
+            isIcon: true,
+            soldTo: true,
+            soldPrice: true
           }
         })
-        
-        // Broadcast players updated event to notify clients of recycled players
-        triggerAuctionEvent(params.id, 'players-updated', {} as any).catch(err => console.error('Pusher error (non-critical):', err))
+
+        availablePlayers = recycledPlayers
+        recycledPlayersForBroadcast = recycledPlayers
+
+        // Recycled players go out in the single combined 'players-updated'
+        // broadcast below instead of their own trigger.
       }
     }
     
@@ -216,8 +229,20 @@ export async function POST(
       } as any).catch(err => console.error('Pusher error (non-critical):', err))
     }
 
-    // Broadcast players updated event
-    await triggerAuctionEvent(params.id, 'players-updated', {}).catch(err => console.error('Pusher error (non-critical):', err))
+    // Broadcast players updated event. Combines this player's own UNSOLD
+    // update with any other UNSOLD players recycled back to AVAILABLE above
+    // into a single trigger, instead of one per change.
+    await triggerAuctionEvent(params.id, 'players-updated', {
+      players: [
+        ...recycledPlayersForBroadcast,
+        ...(currentPlayer ? [{
+          ...currentPlayer,
+          status: 'UNSOLD',
+          soldTo: null,
+          soldPrice: null
+        }] : [])
+      ]
+    } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 
       success: true,
