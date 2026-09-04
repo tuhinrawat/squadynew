@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download } from 'lucide-react'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher } from '@/lib/pusher-client'
@@ -350,6 +350,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const router = useRouter()
   const { data: session } = useSession()
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
+  // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
+  // to recycle) - without this, the UI has no way to distinguish "waiting for
+  // the next player" from "there is no next player," and just freezes on
+  // whoever was sold last.
+  const [poolExhausted, setPoolExhausted] = useState(false)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
   const [timer, setTimer] = useState(30)
   const [isPaused, setIsPaused] = useState(false)
@@ -906,7 +911,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
 
   const handleSaleUndo = useCallback((data: PusherSaleUndoData) => {
       console.log('🔄 Sale undo event received:', data)
-      
+      // Undoing a sale always brings a player back onto the block, so
+      // whatever "pool exhausted" state existed no longer applies.
+      setPoolExhausted(false)
+
       // Update player status if player data is provided
       if (data.player) {
         setPlayers(prev => prev.map(p => 
@@ -1046,6 +1054,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   }, [])
 
   const handleNewPlayer = useCallback((data: PusherPlayerData) => {
+      setPoolExhausted(false)
       console.log('🎬 NEW PLAYER EVENT RECEIVED - Starting reveal animation:', data.player)
       console.log('🎬 Player data:', {
         id: data.player?.id,
@@ -1251,6 +1260,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     onPlayersUpdated: handlePlayersUpdated,
     onAuctionEnded: handleAuctionEnded,
     onAuctionReset: handleAuctionReset,
+    onAuctionPoolExhausted: () => setPoolExhausted(true),
     onBidError: (data) => {
       // Display error message via Pusher
       pushBidError(data.message)
@@ -1378,8 +1388,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               }
               fallbackTimeoutRef.current = null
             }, 12000)
+          } else {
+            // No next player in the response - the pool is empty. Show that
+            // clearly now instead of waiting on the 'auction-pool-exhausted'
+            // Pusher round-trip, which the admin who just took this action
+            // shouldn't have to wait on to see the result of their own click.
+            setPoolExhausted(true)
           }
-          
+
           // Auto-hide sold animation after 3 seconds (Pusher event will also handle this)
           setTimeout(() => {
             setSoldAnimation(false)
@@ -1924,6 +1940,23 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           {/* New Player Spotlight Card (presentational) - client only to avoid SSR drift */}
           {isClient && (
             <div className="mb-4 space-y-4">
+              {/* Pool exhausted: nothing left to auction. Shown above the (now
+                  stale) last-sold player card instead of leaving the screen
+                  looking frozen with no explanation. */}
+              {poolExhausted && (
+                <div className="rounded-xl border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 p-4 sm:p-6 text-center space-y-3">
+                  <PartyPopper className="h-8 w-8 mx-auto text-purple-600 dark:text-purple-400" />
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">All Players Sold</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Every player has been sold or marked unsold with no one left to recycle. This auction is ready to be ended.
+                  </p>
+                  {viewMode === 'admin' && (
+                    <Button onClick={handleEndAuction} className="bg-purple-600 hover:bg-purple-700 text-white">
+                      End Auction
+                    </Button>
+                  )}
+                </div>
+              )}
               {/* Player Card Container with Animation Overlay */}
               <div className="relative mx-1 sm:mx-0">
                 {/* Player Reveal Animation - Inside Player Card */}
@@ -2042,6 +2075,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     isMarkingSold={isMarkingSold}
                     isMarkingUnsold={isMarkingUnsold}
                     hasBids={bidHistory.length > 0 || currentBid !== null}
+                    isDisabled={poolExhausted}
                   />
                 </div>
               )}

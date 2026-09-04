@@ -139,6 +139,7 @@ export interface AuctionEventData {
   'auction-resumed': {}
   'auction-ended': {}
   'auction-reset': {}
+  'auction-pool-exhausted': Record<string, never>
   'players-updated': {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
@@ -163,6 +164,7 @@ export interface UsePusherOptions {
   onAuctionResumed?: (data: AuctionEventData['auction-resumed']) => void
   onAuctionEnded?: (data: AuctionEventData['auction-ended']) => void
   onAuctionReset?: (data: AuctionEventData['auction-reset']) => void
+  onAuctionPoolExhausted?: (data: AuctionEventData['auction-pool-exhausted']) => void
   onPlayersUpdated?: (data: AuctionEventData['players-updated']) => void
   onBidError?: (data: AuctionEventData['bid-error']) => void
 }
@@ -204,6 +206,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             channelToBind.unbind('auction-resumed')
             channelToBind.unbind('auction-ended')
             channelToBind.unbind('auction-reset')
+            channelToBind.unbind('auction-pool-exhausted')
             channelToBind.unbind('players-updated')
             channelToBind.unbind('bid-error')
             
@@ -264,6 +267,10 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             
             channelToBind.bind('auction-reset', (data: any) => {
               callbacksRef.current.onAuctionReset?.(data)
+            })
+
+            channelToBind.bind('auction-pool-exhausted', () => {
+              callbacksRef.current.onAuctionPoolExhausted?.({})
             })
             
             channelToBind.bind('players-updated', (data: any) => {

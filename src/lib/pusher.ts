@@ -64,6 +64,11 @@ export interface AuctionEventData {
   'auction-resumed': {}
   'auction-ended': {}
   'auction-reset': {}
+  // The pool of players ran out (nothing AVAILABLE, nothing UNSOLD left to
+  // recycle) after a sale - distinct from 'new-player' so every connected
+  // screen can show a clear completion state instead of freezing on the
+  // last-sold player forever, since no 'new-player' event follows this one.
+  'auction-pool-exhausted': Record<string, never>
   'players-updated': {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates

@@ -83,6 +83,10 @@ interface PublicAuctionViewProps {
 
 export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
+  // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
+  // to recycle) - without this, spectators have no way to tell "waiting for
+  // the next player" apart from "there is no next player."
+  const [poolExhausted, setPoolExhausted] = useState(false)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
   const [timer, setTimer] = useState(30)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
@@ -403,10 +407,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setTimer(data.seconds)
     },
     onNewPlayer: (data) => {
+      setPoolExhausted(false)
       // Store the new player and show reveal animation
       setPendingPlayer(data.player as Player)
       setShowPlayerReveal(true)
       // Don't update current player yet - wait for animation to complete
+    },
+    onAuctionPoolExhausted: () => {
+      setPoolExhausted(true)
     },
     onAuctionEnded: () => {
       window.location.reload()
@@ -782,6 +790,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
               {isClient && (
                 <div className="relative">
+                  {/* Pool exhausted: nothing left to auction. Shown above the
+                      (now stale) last-sold player card instead of leaving
+                      spectators looking at a frozen screen with no explanation. */}
+                  {poolExhausted && (
+                    <div className="mb-3 rounded-xl border-2 border-purple-300 dark:border-purple-700 bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/40 dark:to-indigo-950/40 p-4 sm:p-6 text-center space-y-2">
+                      <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">🎉 All Players Sold</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Every player has been auctioned. Results will be shared shortly.
+                      </p>
+                    </div>
+                  )}
                   <AnimatePresence>
                     {showPlayerReveal && pendingPlayer && (
                       <PlayerRevealAnimation

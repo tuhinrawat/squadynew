@@ -385,6 +385,12 @@ export async function POST(
       await triggerAuctionEvent(params.id, 'timer-update', {
         seconds: countdownSeconds
       } as any)
+    } else {
+      // Nothing AVAILABLE and nothing UNSOLD left to recycle - the pool is
+      // genuinely exhausted. Without this, every connected screen (admin
+      // included) waits forever for a 'new-player' event that will never
+      // come, staying frozen on the player that was just sold.
+      await triggerAuctionEvent(params.id, 'auction-pool-exhausted', {})
     }
 
     // Broadcast players updated event with data to avoid fetch (fire and forget)
