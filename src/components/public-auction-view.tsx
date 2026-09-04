@@ -780,7 +780,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     <div className="absolute -top-[30%] left-[10%] w-24 h-[160%] bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[-10deg] pointer-events-none" />
                     {presenterPhotoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={presenterPhotoUrl} alt={playerName} className="w-full h-full object-cover" />
+                      <img src={presenterPhotoUrl} alt={playerName} className="w-full h-full object-contain" />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center opacity-20">
                         <svg width="220" height="380" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={2.5}>
