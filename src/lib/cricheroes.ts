@@ -2,7 +2,7 @@
 // depending on how the source spreadsheet was authored - these are every
 // variant already handled across the player card, the pre-live pool view,
 // and the roster page before this file existed to share it.
-const CRICHEROES_LINK_KEYS = [
+export const CRICHEROES_LINK_KEYS = [
   'Cricheroes Profile link',
   ' Cricheroes Profile link',
   'cricheroes profile link',
@@ -34,4 +34,31 @@ export function normalizeCricheroesLink(link: string | null | undefined): string
   if (!link) return undefined
   const trimmed = link.trim().replace(/\/+$/, '').toLowerCase()
   return trimmed || undefined
+}
+
+// Real uploaded sheets often have this column as free text a person pasted
+// into ("Hey check this out https://cricheroes.com/xyz please review"), or
+// with trailing junk after the link itself. Pulls out just the URL - from
+// "https://"/"http://" up to the first whitespace - and leaves the value
+// alone if it doesn't contain a recognizable link at all, rather than
+// blanking a column we can't confidently parse.
+export function cleanCricheroesLinkValue(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw
+  const match = raw.match(/(https?:\/\/[^\s]+)/i)
+  return match ? match[1].trim() : raw
+}
+
+// Runs cleanCricheroesLinkValue over every column name this codebase
+// recognizes as a Cricheroes-link field (see CRICHEROES_LINK_KEYS above),
+// for a single player's uploaded data. Used at import time so the stored
+// value is clean, not just whatever extractCricheroesLink can salvage from
+// it at display/match time.
+export function cleanCricheroesLinksInPlayerData<T extends Record<string, unknown>>(data: T): T {
+  const cleaned: Record<string, unknown> = { ...data }
+  for (const key of CRICHEROES_LINK_KEYS) {
+    if (key in cleaned) {
+      cleaned[key] = cleanCricheroesLinkValue(cleaned[key])
+    }
+  }
+  return cleaned as T
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
-import { extractCricheroesLink, normalizeCricheroesLink } from '@/lib/cricheroes'
+import { extractCricheroesLink, normalizeCricheroesLink, cleanCricheroesLinksInPlayerData } from '@/lib/cricheroes'
 import { Player } from '@prisma/client'
 
 // POST /api/auctions/[id]/players/upload-stats - Import a separate stats
@@ -31,11 +31,16 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
-    const { players: uploadedPlayers } = await request.json()
+    const body = await request.json()
+    const rawUploadedPlayers = body.players
 
-    if (!Array.isArray(uploadedPlayers) || uploadedPlayers.length === 0) {
+    if (!Array.isArray(rawUploadedPlayers) || rawUploadedPlayers.length === 0) {
       return NextResponse.json({ error: 'No player data provided' }, { status: 400 })
     }
+
+    // Clean up messy Cricheroes-link cells before matching or merging, so
+    // both the link-based match and the stored value are the plain URL.
+    const uploadedPlayers = rawUploadedPlayers.map(cleanCricheroesLinksInPlayerData)
 
     const normalizeName = (name: string): string => {
       if (!name || typeof name !== 'string') return ''

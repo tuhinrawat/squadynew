@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import { cleanCricheroesLinksInPlayerData } from '@/lib/cricheroes'
 
 // POST /api/auctions/[id]/players/upload - Upload multiple players from Excel/CSV
 export async function POST(
@@ -32,9 +33,15 @@ export async function POST(
     }
 
     // Validate that all players have data
-    const validPlayers = players.filter(player => 
-      player && typeof player === 'object' && Object.keys(player).length > 0
-    )
+    const validPlayers = players
+      .filter(player =>
+        player && typeof player === 'object' && Object.keys(player).length > 0
+      )
+      // Uploaded sheets often have this column as free text someone pasted
+      // a link into, with junk before/after it - strip down to just the
+      // https://... URL before it's stored, rather than only cleaning it up
+      // at display/match time.
+      .map(cleanCricheroesLinksInPlayerData)
 
     if (validPlayers.length === 0) {
       return NextResponse.json({ error: 'No valid player data found' }, { status: 400 })

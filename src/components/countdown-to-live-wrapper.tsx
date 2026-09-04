@@ -80,7 +80,7 @@ export function CountdownToLiveWrapper({
   // actually went for in a linked previous auction, not this auction's
   // current/base price. Players with no match sort to the end regardless
   // of direction, rather than reading as a "free" ₹0 in ascending order.
-  const [sortOrder, setSortOrder] = useState<'default' | 'price-desc' | 'price-asc'>('default')
+  const [sortOrder, setSortOrder] = useState<'default' | 'price-desc' | 'price-asc'>('price-desc')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
   const timerViewTrackedRef = useRef(false)
