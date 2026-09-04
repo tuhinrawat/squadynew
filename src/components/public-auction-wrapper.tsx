@@ -55,13 +55,18 @@ export function PublicAuctionWrapper({
 
   return (
     <>
-      <PublicHeader
-        onOpenBidHistory={() => {
-          if (openBidHistoryRef.current) {
-            openBidHistoryRef.current()
-          }
-        }}
-      />
+      {/* The marketing header (Register/Sign In, Powered by) has no place on
+          a screen being projected for a room to watch - presenter mode
+          builds its own minimal top strip inside PublicAuctionView instead. */}
+      {!isPresenter && (
+        <PublicHeader
+          onOpenBidHistory={() => {
+            if (openBidHistoryRef.current) {
+              openBidHistoryRef.current()
+            }
+          }}
+        />
+      )}
 
       <PublicAuctionView
         auction={auction}

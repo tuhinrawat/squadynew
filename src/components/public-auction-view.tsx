@@ -20,6 +20,7 @@ import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { GoingLiveBanner } from '@/components/going-live-banner'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
+import { BatIcon, BallIcon } from '@/components/cricket-stat-ui'
 // Memoized components for performance
 import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
 
@@ -689,6 +690,180 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return undefined
   }, [])
 
+  // Presenter mode (?presenter=1) is a dedicated full-screen stage meant to
+  // be projected for a room to watch, not the interactive per-viewer page -
+  // see the design brief this came from. It reuses all the same state above
+  // (currentPlayer, currentBid, stats, live Pusher connection) but renders a
+  // completely different layout: full attention on the player photo and one
+  // big "Current Bid" number, everything else that isn't essential to read
+  // from across a room removed. The regular public view below is untouched.
+  if (isPresenter) {
+    const presenterRole = playerData?.Speciality || playerData?.speciality || playerData?.Role || playerData?.role
+    const presenterBasePrice = Number(playerData?.['Base Price'] || playerData?.['base price']) || 1000
+    const presenterPhotoUrl = getProfilePhotoUrl(playerData)
+    const presenterBattingStats = extractBattingStats(playerData)
+    const presenterBowlingStats = extractBowlingStats(playerData)
+    const presenterIsBidderChoice = !!(currentPlayer?.isIcon || (currentPlayer?.data as any)?.isIcon)
+    const presenterCricherosLink = extractCricheroesLink(playerData)
+
+    return (
+      <>
+        <GoingLiveBanner show={showGoingLiveBanner} onComplete={() => setShowGoingLiveBanner(false)} />
+        {!showGoingLiveBanner && (
+          <div className="h-screen w-screen overflow-hidden bg-[#05070a] flex flex-col">
+            {/* Top strip - auction name, LIVE, sold/left count, connection status. Nothing else. */}
+            <div className="relative flex items-center justify-between px-6 py-2.5 border-b border-white/10 flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-sm font-black text-white uppercase tracking-tight truncate">{auction.name}</span>
+                <Badge className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 gap-1 animate-pulse flex-shrink-0">● LIVE</Badge>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-bold text-white/55 flex-shrink-0">
+                <span><span className="text-amber-400">{stats.sold}</span> sold</span>
+                <span className="text-white/20">&middot;</span>
+                <span><span className="text-teal-400">{stats.remaining}</span> left</span>
+                <span className="text-white/20">&middot;</span>
+                <span>{stats.total} total</span>
+                <span className={`inline-flex items-center gap-1.5 ${pusherConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${pusherConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                  {pusherConnected ? 'Live' : 'Reconnecting…'}
+                </span>
+              </div>
+            </div>
+
+            {/* Stage */}
+            <div className="relative flex-1 flex min-h-0">
+              <AnimatePresence>
+                {soldAnimation && (
+                  <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    className="absolute inset-0 z-50 flex items-center justify-center bg-green-500 text-white text-7xl lg:text-8xl font-black"
+                  >
+                    SOLD!
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {showPlayerReveal && pendingPlayer && (
+                  <PlayerRevealAnimation
+                    allPlayerNames={allPlayerNames}
+                    finalPlayerName={pendingPlayerName}
+                    onComplete={handleRevealComplete}
+                    duration={5000}
+                  />
+                )}
+              </AnimatePresence>
+
+              {poolExhausted ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center space-y-3">
+                    <h3 className="text-3xl lg:text-4xl font-black text-white">All Players Sold</h3>
+                    <p className="text-white/60 text-base lg:text-lg">Results will be shared shortly.</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Left: photo - dominant, not full-bleed */}
+                  <div className="relative w-[58%] h-full overflow-hidden bg-gradient-to-br from-[#1c2b2a] via-[#10181b] to-[#05070a] flex-shrink-0">
+                    <div className="absolute -top-[30%] left-[10%] w-24 h-[160%] bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[-10deg] pointer-events-none" />
+                    {presenterPhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={presenterPhotoUrl} alt={playerName} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                        <svg width="220" height="380" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={2.5}>
+                          <circle cx="110" cy="80" r="55"></circle>
+                          <path d="M25 375 C25 235 55 180 110 180 C165 180 195 235 195 375"></path>
+                        </svg>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#05070a]/95" />
+                  </div>
+
+                  {/* Right: identity + the big Current Bid number + compact stat strip */}
+                  <div className="relative flex-1 h-full bg-[#080b0f] border-l border-white/10 flex flex-col justify-center px-8 lg:px-14 py-6 overflow-y-auto min-w-0">
+                    {presenterRole && (
+                      <span className="text-base lg:text-xl font-extrabold text-teal-400 uppercase tracking-wide mb-1.5">{presenterRole}</span>
+                    )}
+                    <h1 className="text-3xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[0.98] mb-3 break-words">
+                      {playerName}
+                    </h1>
+                    <div className="flex flex-col gap-1 mb-6 text-sm lg:text-base font-bold">
+                      <span className="text-white/55">Base ₹{presenterBasePrice.toLocaleString('en-IN')}</span>
+                      {currentPlayer?.lastYearPrice != null && (
+                        <span className="text-white/70">
+                          Last Year <span className="text-amber-400">₹{currentPlayer.lastYearPrice.toLocaleString('en-IN')}</span>
+                          {currentPlayer.lastYearTeamName ? ` · ${currentPlayer.lastYearTeamName}` : ''}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* The scoreboard - the single most important number in the room */}
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={currentBid ? `${currentBid.bidderId}-${currentBid.amount}` : 'no-bid'}
+                        initial={{ opacity: 0, scale: 0.94 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.25 }}
+                        className="rounded-2xl border-[1.5px] border-teal-400/40 bg-gradient-to-br from-teal-400/15 to-teal-400/[0.02] px-6 lg:px-8 py-5 lg:py-6 mb-6 shadow-[0_0_60px_rgba(45,212,191,0.12)]"
+                      >
+                        <div className="text-xs font-extrabold text-teal-200 uppercase tracking-widest mb-1.5">Current Bid</div>
+                        {currentBid ? (
+                          <>
+                            <div className="text-4xl lg:text-5xl font-black text-amber-400 tracking-tight">
+                              ₹{currentBid.amount.toLocaleString('en-IN')}
+                            </div>
+                            <div className="text-sm lg:text-base font-bold text-white/70 mt-1 truncate">
+                              {currentBid.teamName || currentBid.bidderName}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-3xl lg:text-4xl font-black text-amber-400">No Bids Yet</div>
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
+
+                    {/* Compact two-row stat strip */}
+                    {(presenterBattingStats || presenterBowlingStats) && (
+                      <div className="flex flex-col gap-2.5 mb-6">
+                        {presenterBattingStats && (
+                          <div className="flex items-center gap-3 text-sm lg:text-base flex-wrap">
+                            <BatIcon size={18} />
+                            {presenterBattingStats.runs !== undefined && <span className="font-black text-white">{presenterBattingStats.runs} Runs</span>}
+                            {presenterBattingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white">{presenterBattingStats.average.toFixed(2)}</b></span>}
+                            {presenterBattingStats.strikeRate !== undefined && <span className="font-bold text-white/60">SR <b className="text-white">{presenterBattingStats.strikeRate.toFixed(2)}</b></span>}
+                          </div>
+                        )}
+                        {presenterBowlingStats && (
+                          <div className="flex items-center gap-3 text-sm lg:text-base flex-wrap">
+                            <BallIcon size={18} />
+                            {presenterBowlingStats.wickets !== undefined && <span className="font-black text-white">{presenterBowlingStats.wickets} Wkts</span>}
+                            {presenterBowlingStats.economy !== undefined && <span className="font-bold text-white/60">Econ <b className="text-white">{presenterBowlingStats.economy.toFixed(2)}</b></span>}
+                            {presenterBowlingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white">{presenterBowlingStats.average.toFixed(2)}</b></span>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {presenterIsBidderChoice && (
+                        <span className="text-[11px] font-extrabold text-purple-200 bg-purple-500/20 border border-purple-400/35 rounded-md px-3 py-1.5 uppercase tracking-wide">★ Bidder Choice</span>
+                      )}
+                      {presenterCricherosLink && (
+                        <span className="text-[11px] font-extrabold text-green-300 bg-green-600/15 border border-green-500/30 rounded-md px-3 py-1.5">Cricheroes.com</span>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
 
   return (
     <>
