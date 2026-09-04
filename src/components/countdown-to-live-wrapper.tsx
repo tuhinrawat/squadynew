@@ -8,7 +8,7 @@ import FloatingPromoChip from './floating-promo-chip'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown, Calendar } from 'lucide-react'
+import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown, Calendar, ArrowUpDown } from 'lucide-react'
 import { AddToCalendar } from './add-to-calendar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -76,6 +76,11 @@ export function CountdownToLiveWrapper({
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders' | 'bidder-choice'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  // Sorts by lastYearPrice (see auction-history.ts) - the price this player
+  // actually went for in a linked previous auction, not this auction's
+  // current/base price. Players with no match sort to the end regardless
+  // of direction, rather than reading as a "free" ₹0 in ascending order.
+  const [sortOrder, setSortOrder] = useState<'default' | 'price-desc' | 'price-asc'>('default')
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
   const timerViewTrackedRef = useRef(false)
@@ -174,13 +179,26 @@ export function CountdownToLiveWrapper({
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim()
-      filtered = filtered.filter(card => 
+      filtered = filtered.filter(card =>
         card.name.toLowerCase().includes(query)
       )
     }
-    
+
+    // Sort by last year's price - players with no matched price always sort
+    // to the end, in both directions, rather than reading as a ₹0 bid.
+    if (sortOrder !== 'default') {
+      filtered = [...filtered].sort((a, b) => {
+        const aPrice = a.lastYearPrice
+        const bPrice = b.lastYearPrice
+        if (aPrice == null && bPrice == null) return 0
+        if (aPrice == null) return 1
+        if (bPrice == null) return -1
+        return sortOrder === 'price-desc' ? bPrice - aPrice : aPrice - bPrice
+      })
+    }
+
     return filtered
-  }, [knowYourPlayersCards, playerFilter, searchQuery])
+  }, [knowYourPlayersCards, playerFilter, searchQuery, sortOrder])
 
   const scrollToKnowPlayers = useCallback(() => {
     knowPlayersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -523,8 +541,25 @@ export function CountdownToLiveWrapper({
                   </Select>
                 </div>
 
+                {/* Mobile Sort - last year's price, high-low or low-high */}
+                <div className="sm:hidden">
+                  <Select value={sortOrder} onValueChange={(value: 'default' | 'price-desc' | 'price-asc') => setSortOrder(value)}>
+                    <SelectTrigger className="w-full bg-white/[0.06] border-white/15 text-white">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpDown className="h-3.5 w-3.5 text-white/40" />
+                        <SelectValue placeholder="Sort by last year price" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default order</SelectItem>
+                      <SelectItem value="price-desc">Last Year Price: High to Low</SelectItem>
+                      <SelectItem value="price-asc">Last Year Price: Low to High</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Desktop Filter Buttons */}
-                <div className="hidden sm:flex flex-wrap gap-2">
+                <div className="hidden sm:flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
                     onClick={() => setPlayerFilter('all')}
@@ -603,6 +638,19 @@ export function CountdownToLiveWrapper({
                   >
                     ⭐ Bidder Choice ({knowYourPlayersCards.filter(card => card.isBidderChoice).length})
                   </Button>
+
+                  {/* Sort - last year's price, high-low or low-high */}
+                  <Select value={sortOrder} onValueChange={(value: 'default' | 'price-desc' | 'price-asc') => setSortOrder(value)}>
+                    <SelectTrigger className="w-auto ml-auto bg-white/[0.06] border-white/15 text-white text-xs sm:text-sm h-8 sm:h-9 gap-1.5">
+                      <ArrowUpDown className="h-3.5 w-3.5 text-white/40" />
+                      <SelectValue placeholder="Sort" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default order</SelectItem>
+                      <SelectItem value="price-desc">Last Year Price: High to Low</SelectItem>
+                      <SelectItem value="price-asc">Last Year Price: Low to High</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
