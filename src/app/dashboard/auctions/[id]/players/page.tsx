@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, DataTableColumn } from '@/components/data-table'
 import { parseExcelFile, ParsedPlayerData, validatePlayerData, cleanPlayerData } from '@/lib/excel-parser'
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus, BarChart3 } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -45,6 +45,22 @@ export default function PlayerManagement() {
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null)
   const [editPlayerData, setEditPlayerData] = useState<Record<string, string>>({})
   const [savingPlayer, setSavingPlayer] = useState(false)
+
+  // Import Player Stats dialog - a separate sheet (name, Cricheroes profile,
+  // Batting_*/Bowling_* columns) merged into EXISTING players, as opposed to
+  // the upload section above which creates new players.
+  const [statsDialogOpen, setStatsDialogOpen] = useState(false)
+  const [statsUploadedData, setStatsUploadedData] = useState<ParsedPlayerData[] | null>(null)
+  const [statsUploadColumns, setStatsUploadColumns] = useState<string[]>([])
+  const [statsUploadError, setStatsUploadError] = useState('')
+  const [statsUploading, setStatsUploading] = useState(false)
+  const [statsUploadResults, setStatsUploadResults] = useState<{
+    matched: number
+    unmatched: number
+    matchedDetails: Array<{ playerName: string; uploadedName: string; columnsUpdated: string[]; matchMethod: string }>
+    unmatchedDetails: Array<{ uploadedName: string; reason: string }>
+    newColumns: string[]
+  } | null>(null)
 
   // Check if editing is allowed - only block during LIVE and MOCK_RUN
   const isEditingAllowed = auctionStatus !== 'LIVE' && auctionStatus !== 'MOCK_RUN'
@@ -200,6 +216,78 @@ export default function PlayerManagement() {
     } finally {
       setUploading(false)
     }
+  }
+
+  const handleStatsFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setStatsUploadError('')
+    setStatsUploadedData(null)
+    setStatsUploadResults(null)
+
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+    ]
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+      setStatsUploadError('Please upload a valid Excel (.xlsx, .xls) or CSV file')
+      return
+    }
+
+    try {
+      const result = await parseExcelFile(file)
+      if (!result.success || !result.data || result.data.length === 0) {
+        setStatsUploadError(result.error || 'No player data found in the file')
+        return
+      }
+
+      setStatsUploadedData(result.data)
+      setStatsUploadColumns(result.columns || [])
+      setStatsDialogOpen(true)
+    } catch {
+      setStatsUploadError('Failed to parse file. Please check the format.')
+    } finally {
+      // Allow re-selecting the same file later
+      event.target.value = ''
+    }
+  }
+
+  const handleConfirmStatsUpload = async () => {
+    if (!statsUploadedData || statsUploadedData.length === 0) return
+
+    setStatsUploading(true)
+    setStatsUploadError('')
+
+    try {
+      const response = await fetch(`/api/auctions/${auctionId}/players/upload-stats`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ players: statsUploadedData }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import player stats')
+      }
+
+      setStatsUploadResults(data.results)
+      await fetchPlayers()
+    } catch (error) {
+      setStatsUploadError(error instanceof Error ? error.message : 'Network error. Please try again.')
+    } finally {
+      setStatsUploading(false)
+    }
+  }
+
+  const closeStatsDialog = () => {
+    setStatsDialogOpen(false)
+    setStatsUploadedData(null)
+    setStatsUploadColumns([])
+    setStatsUploadError('')
+    setStatsUploadResults(null)
   }
 
   const handleClearAllPlayers = async () => {
@@ -720,6 +808,162 @@ export default function PlayerManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* Import Player Stats - enriches EXISTING players with career stats
+          from a separate sheet, unlike the upload above which creates new
+          players. Kept as its own card/action since the two operations do
+          very different things and conflating them would be confusing. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <BarChart3 className="h-5 w-5 mr-2" />
+            Import Player Stats
+          </CardTitle>
+          <CardDescription>
+            Import a separate sheet (player name, Cricheroes profile, batting/bowling stats) and match it
+            against the players already in this auction. Matches by Cricheroes profile link first, falling
+            back to name (and contact number, if present) when a row has no link or no link match.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center space-x-4">
+            <Input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleStatsFileUpload}
+              className="flex-1"
+            />
+          </div>
+          {statsUploadError && !statsDialogOpen && (
+            <p className="text-sm text-red-600 dark:text-red-400 mt-2">{statsUploadError}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Import Player Stats - preview/confirm dialog */}
+      <Dialog open={statsDialogOpen} onOpenChange={(open) => { if (!open) closeStatsDialog() }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Player Stats</DialogTitle>
+            <DialogDescription>
+              Review the uploaded data before confirming. Nothing is saved until you confirm.
+            </DialogDescription>
+          </DialogHeader>
+
+          {statsUploadError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{statsUploadError}</AlertDescription>
+            </Alert>
+          )}
+
+          {statsUploadResults ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{statsUploadResults.matched}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Matched</div>
+                </div>
+                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{statsUploadResults.unmatched}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Unmatched</div>
+                </div>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{statsUploadResults.newColumns.length}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Columns Added</div>
+                </div>
+              </div>
+
+              {statsUploadResults.matchedDetails.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Matched Players:</h4>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {statsUploadResults.matchedDetails.map((item, idx) => (
+                      <div key={idx} className="text-sm text-gray-600 dark:text-gray-400">
+                        &bull; {item.uploadedName} &rarr; {item.playerName}
+                        <span className="text-xs text-gray-500 dark:text-gray-500 ml-2">
+                          ({item.columnsUpdated.length} columns, matched via: {item.matchMethod})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {statsUploadResults.unmatchedDetails.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Unmatched Rows:</h4>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {statsUploadResults.unmatchedDetails.map((item, idx) => (
+                      <div key={idx} className="text-sm text-gray-600 dark:text-gray-400">
+                        &bull; {item.uploadedName} - {item.reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : statsUploadedData && (
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                Found <strong>{statsUploadedData.length}</strong> rows in the file. Matching by Cricheroes profile
+                link first, then by name{statsUploadColumns.some(c => /contact|phone|mobile/i.test(c)) ? ' and contact number' : ''}.
+              </div>
+
+              <div className="max-h-60 overflow-y-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
+                    <tr>
+                      {statsUploadColumns.slice(0, 5).map(col => (
+                        <th key={col} className="px-3 py-2 text-left font-semibold">{col}</th>
+                      ))}
+                      {statsUploadColumns.length > 5 && (
+                        <th className="px-3 py-2 text-left font-semibold">... (+{statsUploadColumns.length - 5} more)</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statsUploadedData.slice(0, 10).map((row, idx) => (
+                      <tr key={idx} className="border-b border-gray-200 dark:border-gray-700">
+                        {statsUploadColumns.slice(0, 5).map(col => (
+                          <td key={col} className="px-3 py-2">{String(row[col] ?? '-')}</td>
+                        ))}
+                        {statsUploadColumns.length > 5 && <td className="px-3 py-2">...</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {statsUploadedData.length > 10 && (
+                  <div className="p-2 text-xs text-gray-500 text-center">
+                    Showing first 10 of {statsUploadedData.length} rows
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeStatsDialog} disabled={statsUploading}>
+              {statsUploadResults ? 'Close' : 'Cancel'}
+            </Button>
+            {!statsUploadResults && (
+              <Button onClick={handleConfirmStatsUpload} disabled={statsUploading || !statsUploadedData}>
+                {statsUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Confirm Import
+                  </>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Players Table */}
       <div className="space-y-4">
