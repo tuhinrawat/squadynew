@@ -1145,9 +1145,16 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           data.players!.forEach(player => {
             const index = updated.findIndex(p => p.id === player.id)
             if (index >= 0) {
-              updated[index] = player
+              // Merge rather than replace - the broadcast only carries the
+              // fields that changed, not the full player record, to keep
+              // the Pusher payload small.
+              updated[index] = { ...updated[index], ...player }
             } else {
-              updated.push(player)
+              // A genuinely unseen player would need its full record
+              // (data/isIcon/etc.), which this partial broadcast doesn't
+              // carry - skip rather than push a broken row. In practice
+              // every player this event names was already loaded on mount.
+              console.warn('[players-updated] Received update for unknown player, ignoring:', player.id)
             }
           })
           return updated

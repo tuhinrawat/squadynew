@@ -226,17 +226,21 @@ export async function POST(
       )
     }
 
+    // Both checks below need the same count - compute it once rather than
+    // querying it twice in the same request.
+    const playersBoughtByBidder = (maxTeamSize !== null || targetAuctionPlayers !== null)
+      ? await prisma.player.count({
+          where: {
+            auctionId: params.id,
+            soldTo: bidder.id,
+            status: 'SOLD' // Add status filter for faster query
+          }
+        })
+      : 0
+
     // CRITICAL: Check team size limit FIRST, before any other validations
     // This prevents teams from bidding when they've reached max team size
     if (maxTeamSize !== null) {
-      const playersBoughtByBidder = await prisma.player.count({
-        where: { 
-          auctionId: params.id, 
-          soldTo: bidder.id,
-          status: 'SOLD' // Add status filter for faster query
-        }
-      })
-      
       // Team size includes the bidder, so if they've bought (maxTeamSize - 1) players,
       // their team is full. Check BEFORE allowing the bid.
       if (playersBoughtByBidder >= maxTeamSize - 1) {
@@ -253,16 +257,6 @@ export async function POST(
     // to reach mandatoryTeamSize with at least minPerPlayerReserve per remaining slot
     // OPTIMIZED: Only check if mandatoryTeamSize is set (skip if null)
     if (targetAuctionPlayers !== null) {
-      // OPTIMIZED: Count players in parallel with other operations if possible
-      // For now, keep sequential but use indexed query
-      const playersBoughtByBidder = await prisma.player.count({
-        where: { 
-          auctionId: params.id, 
-          soldTo: bidder.id,
-          status: 'SOLD' // Add status filter for faster query
-        }
-      })
-
       const remainingSlotsAfterThis = Math.max(targetAuctionPlayers - (playersBoughtByBidder + 1), 0)
       
       // If no remaining slots needed, allow bidding all remaining money

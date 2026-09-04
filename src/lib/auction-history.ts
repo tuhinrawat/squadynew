@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { extractCricheroesLink, normalizeCricheroesLink } from '@/lib/cricheroes'
 
 interface LastYearMatch {
@@ -93,7 +94,7 @@ export async function computeLastYearMatches(
   })
 
   let matchedCount = 0
-  const updates = currentPlayers.map(player => {
+  const rows = currentPlayers.map(player => {
     const link = normalizeCricheroesLink(extractCricheroesLink(player.data as Record<string, unknown>))
     let match: LastYearMatch | undefined
     if (link) {
@@ -107,24 +108,25 @@ export async function computeLastYearMatches(
     }
     if (match) matchedCount++
 
-    return prisma.player.update({
-      where: { id: player.id },
-      data: {
-        lastYearPrice: match?.price ?? null,
-        lastYearTeamName: match?.teamName ?? null,
-        lastYearBidderName: match?.bidderName ?? null,
-        lastYearAuctionName: match?.auctionName ?? null,
-      },
-    })
+    return Prisma.sql`(${player.id}::text, ${match?.price ?? null}::double precision, ${match?.teamName ?? null}::text, ${match?.bidderName ?? null}::text, ${match?.auctionName ?? null}::text)`
   })
 
-  // A player-by-player batch, not a single UPDATE - each player can match a
-  // different linked auction/price. Plain Promise.all rather than
-  // $transaction: Prisma Accelerate's extension typings don't support a
-  // timeout on the array form (a known limitation elsewhere in this
-  // codebase), and strict atomicity isn't needed here - a partial failure
-  // just means re-running the link action fixes it.
-  await Promise.all(updates)
+  // A single batched UPDATE...FROM(VALUES...) instead of one
+  // prisma.player.update per player - each player can match a different
+  // linked auction/price, so this can't collapse into one WHERE-scoped
+  // updateMany, but it can still be one round-trip to Postgres instead of
+  // one per player (which meant 1000+ round-trips for a large roster).
+  if (rows.length > 0) {
+    await prisma.$executeRaw`
+      UPDATE players AS p
+      SET "lastYearPrice" = v.price,
+          "lastYearTeamName" = v.team_name,
+          "lastYearBidderName" = v.bidder_name,
+          "lastYearAuctionName" = v.auction_name
+      FROM (VALUES ${Prisma.join(rows)}) AS v(id, price, team_name, bidder_name, auction_name)
+      WHERE p.id = v.id
+    `
+  }
 
   return { matchedCount, totalPlayers: currentPlayers.length }
 }

@@ -37,6 +37,10 @@ export async function GET(request: NextRequest) {
       orderBy: {
         createdAt: 'desc'
       },
+      // Defensive cap - a heavy customer running many auctions per season
+      // shouldn't make this grow unbounded (the dashboard's own list view
+      // is separately paginated; this API route is a lighter-weight lookup).
+      take: 200,
       include: {
         _count: {
           select: {

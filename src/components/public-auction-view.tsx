@@ -521,7 +521,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       if (data.players) {
         setPlayers(prev => prev.map(p => {
           const update = data.players!.find(up => up.id === p.id)
-          return update || p
+          // Merge rather than replace - the broadcast only carries the
+          // fields that changed (status/soldTo/soldPrice), not the full
+          // player record, to keep the Pusher payload small.
+          return update ? { ...p, ...update } : p
         }))
       }
       

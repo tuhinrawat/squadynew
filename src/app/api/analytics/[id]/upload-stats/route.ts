@@ -256,16 +256,20 @@ export async function POST(
       })
     }
 
-    // Update all matched players in a transaction
+    // One batched UPDATE...FROM(VALUES...) instead of one prisma.player.update
+    // per matched player (previously wrapped in $transaction, which still
+    // meant N separate UPDATE statements, just serialized under one
+    // transaction) - cuts this to a single round-trip to Postgres.
     if (updates.length > 0) {
-      await prisma.$transaction(
-        updates.map(update =>
-          prisma.player.update({
-            where: { id: update.playerId },
-            data: { data: update.data }
-          })
-        )
+      const rows = updates.map(update =>
+        Prisma.sql`(${update.playerId}::text, ${JSON.stringify(update.data)}::jsonb)`
       )
+      await prisma.$executeRaw`
+        UPDATE players AS p
+        SET data = v.data
+        FROM (VALUES ${Prisma.join(rows)}) AS v(id, data)
+        WHERE p.id = v.id
+      `
     }
 
     // Update analyticsVisibleColumns to include new columns

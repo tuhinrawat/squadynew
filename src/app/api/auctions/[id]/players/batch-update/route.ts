@@ -100,59 +100,110 @@ export async function POST(
       data: updateData
     })
 
-    // If retiring players, create bidder records for them
+    // If retiring players, create bidder records for them. Batched instead
+    // of one-at-a-time: the previous version did up to 5 sequential DB calls
+    // plus a bcrypt hash per player inside a for-loop, which timed out for
+    // any large batch of retirements.
     if (updates.status === 'RETIRED') {
       const auction = await prisma.auction.findUnique({
-        where: { id: params.id }
+        where: { id: params.id },
+        select: { rules: true }
       })
       const rules = auction?.rules as any
       const purseAmount = rules?.totalPurse || 100000
 
-      for (const player of existingPlayers) {
-        if (player.status !== 'RETIRED') { // Only create bidder if not already retired
-          const playerData = player.data as any
-          const playerName = playerData?.name || playerData?.Name || 'Retired Player'
-          const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
-          
-          // Check if bidder already exists
-          const existingBidder = await prisma.bidder.findFirst({
-            where: {
-              auctionId: params.id,
-              username: `retired_${player.id}`
+      const playersToRetire = existingPlayers.filter(p => p.status !== 'RETIRED')
+
+      if (playersToRetire.length > 0) {
+        const usernames = playersToRetire.map(p => `retired_${p.id}`)
+        const emails = usernames.map(u => `${u}@retired.player`)
+
+        // One query each for bidders/users that might already exist, instead
+        // of a findFirst + findUnique per player.
+        const [existingBidders, existingUsers] = await Promise.all([
+          prisma.bidder.findMany({
+            where: { auctionId: params.id, username: { in: usernames } },
+            select: { username: true }
+          }),
+          prisma.user.findMany({
+            where: { email: { in: emails } },
+            select: { id: true, email: true, role: true }
+          })
+        ])
+
+        const existingBidderUsernames = new Set(existingBidders.map(b => b.username))
+        const existingUserByEmail = new Map(existingUsers.map(u => [u.email, u]))
+
+        // Only players that don't already have a bidder record need anything below.
+        const playersNeedingBidder = playersToRetire.filter(
+          p => !existingBidderUsernames.has(`retired_${p.id}`)
+        )
+
+        // Among those, figure out which need a brand-new User row (vs. reusing
+        // one from a previous retire/un-retire cycle for the same player).
+        const newUserSpecs = playersNeedingBidder
+          .filter(p => !existingUserByEmail.has(`retired_${p.id}@retired.player`))
+          .map(p => {
+            const playerData = p.data as any
+            const playerName = playerData?.name || playerData?.Name || 'Retired Player'
+            return {
+              email: `retired_${p.id}@retired.player`,
+              name: playerName,
             }
           })
 
-          if (!existingBidder) {
-            // Generate credentials
-            const username = `retired_${player.id}`
-            const email = `${username}@retired.player`
-            const password = Math.random().toString(36).substring(2, 10)
-            const hashedPassword = await bcrypt.hash(password, 10)
+        // Hash all new passwords concurrently (bcrypt releases the event
+        // loop, so this runs genuinely in parallel rather than one-at-a-time).
+        const hashedNewUsers = await Promise.all(newUserSpecs.map(async spec => ({
+          ...spec,
+          password: await bcrypt.hash(Math.random().toString(36).substring(2, 10), 10)
+        })))
 
-            // Create or get user
-            let user = await prisma.user.findUnique({ where: { email } })
-            if (!user) {
-              user = await prisma.user.create({
-                data: {
-                  email,
-                  name: playerName,
-                  password: hashedPassword,
-                }
-              })
-            }
+        if (hashedNewUsers.length > 0) {
+          await prisma.user.createMany({
+            data: hashedNewUsers.map(u => ({
+              email: u.email,
+              name: u.name,
+              password: u.password,
+              role: 'BIDDER' as const
+            })),
+            skipDuplicates: true
+          })
+        }
 
-            // Update user role to BIDDER
-            if (user.role !== 'BIDDER') {
-              user = await prisma.user.update({
-                where: { id: user.id },
-                data: { role: 'BIDDER' }
-              })
-            }
+        // Promote any pre-existing (non-BIDDER) user to BIDDER role in one batched update.
+        const usersNeedingRoleChange = playersNeedingBidder
+          .map(p => existingUserByEmail.get(`retired_${p.id}@retired.player`))
+          .filter((u): u is NonNullable<typeof u> => u !== undefined && u.role !== 'BIDDER')
+        if (usersNeedingRoleChange.length > 0) {
+          await prisma.user.updateMany({
+            where: { id: { in: usersNeedingRoleChange.map(u => u.id) } },
+            data: { role: 'BIDDER' }
+          })
+        }
+
+        // Re-fetch (new + pre-existing) users by email in one query to get
+        // their ids for the bidder rows below.
+        const allEmails = playersNeedingBidder.map(p => `retired_${p.id}@retired.player`)
+        const allUsers = await prisma.user.findMany({
+          where: { email: { in: allEmails } },
+          select: { id: true, email: true }
+        })
+        const userIdByEmail = new Map(allUsers.map(u => [u.email, u.id]))
+
+        const bidderRows = playersNeedingBidder
+          .map(p => {
+            const playerData = p.data as any
+            const playerName = playerData?.name || playerData?.Name || 'Retired Player'
+            const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
+            const username = `retired_${p.id}`
+            const userId = userIdByEmail.get(`${username}@retired.player`)
+            if (!userId) return null
 
             // Get profile photo URL for bidderPhotoUrl (NOT logoUrl - logoUrl is for team logo from form upload)
             const photoKeys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
             const photoValue = photoKeys.map(key => playerData?.[key]).find(v => v && String(v).trim())
-            let bidderPhotoUrl = null
+            let bidderPhotoUrl: string | null = null
             if (photoValue) {
               const photoStr = String(photoValue).trim()
               const match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
@@ -161,21 +212,21 @@ export async function POST(
               }
             }
 
-            // Create bidder
-            // logoUrl should be null initially - admin will upload team logo separately via form
-            await prisma.bidder.create({
-              data: {
-                userId: user.id,
-                auctionId: params.id,
-                teamName,
-                username,
-                purseAmount,
-                remainingPurse: purseAmount,
-                logoUrl: null, // Team logo - will be uploaded via form
-                bidderPhotoUrl // Bidder photo from player profile
-              }
-            })
-          }
+            return {
+              userId,
+              auctionId: params.id,
+              teamName,
+              username,
+              purseAmount,
+              remainingPurse: purseAmount,
+              logoUrl: null, // Team logo - will be uploaded via form
+              bidderPhotoUrl // Bidder photo from player profile
+            }
+          })
+          .filter((row): row is NonNullable<typeof row> => row !== null)
+
+        if (bidderRows.length > 0) {
+          await prisma.bidder.createMany({ data: bidderRows })
         }
       }
     }

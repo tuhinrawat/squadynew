@@ -18,7 +18,7 @@ export type AuctionBidHistoryRecord = {
   timestamp: Date
   bidderName: string
   teamName?: string
-  type?: 'bid' | 'sold' | 'unsold'
+  type?: 'bid' | 'sold' | 'unsold' | 'bid-undo'
   playerId?: string
   playerName?: string
 }
@@ -58,6 +58,29 @@ export function normalizeTimestamp(value: unknown): Date {
   }
 
   return new Date(0)
+}
+
+// Every client that reads bid history off the snapshot/SSR payload only
+// ever displays the current player's bids (see the identical filter
+// `public-auction-view.tsx` and `admin-auction-view.tsx` each apply
+// client-side before rendering anything). The snapshot endpoint is polled
+// every couple of seconds for the life of an auction, so shipping the
+// *entire*, ever-growing bidHistory array on every poll - only for the
+// client to immediately throw away everything but one player's handful of
+// entries - is pure waste that gets worse the longer an auction runs.
+// Filtering server-side here caps that payload to what's actually used.
+export function filterBidHistoryForCurrentPlayer(
+  history: AuctionBidHistoryRecord[],
+  currentPlayerId: string | null | undefined
+): AuctionBidHistoryRecord[] {
+  if (!currentPlayerId) {
+    return []
+  }
+
+  return history.filter(bid => {
+    if (bid.type === 'bid-undo') return false
+    return !bid.playerId || bid.playerId === currentPlayerId
+  })
 }
 
 export function parseBidHistory(rawHistory: unknown): AuctionBidHistoryRecord[] {

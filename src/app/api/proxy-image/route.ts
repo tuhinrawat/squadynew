@@ -1,27 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
+// Only ever takes a Google Drive file id, never an arbitrary URL - every
+// caller in this codebase already only ever passes `?id=` (the `?url=`
+// variant this route used to accept was unused dead code, and accepting an
+// arbitrary server-side-fetched URL from a query param is an open SSRF
+// vector: it would let a request make this server fetch and return the
+// contents of any URL, including internal/private addresses).
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const url = searchParams.get('url')
     const fileId = searchParams.get('id')
 
-    if (!url && !fileId) {
-      return NextResponse.json({ error: 'Missing URL or file ID' }, { status: 400 })
+    if (!fileId || !/^[a-zA-Z0-9_-]+$/.test(fileId)) {
+      return NextResponse.json({ error: 'Missing or invalid file ID' }, { status: 400 })
     }
 
-    let imageUrl = ''
-    if (url) {
-      imageUrl = url
-    } else if (fileId) {
-      // Extract file ID from Google Drive URL and convert to thumbnail
-      imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`
-    }
-
-    if (!imageUrl) {
-      return NextResponse.json({ error: 'Invalid URL or file ID' }, { status: 400 })
-    }
+    // Extract file ID from Google Drive URL and convert to thumbnail
+    const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`
 
     // Fetch the image from Google Drive
     const response = await fetch(imageUrl, {

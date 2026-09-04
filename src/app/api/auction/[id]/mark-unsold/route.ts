@@ -30,10 +30,12 @@ export async function POST(
 
     const { playerId } = parsedBody.data
 
-    // Fetch auction with players
+    // Fetch auction - only bidHistory is actually read below; the player
+    // list was never used from this query (recycling re-fetches its own
+    // narrowly-scoped player rows further down).
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
-      include: { players: true }
+      select: { id: true, bidHistory: true }
     })
 
     if (!auction) {
@@ -79,8 +81,9 @@ export async function POST(
     // Collects players whose status changed this request (recycled UNSOLD ->
     // AVAILABLE below, plus this player's own UNSOLD update further down) so
     // they go out in the single 'players-updated' broadcast at the end of
-    // this handler instead of a separate trigger per change.
-    let recycledPlayersForBroadcast: Array<{ id: string; auctionId: string; data: unknown; status: string; isIcon: boolean; soldTo: string | null; soldPrice: number | null }> = []
+    // this handler instead of a separate trigger per change. Deliberately
+    // excludes the `data` JSON blob - see the same note in mark-sold's route.
+    let recycledPlayersForBroadcast: Array<{ id: string; status: string; isIcon: boolean; soldTo: string | null; soldPrice: number | null }> = []
 
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
@@ -128,8 +131,6 @@ export async function POST(
           },
           select: {
             id: true,
-            auctionId: true,
-            data: true,
             status: true,
             isIcon: true,
             soldTo: true,
@@ -235,12 +236,13 @@ export async function POST(
 
     // Broadcast players updated event. Combines this player's own UNSOLD
     // update with any other UNSOLD players recycled back to AVAILABLE above
-    // into a single trigger, instead of one per change.
+    // into a single trigger, instead of one per change. Deliberately omits
+    // each player's `data` JSON blob - see the same note in mark-sold's route.
     await triggerAuctionEvent(params.id, 'players-updated', {
       players: [
         ...recycledPlayersForBroadcast,
         ...(currentPlayer ? [{
-          ...currentPlayer,
+          id: currentPlayer.id,
           status: 'UNSOLD',
           soldTo: null,
           soldPrice: null

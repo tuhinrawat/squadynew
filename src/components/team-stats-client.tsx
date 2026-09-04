@@ -61,6 +61,12 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   // per card - avoids mounting a dialog per player when there can be
   // hundreds in the pool.
   const [statsDialogTarget, setStatsDialogTarget] = useState<{ id: string; discipline: 'batting' | 'bowling' } | null>(null)
+  // Renders the pool in pages instead of mounting every filtered card's DOM
+  // at once - a pool of 500-1000+ players otherwise mounts tens of
+  // thousands of DOM nodes simultaneously, which visibly jank scrolling and
+  // filtering especially on mobile.
+  const KNOW_PLAYERS_PAGE_SIZE = 60
+  const [knowPlayersVisibleCount, setKnowPlayersVisibleCount] = useState(KNOW_PLAYERS_PAGE_SIZE)
   const [fixtures, setFixtures] = useState<any[]>([])
   const [fixturesLoading, setFixturesLoading] = useState(true)
 
@@ -107,7 +113,9 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
           if (data.players) {
             updated.players = prev.players.map(p => {
               const update = data.players!.find(up => up.id === p.id)
-              return update || p
+              // Merge rather than replace - the broadcast only carries the
+              // fields that changed, not the full player record.
+              return update ? { ...p, ...update } : p
             })
           }
           if (data.bidders) {
@@ -358,7 +366,36 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     return filtered
   }, [playerCards, playerFilter, searchQuery, sortOrder])
 
-  const selectedTeamData = selectedTeam 
+  // Back to the first page whenever the filtered set itself changes -
+  // otherwise switching filters could leave visibleCount referring to a
+  // page deep into a now-different, possibly much smaller list.
+  useEffect(() => {
+    setKnowPlayersVisibleCount(KNOW_PLAYERS_PAGE_SIZE)
+  }, [playerFilter, searchQuery, sortOrder])
+
+  const visiblePlayerCards = useMemo(
+    () => filteredPlayerCards.slice(0, knowPlayersVisibleCount),
+    [filteredPlayerCards, knowPlayersVisibleCount]
+  )
+
+  // Counts shown next to each filter option - computed once instead of
+  // re-scanning the full (unfiltered) player list with a fresh .filter()
+  // call inline in JSX for every option, in both the mobile dropdown and
+  // the desktop button row, on every render.
+  const filterCounts = useMemo(() => {
+    let batsmen = 0, bowlers = 0, allRounders = 0, bidders = 0
+    for (const card of playerCards) {
+      const roleStr = (card.role || '').toLowerCase()
+      const specialtyStr = (card.specialty || '').toLowerCase()
+      if (roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')) batsmen++
+      if (roleStr.includes('bowler') || specialtyStr.includes('bowler')) bowlers++
+      if (roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')) allRounders++
+      if (card.isBidder) bidders++
+    }
+    return { all: playerCards.length, batsmen, bowlers, allRounders, bidders }
+  }, [playerCards])
+
+  const selectedTeamData = selectedTeam
     ? teamsData.find(t => t.id === selectedTeam)
     : null
 
@@ -1131,29 +1168,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                           <SelectValue placeholder="Filter by role" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All ({playerCards.length})</SelectItem>
-                          <SelectItem value="batsmen">
-                            Batsmen ({playerCards.filter(card => {
-                              const roleStr = (card.role || '').toLowerCase()
-                              const specialtyStr = (card.specialty || '').toLowerCase()
-                              return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
-                            }).length})
-                          </SelectItem>
-                          <SelectItem value="bowlers">
-                            Bowlers ({playerCards.filter(card => {
-                              const roleStr = (card.role || '').toLowerCase()
-                              const specialtyStr = (card.specialty || '').toLowerCase()
-                              return roleStr.includes('bowler') || specialtyStr.includes('bowler')
-                            }).length})
-                          </SelectItem>
-                          <SelectItem value="all-rounders">
-                            All Rounders ({playerCards.filter(card => {
-                              const roleStr = (card.role || '').toLowerCase()
-                              const specialtyStr = (card.specialty || '').toLowerCase()
-                              return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
-                            }).length})
-                          </SelectItem>
-                          <SelectItem value="bidders">Bidders ({playerCards.filter(card => card.isBidder).length})</SelectItem>
+                          <SelectItem value="all">All ({filterCounts.all})</SelectItem>
+                          <SelectItem value="batsmen">Batsmen ({filterCounts.batsmen})</SelectItem>
+                          <SelectItem value="bowlers">Bowlers ({filterCounts.bowlers})</SelectItem>
+                          <SelectItem value="all-rounders">All Rounders ({filterCounts.allRounders})</SelectItem>
+                          <SelectItem value="bidders">Bidders ({filterCounts.bidders})</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1187,7 +1206,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
                         } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
                       >
-                        All ({playerCards.length})
+                        All ({filterCounts.all})
                       </Button>
                       <Button
                         size="sm"
@@ -1199,11 +1218,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
                         } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
                       >
-                        Batsmen ({playerCards.filter(card => {
-                          const roleStr = (card.role || '').toLowerCase()
-                          const specialtyStr = (card.specialty || '').toLowerCase()
-                          return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
-                        }).length})
+                        Batsmen ({filterCounts.batsmen})
                       </Button>
                       <Button
                         size="sm"
@@ -1215,11 +1230,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
                         } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
                       >
-                        Bowlers ({playerCards.filter(card => {
-                          const roleStr = (card.role || '').toLowerCase()
-                          const specialtyStr = (card.specialty || '').toLowerCase()
-                          return roleStr.includes('bowler') || specialtyStr.includes('bowler')
-                        }).length})
+                        Bowlers ({filterCounts.bowlers})
                       </Button>
                       <Button
                         size="sm"
@@ -1231,11 +1242,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
                         } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 whitespace-nowrap`}
                       >
-                        All Rounders ({playerCards.filter(card => {
-                          const roleStr = (card.role || '').toLowerCase()
-                          const specialtyStr = (card.specialty || '').toLowerCase()
-                          return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
-                        }).length})
+                        All Rounders ({filterCounts.allRounders})
                       </Button>
                       <Button
                         size="sm"
@@ -1247,7 +1254,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             : 'bg-white/10 text-white border-white/30 hover:bg-white/20'
                         } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2`}
                       >
-                        Bidders ({playerCards.filter(card => card.isBidder).length})
+                        Bidders ({filterCounts.bidders})
                       </Button>
 
                       {/* Sort - last year's price, high-low or low-high */}
@@ -1271,7 +1278,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         No players found{playerFilter !== 'all' ? ` for ${playerFilter}` : ' in this auction roster'}.
                       </div>
                     ) : (
-                      filteredPlayerCards.map(card => (
+                      visiblePlayerCards.map(card => (
                             <div
                               key={card.id}
                               className={`group relative rounded-2xl overflow-hidden border-2 shadow-xl transition-all hover:scale-[1.02] ${card.isBidder ? 'border-violet-400 shadow-[0_0_20px_rgba(168,85,247,0.6)] bg-gradient-to-br from-violet-900 via-purple-900 to-slate-950' : 'border-white/20 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950'} max-w-md mx-auto w-full`}
@@ -1420,6 +1427,18 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                           ))
                     )}
                   </div>
+
+                  {filteredPlayerCards.length > knowPlayersVisibleCount && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setKnowPlayersVisibleCount(count => count + KNOW_PLAYERS_PAGE_SIZE)}
+                        className="bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      >
+                        Load More ({filteredPlayerCards.length - knowPlayersVisibleCount} remaining)
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

@@ -212,8 +212,10 @@ export async function POST(
       updatedBidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }]
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
-    // Update player and bidder in parallel for better performance
-    await Promise.all([
+    // Update player and bidder atomically - if one fails, neither should
+    // commit, otherwise a player can end up SOLD with the buyer's purse
+    // never debited (or vice versa).
+    await prisma.$transaction([
       prisma.player.update({
         where: { id: playerId },
         data: {
@@ -249,8 +251,12 @@ export async function POST(
     // Collects players whose status changed this request (recycled UNSOLD ->
     // AVAILABLE below, plus the just-sold player further down) so they go out
     // in the single 'players-updated' broadcast at the end of this handler
-    // instead of a separate trigger per change.
-    let recycledPlayersForBroadcast: Array<{ id: string; auctionId: string; data: unknown; status: string; isIcon: boolean; soldTo: string | null; soldPrice: number | null }> = []
+    // instead of a separate trigger per change. Deliberately excludes the
+    // `data` JSON blob (full spreadsheet row) - clients already have it from
+    // their initial load and only need the fields that actually changed, to
+    // keep this broadcast well under Pusher's per-message size limit even
+    // when hundreds of players get recycled at once.
+    let recycledPlayersForBroadcast: Array<{ id: string; status: string; isIcon: boolean; soldTo: string | null; soldPrice: number | null }> = []
 
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
@@ -299,8 +305,6 @@ export async function POST(
           },
           select: {
             id: true,
-            auctionId: true,
-            data: true,
             status: true,
             isIcon: true,
             soldTo: true,
@@ -407,14 +411,19 @@ export async function POST(
       await triggerAuctionEvent(params.id, 'auction-pool-exhausted', {}).catch(err => console.error('Pusher error (non-critical):', err))
     }
 
-    // Broadcast players updated event with data to avoid fetch (fire and forget).
+    // Broadcast players updated event with the fields that changed, so
+    // clients can merge locally instead of re-fetching (fire and forget).
     // Combines the just-sold player with any UNSOLD players recycled back to
     // AVAILABLE above into a single trigger, instead of one per change.
+    // Deliberately omits each player's `data` JSON blob - clients already
+    // have it and only need to know what changed, keeping this payload well
+    // under Pusher's per-message size limit even when many players recycle
+    // at once.
     triggerAuctionEvent(params.id, 'players-updated', {
       players: [
         ...recycledPlayersForBroadcast,
         {
-          ...currentPlayer,
+          id: currentPlayer.id,
           status: 'SOLD',
           soldTo: winningBidder.id,
           soldPrice: highestBid.amount

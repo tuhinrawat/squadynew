@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isCuid } from '@/lib/slug'
 import { isLiveStatus } from '@/lib/auction-status'
-import { parseBidHistory } from '@/lib/auction-view-data'
+import { parseBidHistory, filterBidHistoryForCurrentPlayer } from '@/lib/auction-view-data'
 
 // Read-only "current truth" snapshot for viewers who aren't on a live Pusher
 // connection - the polling fallback for the public auction view's
@@ -70,7 +70,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       && (isLiveStatus(auction.status) || auction.status === 'PAUSED')
       && !players.some(p => p.status === 'AVAILABLE')
 
-    const bidHistory = parseBidHistory(auction.bidHistory)
+    // The polling client only ever displays the current player's bids (it
+    // applies this exact same filter itself before rendering) - filtering
+    // here keeps this 2-second poll's payload from growing with the
+    // auction's entire history instead of just the current lot.
+    const bidHistory = filterBidHistoryForCurrentPlayer(parseBidHistory(auction.bidHistory), currentPlayer?.id)
 
     return NextResponse.json(
       {

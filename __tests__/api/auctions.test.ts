@@ -110,6 +110,7 @@ describe('API: /api/auctions', () => {
       expect(prisma.auction.findMany).toHaveBeenCalledWith({
         where: { createdById: 'admin1' },
         orderBy: { createdAt: 'desc' },
+        take: 200,
         include: {
           _count: {
             select: {

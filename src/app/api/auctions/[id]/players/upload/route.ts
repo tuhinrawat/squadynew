@@ -49,7 +49,7 @@ export async function POST(
 
     // Extract column order from first player if not provided
     let finalColumnOrder = columnOrder || (validPlayers.length > 0 ? Object.keys(validPlayers[0]) : [])
-    
+
     // Ensure finalColumnOrder is an array of strings
     if (!Array.isArray(finalColumnOrder)) {
       finalColumnOrder = validPlayers.length > 0 ? Object.keys(validPlayers[0]) : []
@@ -85,42 +85,38 @@ export async function POST(
       }
     })
 
-    // Create a function to check if two player objects are duplicates
-    const arePlayersDuplicate = (player1: any, player2: any): boolean => {
-      const keys1 = Object.keys(player1).sort()
-      const keys2 = Object.keys(player2).sort()
-      
-      // Must have same number of fields
-      if (keys1.length !== keys2.length) return false
-      
-      // All field names must match
-      if (!keys1.every(key => keys2.includes(key))) return false
-      
-      // All field values must match
-      return keys1.every(key => {
-        const val1 = player1[key]
-        const val2 = player2[key]
-        
-        // Handle null/undefined
-        if (val1 == null && val2 == null) return true
-        if (val1 == null || val2 == null) return false
-        
-        // Convert to strings for comparison
-        return String(val1).trim().toLowerCase() === String(val2).trim().toLowerCase()
-      })
+    // A canonical string for a player row: same field set + same normalized
+    // values (case/whitespace-insensitive) always produce the same
+    // signature, regardless of key order - so "is this a duplicate" becomes
+    // a Set lookup instead of comparing every uploaded row against every
+    // existing player field-by-field. That O(n*m) comparison was fine for a
+    // few hundred players but visibly slow re-uploading a large roster
+    // against an already-large existing one. Keys/values are joined with
+    // delimiters (not bare concatenation) so a different key/value split -
+    // e.g. key "a" value "bc" vs key "ab" value "c" - can never collide into
+    // the same signature string.
+    const computeSignature = (player: Record<string, unknown>): string => {
+      const keys = Object.keys(player).sort()
+      return keys
+        .map(key => {
+          const val = player[key]
+          const normalized = val == null ? '<null>' : String(val).trim().toLowerCase()
+          return `${JSON.stringify(key)}=${JSON.stringify(normalized)};`
+        })
+        .join('')
     }
 
+    const existingSignatures = new Set(
+      existingPlayers.map(p => computeSignature(p.data as Record<string, unknown>))
+    )
+
     // Filter out duplicates
-    const uniquePlayers = validPlayers.filter(newPlayer => {
-      return !existingPlayers.some(existingPlayer => 
-        arePlayersDuplicate(newPlayer, existingPlayer.data)
-      )
-    })
+    const uniquePlayers = validPlayers.filter(newPlayer => !existingSignatures.has(computeSignature(newPlayer)))
 
     const duplicateCount = validPlayers.length - uniquePlayers.length
 
     if (uniquePlayers.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'All players are duplicates of existing players',
         duplicateCount,
         totalCount: validPlayers.length
@@ -136,7 +132,7 @@ export async function POST(
       }))
     })
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       message: `${createdPlayers.count} players uploaded successfully${duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : ''}`,
       count: createdPlayers.count,
       duplicateCount,

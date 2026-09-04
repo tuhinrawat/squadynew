@@ -1,5 +1,3 @@
-import * as XLSX from 'xlsx'
-
 export interface ParsedPlayerData {
   [key: string]: any
 }
@@ -12,10 +10,16 @@ export interface ParseResult {
   preview?: ParsedPlayerData[]
 }
 
-export function parseExcelFile(file: File): Promise<ParseResult> {
+export async function parseExcelFile(file: File): Promise<ParseResult> {
+  // Loaded on demand rather than imported at module scope - this pulls in
+  // the full SheetJS library, which otherwise ships to every visitor of a
+  // page that merely imports this file, even if they never touch the
+  // upload feature.
+  const XLSX = await import('xlsx')
+
   return new Promise((resolve) => {
     const reader = new FileReader()
-    
+
     reader.onload = (e) => {
       try {
         const data = e.target?.result

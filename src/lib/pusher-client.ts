@@ -24,6 +24,38 @@ if (!process.env.NEXT_PUBLIC_PUSHER_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUST
 // them would hide the exact "why did it break" detail this was built for.
 const SYNC_LAG_SAMPLE_RATE = 0.2
 
+// Module-level (not per-hook-instance) so overlapping mounts of the SAME
+// channel - most commonly React 18 Strict Mode's cleanup-then-immediately-
+// remount cycle - can coordinate. A real unmount (e.g. navigating from one
+// auction's page to another, or away entirely) schedules the channel's
+// actual unsubscribe a couple of seconds out; if a fresh effect run for
+// that exact channel name shows up before the timer fires - the Strict
+// Mode case - it cancels the pending teardown instead of ever unsubscribing,
+// which is what the previous "do NOTHING in cleanup" comment was protecting
+// against (unsubscribing synchronously broke that remount's bindings).
+// Genuine navigation away, where nothing re-requests the channel, lets the
+// timer fire and actually release the subscription - without this, browsing
+// between several auctions in one session left every one of them permanently
+// subscribed.
+const pendingChannelUnsubscribes = new Map<string, ReturnType<typeof setTimeout>>()
+
+function cancelScheduledUnsubscribe(channelName: string) {
+  const existing = pendingChannelUnsubscribes.get(channelName)
+  if (existing) {
+    clearTimeout(existing)
+    pendingChannelUnsubscribes.delete(channelName)
+  }
+}
+
+function scheduleChannelUnsubscribe(pusher: Pusher, channelName: string) {
+  cancelScheduledUnsubscribe(channelName)
+  const timeoutId = setTimeout(() => {
+    pendingChannelUnsubscribes.delete(channelName)
+    pusher.unsubscribe(channelName)
+  }, 2000)
+  pendingChannelUnsubscribes.set(channelName, timeoutId)
+}
+
 // Pusher's connection/subscription error objects rarely carry a plain
 // .message string - the actual diagnostic detail (error type, close code)
 // lives nested under .type / .data / .error.data. Without this, every
@@ -204,7 +236,11 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
       pusherRef.current = pusher
 
       const channelName = `auction-${auctionId}`
-      
+
+      // This effect run wants this channel again - cancel any teardown a
+      // previous cleanup scheduled for it (see the module-level comment above).
+      cancelScheduledUnsubscribe(channelName)
+
       // Function to bind all event listeners (defined outside so it can be used in interval)
       const bindAllEvents = (channelToBind: any) => {
             console.log('[Pusher] bindAllEvents called', { channelName, hasOnNewBid: !!callbacksRef.current.onNewBid, channelSubscribed: channelToBind?.subscribed })
@@ -391,10 +427,15 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
       // Cleanup
       return () => {
         clearInterval(rebindInterval)
-        // Do NOTHING else in cleanup
-        // React 18 Strict Mode will call this and remount immediately
-        // If we unbind anything, the channel bindings break and never recover
-        // The channel and all bindings will persist across remounts
+        pusher.connection.unbind('error', handleError)
+        // Don't unsubscribe synchronously here - React 18 Strict Mode calls
+        // this and remounts immediately with the same channel, and an
+        // immediate unsubscribe breaks that remount's bindings (see history).
+        // Schedule it instead: this effect's next run for the SAME channel
+        // (the Strict Mode remount, or navigating back to this same auction)
+        // cancels it via cancelScheduledUnsubscribe above; a genuine
+        // navigation away leaves nothing to cancel it, so it actually fires.
+        scheduleChannelUnsubscribe(pusher, channelName)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize Pusher')

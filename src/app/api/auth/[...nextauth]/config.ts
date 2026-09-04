@@ -2,6 +2,13 @@ import { NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { RateLimiter } from "@/lib/rate-limiter"
+
+// Unlimited password guesses were previously possible against this endpoint -
+// this doesn't stop a distributed attacker (see RateLimiter's own documented
+// per-instance limitation), but it does stop the common case of a script
+// hammering one known account's password.
+const loginRateLimiter = new RateLimiter(5 * 60 * 1000, 5) // 5 attempts per 5 minutes per email
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
@@ -15,6 +22,14 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         try {
           if (!credentials?.email || !credentials?.password) {
+            return null
+          }
+
+          // Rejected the same way as a wrong password (rather than a
+          // distinct error) so a rate-limited response doesn't itself leak
+          // that this email address hit the limit.
+          const rateLimitKey = credentials.email.trim().toLowerCase()
+          if (!loginRateLimiter.check(rateLimitKey).allowed) {
             return null
           }
 

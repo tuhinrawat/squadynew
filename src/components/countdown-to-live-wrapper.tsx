@@ -88,6 +88,12 @@ export function CountdownToLiveWrapper({
   // per card - avoids mounting a dialog per player when there can be
   // hundreds in the pool.
   const [statsDialogTarget, setStatsDialogTarget] = useState<{ id: string; discipline: 'batting' | 'bowling' } | null>(null)
+  // Renders the pool in pages instead of mounting every filtered card's DOM
+  // at once - a pool of 500-1000+ players otherwise mounts tens of
+  // thousands of DOM nodes simultaneously, which visibly jank scrolling and
+  // filtering especially on mobile.
+  const KNOW_PLAYERS_PAGE_SIZE = 60
+  const [knowPlayersVisibleCount, setKnowPlayersVisibleCount] = useState(KNOW_PLAYERS_PAGE_SIZE)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
   const timerViewTrackedRef = useRef(false)
@@ -208,6 +214,36 @@ export function CountdownToLiveWrapper({
 
     return filtered
   }, [knowYourPlayersCards, playerFilter, searchQuery, sortOrder])
+
+  // Back to the first page whenever the filtered set itself changes -
+  // otherwise switching filters could leave visibleCount referring to a
+  // page deep into a now-different, possibly much smaller list.
+  useEffect(() => {
+    setKnowPlayersVisibleCount(KNOW_PLAYERS_PAGE_SIZE)
+  }, [playerFilter, searchQuery, sortOrder])
+
+  const visibleKnowYourPlayersCards = useMemo(
+    () => filteredKnowYourPlayersCards.slice(0, knowPlayersVisibleCount),
+    [filteredKnowYourPlayersCards, knowPlayersVisibleCount]
+  )
+
+  // Counts shown next to each filter option (e.g. "Batsmen (12)") - computed
+  // once here instead of re-scanning the full (unfiltered) player list with
+  // a fresh .filter() call inline in JSX for every option, in both the
+  // mobile dropdown and the desktop button row, on every render.
+  const filterCounts = useMemo(() => {
+    let batsmen = 0, bowlers = 0, allRounders = 0, bidders = 0, bidderChoice = 0
+    for (const card of knowYourPlayersCards) {
+      const roleStr = (card.role || '').toLowerCase()
+      const specialtyStr = (card.specialty || '').toLowerCase()
+      if (roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')) batsmen++
+      if (roleStr.includes('bowler') || specialtyStr.includes('bowler')) bowlers++
+      if (roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')) allRounders++
+      if (card.isBidder) bidders++
+      if (card.isBidderChoice) bidderChoice++
+    }
+    return { all: knowYourPlayersCards.length, batsmen, bowlers, allRounders, bidders, bidderChoice }
+  }, [knowYourPlayersCards])
 
   const scrollToKnowPlayers = useCallback(() => {
     knowPlayersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -522,30 +558,12 @@ export function CountdownToLiveWrapper({
                       <SelectValue placeholder="Filter by role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All ({knowYourPlayersCards.length})</SelectItem>
-                      <SelectItem value="batsmen">
-                        Batsmen ({knowYourPlayersCards.filter(card => {
-                          const roleStr = (card.role || '').toLowerCase()
-                          const specialtyStr = (card.specialty || '').toLowerCase()
-                          return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
-                        }).length})
-                      </SelectItem>
-                      <SelectItem value="bowlers">
-                        Bowlers ({knowYourPlayersCards.filter(card => {
-                          const roleStr = (card.role || '').toLowerCase()
-                          const specialtyStr = (card.specialty || '').toLowerCase()
-                          return roleStr.includes('bowler') || specialtyStr.includes('bowler')
-                        }).length})
-                      </SelectItem>
-                      <SelectItem value="all-rounders">
-                        All Rounders ({knowYourPlayersCards.filter(card => {
-                          const roleStr = (card.role || '').toLowerCase()
-                          const specialtyStr = (card.specialty || '').toLowerCase()
-                          return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
-                        }).length})
-                      </SelectItem>
-                      <SelectItem value="bidders">Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})</SelectItem>
-                      <SelectItem value="bidder-choice">⭐ Bidder Choice ({knowYourPlayersCards.filter(card => card.isBidderChoice).length})</SelectItem>
+                      <SelectItem value="all">All ({filterCounts.all})</SelectItem>
+                      <SelectItem value="batsmen">Batsmen ({filterCounts.batsmen})</SelectItem>
+                      <SelectItem value="bowlers">Bowlers ({filterCounts.bowlers})</SelectItem>
+                      <SelectItem value="all-rounders">All Rounders ({filterCounts.allRounders})</SelectItem>
+                      <SelectItem value="bidders">Bidders ({filterCounts.bidders})</SelectItem>
+                      <SelectItem value="bidder-choice">⭐ Bidder Choice ({filterCounts.bidderChoice})</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -578,7 +596,7 @@ export function CountdownToLiveWrapper({
                         : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
-                    All ({knowYourPlayersCards.length})
+                    All ({filterCounts.all})
                   </Button>
                   <Button
                     size="sm"
@@ -589,11 +607,7 @@ export function CountdownToLiveWrapper({
                         : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
-                    Batsmen ({knowYourPlayersCards.filter(card => {
-                      const roleStr = (card.role || '').toLowerCase()
-                      const specialtyStr = (card.specialty || '').toLowerCase()
-                      return roleStr.includes('batsman') || roleStr.includes('batter') || specialtyStr.includes('batsman') || specialtyStr.includes('batter')
-                    }).length})
+                    Batsmen ({filterCounts.batsmen})
                   </Button>
                   <Button
                     size="sm"
@@ -604,11 +618,7 @@ export function CountdownToLiveWrapper({
                         : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
-                    Bowlers ({knowYourPlayersCards.filter(card => {
-                      const roleStr = (card.role || '').toLowerCase()
-                      const specialtyStr = (card.specialty || '').toLowerCase()
-                      return roleStr.includes('bowler') || specialtyStr.includes('bowler')
-                    }).length})
+                    Bowlers ({filterCounts.bowlers})
                   </Button>
                   <Button
                     size="sm"
@@ -619,11 +629,7 @@ export function CountdownToLiveWrapper({
                         : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold whitespace-nowrap`}
                   >
-                    All Rounders ({knowYourPlayersCards.filter(card => {
-                      const roleStr = (card.role || '').toLowerCase()
-                      const specialtyStr = (card.specialty || '').toLowerCase()
-                      return roleStr.includes('all-rounder') || roleStr.includes('allrounder') || roleStr.includes('all rounder') || specialtyStr.includes('all-rounder') || specialtyStr.includes('allrounder')
-                    }).length})
+                    All Rounders ({filterCounts.allRounders})
                   </Button>
                   <Button
                     size="sm"
@@ -634,7 +640,7 @@ export function CountdownToLiveWrapper({
                         : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold`}
                   >
-                    Bidders ({knowYourPlayersCards.filter(card => card.isBidder).length})
+                    Bidders ({filterCounts.bidders})
                   </Button>
                   <Button
                     size="sm"
@@ -645,7 +651,7 @@ export function CountdownToLiveWrapper({
                         : 'bg-white/[0.06] text-white/65 border border-white/15 hover:bg-white/10'
                     } text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full font-bold whitespace-nowrap`}
                   >
-                    ⭐ Bidder Choice ({knowYourPlayersCards.filter(card => card.isBidderChoice).length})
+                    ⭐ Bidder Choice ({filterCounts.bidderChoice})
                   </Button>
 
                   {/* Sort - last year's price, high-low or low-high */}
@@ -671,7 +677,7 @@ export function CountdownToLiveWrapper({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-                  {filteredKnowYourPlayersCards.map(card => {
+                  {visibleKnowYourPlayersCards.map(card => {
                     const isBidder = card.statusLabel === 'Bidder'
                     // Discipline flag on the top border - null for a bidder/team
                     // card (it has no batting/bowling role) or when the source
@@ -866,6 +872,18 @@ export function CountdownToLiveWrapper({
                       </div>
                     )
                   })}
+                </div>
+              )}
+
+              {filteredKnowYourPlayersCards.length > knowPlayersVisibleCount && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setKnowPlayersVisibleCount(count => count + KNOW_PLAYERS_PAGE_SIZE)}
+                    className="bg-white/[0.06] border-white/15 text-white hover:bg-white/10"
+                  >
+                    Load More ({filteredKnowYourPlayersCards.length - knowPlayersVisibleCount} remaining)
+                  </Button>
                 </div>
               )}
             </CardContent>

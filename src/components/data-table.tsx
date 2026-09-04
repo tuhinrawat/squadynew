@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -132,6 +132,20 @@ export function DataTable({
 
     return filtered
   }, [data, searchTerm, sortConfig, filters])
+
+  // Renders rows in pages instead of mounting every filtered row's DOM at
+  // once - a roster of 500-1000+ players otherwise mounts an equally large
+  // table body simultaneously. "Select all" and the header count still
+  // operate on the full filteredAndSortedData, not just the visible page.
+  const ROW_PAGE_SIZE = 100
+  const [visibleRowCount, setVisibleRowCount] = useState(ROW_PAGE_SIZE)
+  useEffect(() => {
+    setVisibleRowCount(ROW_PAGE_SIZE)
+  }, [searchTerm, sortConfig, filters])
+  const visibleData = useMemo(
+    () => filteredAndSortedData.slice(0, visibleRowCount),
+    [filteredAndSortedData, visibleRowCount]
+  )
 
   const handleSort = (key: string) => {
     const column = columns.find(col => col.key === key)
@@ -488,7 +502,7 @@ export function DataTable({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAndSortedData.map((item, index) => (
+                  {visibleData.map((item, index) => (
                     <TableRow key={index}>
                       {enableSelection && (
                         <TableCell className="w-12">
@@ -587,6 +601,17 @@ export function DataTable({
                 </span>
               </div>
             </div>
+            {filteredAndSortedData.length > visibleRowCount && (
+              <div className="flex justify-center py-3 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleRowCount(count => count + ROW_PAGE_SIZE)}
+                >
+                  Load More ({filteredAndSortedData.length - visibleRowCount} remaining)
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

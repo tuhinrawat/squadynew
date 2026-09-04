@@ -17,9 +17,20 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Only status/isIcon are needed to pick the next player - the winning
+    // candidate's full `data` is fetched separately, once, after selection
+    // (matching mark-sold/mark-unsold's pattern), instead of pulling every
+    // player's full JSON blob just to run this selection logic.
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
-      include: { players: true }
+      select: {
+        id: true,
+        status: true,
+        currentPlayerId: true,
+        players: {
+          select: { id: true, status: true, isIcon: true }
+        }
+      }
     })
 
     if (!auction) {
@@ -44,8 +55,7 @@ export async function POST(
     // Pick next random available player
     // Prioritize icon players if they haven't all been auctioned yet
     let availablePlayers = auction.players.filter(p => p.status === 'AVAILABLE')
-    let currentAuctionData = auction
-    
+
     // If no available players, automatically recycle UNSOLD players back to AVAILABLE
     // IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
     if (availablePlayers.length === 0) {
@@ -78,11 +88,15 @@ export async function POST(
         // Refresh auction data after conversion
         const updatedAuction = await prisma.auction.findUnique({
           where: { id: params.id },
-          include: { players: true }
+          select: {
+            id: true,
+            players: {
+              select: { id: true, status: true, isIcon: true }
+            }
+          }
         })
         
         if (updatedAuction) {
-          currentAuctionData = updatedAuction
           availablePlayers = updatedAuction.players.filter(p => p.status === 'AVAILABLE')
           
           // Broadcast players updated event to notify clients of recycled players
@@ -127,13 +141,32 @@ export async function POST(
       }
     })
 
+    // The selection above only carries id/status/isIcon - fetch the full
+    // record (with `data`) for just this one chosen player, now that we
+    // know which one it is, instead of having pulled every player's full
+    // JSON blob up front to make the selection.
+    const fullNextPlayer = await prisma.player.findUnique({
+      where: { id: randomPlayer.id },
+      select: {
+        id: true,
+        status: true,
+        isIcon: true,
+        data: true,
+        auctionId: true,
+        lastYearPrice: true,
+        lastYearTeamName: true,
+        lastYearBidderName: true,
+        lastYearAuctionName: true
+      }
+    })
+
     // No automatic sale when timer expires - admin decides
 
     // Broadcast new player event - the DB already moved to this player
     // above, so a Pusher hiccup here must never turn that success into a 500.
-    await triggerAuctionEvent(params.id, 'new-player', { player: randomPlayer }).catch(err => console.error('Pusher error (non-critical):', err))
+    await triggerAuctionEvent(params.id, 'new-player', { player: fullNextPlayer }).catch(err => console.error('Pusher error (non-critical):', err))
 
-    return NextResponse.json({ success: true, player: randomPlayer })
+    return NextResponse.json({ success: true, player: fullNextPlayer })
   } catch (error) {
     console.error('Error moving to next player:', error)
     logEventAsync({ category: 'api_error', eventName: 'next_player', auctionId: params.id, success: false, ...describeError(error) })

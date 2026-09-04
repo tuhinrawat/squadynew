@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { extractCricheroesLink, normalizeCricheroesLink, cleanCricheroesLinksInPlayerData } from '@/lib/cricheroes'
-import { Player } from '@prisma/client'
+import { Player, Prisma } from '@prisma/client'
 
 // POST /api/auctions/[id]/players/upload-stats - Import a separate stats
 // sheet (name, Cricheroes profile, Batting_*/Bowling_* columns) and merge it
@@ -219,16 +219,20 @@ export async function POST(
       })
     }
 
-    // Independent per-player updates, not $transaction - Prisma Accelerate's
-    // extension typings don't support this array form well (a known
-    // limitation elsewhere in this codebase), and strict atomicity isn't
-    // needed for a stats merge: a partial failure just means re-running the
-    // import fixes it.
-    await Promise.all(
-      updates.map(update =>
-        prisma.player.update({ where: { id: update.playerId }, data: { data: update.data } })
+    // One batched UPDATE...FROM(VALUES...) instead of one prisma.player.update
+    // per matched player - cuts this from N round-trips (1000+ for a large
+    // roster) down to a single round-trip to Postgres.
+    if (updates.length > 0) {
+      const rows = updates.map(update =>
+        Prisma.sql`(${update.playerId}::text, ${JSON.stringify(update.data)}::jsonb)`
       )
-    )
+      await prisma.$executeRaw`
+        UPDATE players AS p
+        SET data = v.data
+        FROM (VALUES ${Prisma.join(rows)}) AS v(id, data)
+        WHERE p.id = v.id
+      `
+    }
 
     return NextResponse.json({
       success: true,

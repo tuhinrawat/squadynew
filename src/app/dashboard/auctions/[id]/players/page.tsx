@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -600,8 +600,13 @@ export default function PlayerManagement() {
     }
   }
 
-  // Convert players to DataTable format and sort by isIcon (Bidder Choice first)
-  const tableData = players.map(player => ({
+  // Convert players to DataTable format and sort by isIcon (Bidder Choice first).
+  // Memoized - this previously re-mapped and re-sorted the entire player
+  // list, and rebuilt every column definition, on every render (including
+  // ones triggered by unrelated state like a form field), which also
+  // defeated DataTable's own internal memoization since it received a new
+  // array/object identity each time regardless of whether the data changed.
+  const tableData = useMemo(() => players.map(player => ({
     ...player.data,
     id: player.id,
     status: player.status,
@@ -613,10 +618,10 @@ export default function PlayerManagement() {
       return b.isIcon ? 1 : -1
     }
     return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  })
+  }), [players])
 
   // Create DataTable columns
-  const tableColumns: DataTableColumn[] = [
+  const tableColumns: DataTableColumn[] = useMemo(() => [
     ...columns.map(col => ({
       key: col,
       label: col,
@@ -677,7 +682,7 @@ export default function PlayerManagement() {
       label: 'Added',
       sortable: true
     }
-  ]
+  ], [columns, tableData])
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">

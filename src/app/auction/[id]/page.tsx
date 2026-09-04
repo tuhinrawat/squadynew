@@ -196,11 +196,10 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
     redirect(`/auction/${auctionWithSlug.slug}${queryString ? `?${queryString}` : ''}`)
   }
 
-  // Fetch current player and validate it's not SOLD
+  // Current player is already in the `players` relation just fetched above -
+  // derive it from there instead of a second round-trip to the database.
   let currentPlayer = auction.currentPlayerId
-    ? await prisma.player.findUnique({
-        where: { id: auction.currentPlayerId }
-      })
+    ? auction.players.find(p => p.id === auction.currentPlayerId) ?? null
     : null
 
   // CRITICAL: If current player is SOLD, clear it to prevent showing SOLD players

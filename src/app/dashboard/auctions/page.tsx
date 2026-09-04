@@ -7,7 +7,9 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { AuctionsTable } from '@/components/auctions-table'
 
-export default async function AuctionsList() {
+const PAGE_SIZE = 25
+
+export default async function AuctionsList({ searchParams }: { searchParams: { page?: string } }) {
   const session = await getServerSession(authOptions)
 
   if (!session) {
@@ -19,35 +21,51 @@ export default async function AuctionsList() {
   }
 
   // SUPER_ADMIN can see all auctions, regular admins see only their own
-  const auctions = await prisma.auction.findMany({
-    where: session.user?.role === 'SUPER_ADMIN' 
-      ? undefined 
-      : { createdById: session.user.id },
-    orderBy: {
-      createdAt: 'desc'
-    },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      image: true,
-      rules: true,
-      scheduledStartDate: true,
-      status: true,
-      isPublished: true,
-      createdAt: true,
-      totalViews: true,
-      timerViews: true,
-      uniqueVisitors: true,
-      peakViewers: true,
-      _count: {
-        select: {
-          players: true,
-          bidders: true
+  const where = session.user?.role === 'SUPER_ADMIN'
+    ? undefined
+    : { createdById: session.user.id }
+
+  const requestedPage = Number(searchParams.page) || 1
+  const page = Math.max(1, Math.floor(requestedPage))
+
+  // Paginated - a SUPER_ADMIN's list spans every auction on the platform
+  // (no createdById filter above) and a busy admin's own list can also grow
+  // into the hundreds; loading it all unbounded on every dashboard visit
+  // doesn't scale with either.
+  const [auctions, totalCount] = await Promise.all([
+    prisma.auction.findMany({
+      where,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        image: true,
+        rules: true,
+        scheduledStartDate: true,
+        status: true,
+        isPublished: true,
+        createdAt: true,
+        totalViews: true,
+        timerViews: true,
+        uniqueVisitors: true,
+        peakViewers: true,
+        _count: {
+          select: {
+            players: true,
+            bidders: true
+          }
         }
       }
-    }
-  })
+    }),
+    prisma.auction.count({ where })
+  ])
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
 
   return (
     <div className="space-y-3">
@@ -56,7 +74,8 @@ export default async function AuctionsList() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">Auctions</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {auctions.length} {auctions.length === 1 ? 'auction' : 'auctions'}
+            {totalCount} {totalCount === 1 ? 'auction' : 'auctions'}
+            {totalPages > 1 && ` · page ${page} of ${totalPages}`}
           </p>
         </div>
         <Link href="/dashboard/auctions/new">
@@ -87,6 +106,26 @@ export default async function AuctionsList() {
           )}
         </CardContent>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-1">
+          {page <= 1 ? (
+            <Button size="sm" variant="outline" disabled>Previous</Button>
+          ) : (
+            <Link href={`/dashboard/auctions?page=${page - 1}`}>
+              <Button size="sm" variant="outline">Previous</Button>
+            </Link>
+          )}
+          <span className="text-xs text-gray-500 dark:text-gray-400">Page {page} of {totalPages}</span>
+          {page >= totalPages ? (
+            <Button size="sm" variant="outline" disabled>Next</Button>
+          ) : (
+            <Link href={`/dashboard/auctions?page=${page + 1}`}>
+              <Button size="sm" variant="outline">Next</Button>
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   )
 }
