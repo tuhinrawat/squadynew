@@ -66,8 +66,15 @@ interface PusherStatus {
   totalChannels: number
   totalSubscribers: number
   channels: PusherChannelStatus[]
+  plan: { key: string; label: string }
   connectionCeiling: { maxConnections: number; usedPercent: number | null }
   broadcastsToday: number
+  messageEstimate: {
+    estimatedMessagesToday: number
+    unestimatedTriggersToday: number
+    messagesPerDayLimit: number
+    usedPercent: number | null
+  }
 }
 
 interface TimelineEvent {
@@ -251,14 +258,17 @@ export default function ObservabilityPage() {
           now," independent of the range/auction filters above */}
       <Card className="border-blue-200 dark:border-blue-900">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 flex-wrap">
             <Radio className="h-4 w-4 text-blue-500" />
             Live Connections
+            {pusherStatus && (
+              <Badge className="bg-blue-100 text-blue-700 border-0 text-[10px] font-semibold">{pusherStatus.plan.label}</Badge>
+            )}
           </CardTitle>
           <CardDescription>
             Occupied auction channels and subscriber counts, straight from Pusher&apos;s API - right now, not a historical window.
-            The connection ceiling below is a manually-configured plan limit, and &quot;broadcasts today&quot; is this app&apos;s own
-            trigger count (a proxy for message volume, not Pusher&apos;s real quota) - check Pusher&apos;s own dashboard for the authoritative number.
+            Limits below come from the PUSHER_PLAN env var (set it to match your real Pusher plan - defaults to Sandbox if unset).
+            The message estimate multiplies today&apos;s triggers by each auction&apos;s current live audience - a real estimate, not Pusher&apos;s exact billed count.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -274,14 +284,26 @@ export default function ObservabilityPage() {
                 <div><span className="text-gray-500">Active auctions:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.totalChannels}</span></div>
                 <div><span className="text-gray-500">Total subscribers:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.totalSubscribers}</span></div>
                 <div>
-                  <span className="text-gray-500">Connection ceiling:</span>{' '}
+                  <span className="text-gray-500">Connections:</span>{' '}
                   <span className={`font-bold ${(pusherStatus.connectionCeiling.usedPercent ?? 0) > 80 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                     {pusherStatus.totalSubscribers}/{pusherStatus.connectionCeiling.maxConnections}
                     {pusherStatus.connectionCeiling.usedPercent !== null && ` (${pusherStatus.connectionCeiling.usedPercent}%)`}
                   </span>
                 </div>
-                <div><span className="text-gray-500">Broadcasts today:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.broadcastsToday.toLocaleString('en-IN')}</span></div>
+                <div>
+                  <span className="text-gray-500">Messages today (est.):</span>{' '}
+                  <span className={`font-bold ${(pusherStatus.messageEstimate.usedPercent ?? 0) > 80 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {pusherStatus.messageEstimate.estimatedMessagesToday.toLocaleString('en-IN')}/{pusherStatus.messageEstimate.messagesPerDayLimit.toLocaleString('en-IN')}
+                    {pusherStatus.messageEstimate.usedPercent !== null && ` (${pusherStatus.messageEstimate.usedPercent}%)`}
+                  </span>
+                </div>
+                <div><span className="text-gray-500">Broadcasts today (raw):</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.broadcastsToday.toLocaleString('en-IN')}</span></div>
               </div>
+              {pusherStatus.messageEstimate.unestimatedTriggersToday > 0 && (
+                <p className="text-xs text-gray-500 mb-3">
+                  +{pusherStatus.messageEstimate.unestimatedTriggersToday.toLocaleString('en-IN')} more triggers today from auctions with no live audience right now to estimate against (not included above).
+                </p>
+              )}
               {pusherStatus.totalChannels === 0 ? (
                 <p className="text-sm text-gray-500 py-2">No auction channels are occupied right now - nobody has an auction page open.</p>
               ) : (
