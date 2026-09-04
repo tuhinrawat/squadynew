@@ -150,6 +150,8 @@ export interface AuctionEventData {
     bidderId: string
     amount: number
     playerName: string
+    bidderName?: string
+    teamName?: string
     bidderRemainingPurse?: number // Added for instant UI updates
     updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch updates
   }

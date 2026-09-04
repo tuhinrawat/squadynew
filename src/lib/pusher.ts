@@ -39,6 +39,8 @@ export interface AuctionEventData {
     bidderId: string
     amount: number
     playerName: string
+    bidderName?: string
+    teamName?: string
     bidderRemainingPurse?: number // Include purse update
     updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch purse updates
   }
