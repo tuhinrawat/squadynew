@@ -16,9 +16,13 @@ export interface PlayerCardProps {
 	// in a separate strip below the photo that required scrolling to see
 	// (worse on mobile, where it was pushed even further down).
 	currentBid?: { amount: number; bidderName: string; teamName?: string } | null
+	// Set when this player was matched to a sale in a linked previous
+	// auction (see src/lib/auction-history.ts) - the anchor/bidders' only
+	// reference point for what this player went for last time.
+	lastYear?: { price: number; teamName?: string | null; auctionName?: string | null } | null
 }
 
-export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid }: PlayerCardProps) {
+export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear }: PlayerCardProps) {
 	// Extract field values
 	const speciality = fields.find(f => f.label === 'Speciality')?.value || ''
 	const batting = fields.find(f => f.label === 'Batting')?.value || ''
@@ -107,6 +111,18 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 				<h2 className="text-xl sm:text-3xl lg:text-4xl font-black text-white uppercase tracking-tight leading-tight">
 					{name}
 				</h2>
+
+				{/* Last Year Price - only when this player was matched to a sale
+				    in a linked previous auction (see auction-history.ts) */}
+				{lastYear && (
+					<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5">
+						<span className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-amber-400/90">Last Year Price</span>
+						<span className="text-xs sm:text-sm font-black text-amber-300 tabular-nums">₹{lastYear.price.toLocaleString('en-IN')}</span>
+						{lastYear.teamName && (
+							<span className="text-[10px] sm:text-xs font-semibold text-gray-400">&middot; {lastYear.teamName}</span>
+						)}
+					</div>
+				)}
 
 				{/* Speciality + Base price */}
 				{(speciality || basePrice !== undefined) && (

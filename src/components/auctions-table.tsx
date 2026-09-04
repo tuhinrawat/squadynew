@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -69,6 +69,12 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [imageUploadError, setImageUploadError] = useState<string>('')
+  const [linkPreviousDialogOpen, setLinkPreviousDialogOpen] = useState(false)
+  const [linkPreviousAuction, setLinkPreviousAuction] = useState<Auction | null>(null)
+  const [linkPreviousCandidates, setLinkPreviousCandidates] = useState<Array<{ id: string; name: string; scheduledStartDate: string | null; createdAt: string }>>([])
+  const [linkPreviousSelectedIds, setLinkPreviousSelectedIds] = useState<Set<string>>(new Set())
+  const [linkPreviousLoading, setLinkPreviousLoading] = useState(false)
+  const [linkPreviousSaving, setLinkPreviousSaving] = useState(false)
   const [editFormData, setEditFormData] = useState({
     name: '',
     description: '',
@@ -320,6 +326,68 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     })
   }
 
+  const handleOpenLinkPrevious = async (auction: Auction) => {
+    setLinkPreviousAuction(auction)
+    setLinkPreviousDialogOpen(true)
+    setLinkPreviousLoading(true)
+    try {
+      const response = await fetch(`/api/auctions/${auction.id}/link-previous`)
+      if (!response.ok) {
+        throw new Error('Failed to load previous auctions')
+      }
+      const data = await response.json()
+      setLinkPreviousCandidates(data.candidates || [])
+      setLinkPreviousSelectedIds(new Set(data.linkedAuctionIds || []))
+    } catch (error) {
+      console.error('Error loading previous auctions:', error)
+      toast.error('Failed to load previous auctions')
+      setLinkPreviousDialogOpen(false)
+    } finally {
+      setLinkPreviousLoading(false)
+    }
+  }
+
+  const toggleLinkPreviousSelection = (auctionId: string) => {
+    setLinkPreviousSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(auctionId)) {
+        next.delete(auctionId)
+      } else {
+        next.add(auctionId)
+      }
+      return next
+    })
+  }
+
+  const handleSaveLinkPrevious = async () => {
+    if (!linkPreviousAuction) return
+    setLinkPreviousSaving(true)
+    try {
+      const response = await fetch(`/api/auctions/${linkPreviousAuction.id}/link-previous`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linkedAuctionIds: Array.from(linkPreviousSelectedIds) }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to link previous auctions')
+      }
+      if (data.matchedCount > 0) {
+        toast.success(`Linked! Matched last year's price for ${data.matchedCount} of ${data.totalPlayers} players.`)
+      } else if (Array.from(linkPreviousSelectedIds).length > 0) {
+        toast.success('Linked, but no players matched by Cricheroes profile link yet.')
+      } else {
+        toast.success('Previous auction links cleared.')
+      }
+      setLinkPreviousDialogOpen(false)
+    } catch (error) {
+      console.error('Error linking previous auctions:', error)
+      toast.error(error instanceof Error ? error.message : 'Failed to link previous auctions')
+    } finally {
+      setLinkPreviousSaving(false)
+    }
+  }
+
   const handleDelete = (auction: Auction) => {
     setAuctionToDelete(auction)
     setDeleteDialogOpen(true)
@@ -420,6 +488,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
                     <Copy className="mr-2 h-4 w-4" />
                     Duplicate Auction
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleOpenLinkPrevious(auction)}>
+                    <History className="mr-2 h-4 w-4" />
+                    Link Previous Auctions
                   </DropdownMenuItem>
                   {auction.status === 'DRAFT' && (
                     <>
@@ -573,6 +645,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                   <DropdownMenuItem onClick={() => handleDuplicate(auction)}>
                     <Copy className="mr-2 h-4 w-4" />
                     Duplicate Auction
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleOpenLinkPrevious(auction)}>
+                    <History className="mr-2 h-4 w-4" />
+                    Link Previous Auctions
                   </DropdownMenuItem>
                   {auction.status === 'DRAFT' && (
                     <>
@@ -1015,6 +1091,55 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Link Previous Auctions Dialog */}
+      <Dialog open={linkPreviousDialogOpen} onOpenChange={setLinkPreviousDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Link Previous Auctions</DialogTitle>
+            <DialogDescription>
+              Select completed auctions from earlier seasons. Players who match by Cricheroes profile link
+              will show their most recent linked auction&apos;s sale price and team as &ldquo;Last Year Price&rdquo; during
+              this auction.
+            </DialogDescription>
+          </DialogHeader>
+          {linkPreviousLoading ? (
+            <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Loading completed auctions...</div>
+          ) : linkPreviousCandidates.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+              No completed auctions available to link yet.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {linkPreviousCandidates.map(candidate => (
+                <label
+                  key={candidate.id}
+                  className="flex items-center gap-3 rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  <Checkbox
+                    checked={linkPreviousSelectedIds.has(candidate.id)}
+                    onCheckedChange={() => toggleLinkPreviousSelection(candidate.id)}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{candidate.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(candidate.scheduledStartDate || candidate.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkPreviousDialogOpen(false)} disabled={linkPreviousSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveLinkPrevious} disabled={linkPreviousLoading || linkPreviousSaving}>
+              {linkPreviousSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

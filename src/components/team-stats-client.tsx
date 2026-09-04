@@ -13,6 +13,7 @@ import { ActivityLog } from '@/components/activity-log'
 import { FixturesBracket } from '@/components/fixtures-bracket'
 import Link from 'next/link'
 import { initializePusher } from '@/lib/pusher-client'
+import { extractCricheroesLink } from '@/lib/cricheroes'
 
 type BidderWithUser = Bidder & { user: { id: string; name: string | null; email: string | null } }
 type AuctionWithRelations = Auction & {
@@ -258,21 +259,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
         playerData?.Batting || playerData?.batting,
         playerData?.Bowling || playerData?.bowling
       ].filter(Boolean).join(' • ')
-      const cricherosLink = (() => {
-        const link = playerData?.['Cricheroes Profile link'] || 
-                     playerData?.[' Cricheroes Profile link'] ||
-                     playerData?.['cricheroes profile link'] ||
-                     playerData?.['Cricheros Profile'] || 
-                     playerData?.['cricheros profile']
-        
-        if (link && typeof link === 'string') {
-          const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
-          if (urlMatch && urlMatch[1]) {
-            return urlMatch[1].trim()
-          }
-        }
-        return undefined
-      })()
+      const cricherosLink = extractCricheroesLink(playerData)
       const isBidder = player.status === 'RETIRED'
       const statusLabel = (() => {
         if (player.status === 'SOLD') {
@@ -302,6 +289,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
         purchasedPrice: player.status === 'SOLD' ? (player.soldPrice || 0) : null,
         basePrice: basePrice,
         cricherosLink,
+        lastYearPrice: player.lastYearPrice,
+        lastYearTeamName: player.lastYearTeamName,
       }
     })
   }, [sortedPlayers, auction.bidders])
@@ -828,7 +817,18 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         <p className="text-green-200 text-[10px] sm:text-xs font-semibold">SOLD FOR</p>
                         <p className="text-white font-black text-xl sm:text-3xl break-words">₹{(player.soldPrice || 0).toLocaleString('en-IN')}</p>
                       </div>
-                      
+
+                      {/* Last Year Price - only when matched via a linked previous auction */}
+                      {player.lastYearPrice != null && (
+                        <div className="bg-amber-500/10 border border-amber-400/30 rounded-lg px-2 py-1.5 text-center">
+                          <p className="text-amber-300/80 text-[9px] sm:text-[10px] font-semibold">LAST YEAR PRICE</p>
+                          <p className="text-amber-300 font-bold text-sm sm:text-base break-words">
+                            ₹{player.lastYearPrice.toLocaleString('en-IN')}
+                            {player.lastYearTeamName ? ` · ${player.lastYearTeamName}` : ''}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Team & Bidder Info */}
                       <div className="space-y-1 bg-white/5 rounded-lg p-2 border border-white/10">
                         <div className="flex items-center justify-between gap-2">
@@ -1286,6 +1286,11 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                   {card.specialty && (
                                       <p className="text-yellow-400 text-[10px] sm:text-xs font-bold uppercase tracking-wide truncate">{card.specialty}</p>
                                     )}
+                                  {card.lastYearPrice != null && (
+                                    <p className="text-amber-300/90 text-[10px] sm:text-xs font-bold truncate mt-1">
+                                      Last Year: ₹{card.lastYearPrice.toLocaleString('en-IN')}{card.lastYearTeamName ? ` · ${card.lastYearTeamName}` : ''}
+                                    </p>
+                                  )}
                                 </div>
 
                                 {/* Price Info */}

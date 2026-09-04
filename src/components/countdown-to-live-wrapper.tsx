@@ -16,6 +16,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { isLiveStatus } from '@/lib/auction-status'
+import { extractCricheroesLink } from '@/lib/cricheroes'
 import { AuctionStatus } from '@prisma/client'
 
 interface CountdownToLiveWrapperProps {
@@ -109,21 +110,7 @@ export function CountdownToLiveWrapper({
       ].filter(Boolean).join(' • ')
       const basePriceRaw = playerData?.['Base Price'] || playerData?.['base price']
       const basePrice = basePriceRaw ? Number(basePriceRaw) : 1000
-      const cricherosLink = (() => {
-        const link = playerData?.['Cricheroes Profile link'] || 
-                     playerData?.[' Cricheroes Profile link'] ||
-                     playerData?.['cricheroes profile link'] ||
-                     playerData?.['Cricheros Profile'] || 
-                     playerData?.['cricheros profile']
-        
-        if (link && typeof link === 'string') {
-          const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
-          if (urlMatch && urlMatch[1]) {
-            return urlMatch[1].trim()
-          }
-        }
-        return undefined
-      })()
+      const cricherosLink = extractCricheroesLink(playerData)
       const status = player.status
       const isBidder = status === 'RETIRED'
       const isBidderChoice = (player as any).isIcon === true
@@ -150,7 +137,9 @@ export function CountdownToLiveWrapper({
         isBidderChoice,
         teamName,
         purchasedPrice: status === 'SOLD' ? (player.soldPrice || 0) : null,
-        cricherosLink
+        cricherosLink,
+        lastYearPrice: player.lastYearPrice as number | null | undefined,
+        lastYearTeamName: player.lastYearTeamName as string | null | undefined,
       }
     }).sort((a, b) => a.name.localeCompare(b.name))
   }, [auction.players])
@@ -743,6 +732,11 @@ export function CountdownToLiveWrapper({
                             )}
                             {card.specialty && (
                               <p className="text-white/40 text-[10px] sm:text-xs font-semibold truncate mt-1">{card.statsSummary || card.specialty}</p>
+                            )}
+                            {card.lastYearPrice != null && (
+                              <p className="text-amber-300/90 text-[10px] sm:text-xs font-bold truncate mt-1">
+                                Last Year: ₹{card.lastYearPrice.toLocaleString('en-IN')}{card.lastYearTeamName ? ` · ${card.lastYearTeamName}` : ''}
+                              </p>
                             )}
                           </div>
 

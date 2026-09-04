@@ -18,6 +18,7 @@ import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { GoingLiveBanner } from '@/components/going-live-banner'
+import { extractCricheroesLink } from '@/lib/cricheroes'
 // Memoized components for performance
 import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
 
@@ -853,6 +854,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
                   <PlayerCard
                     currentBid={currentBid}
+                    lastYear={currentPlayer?.lastYearPrice != null ? {
+                      price: currentPlayer.lastYearPrice,
+                      teamName: currentPlayer.lastYearTeamName,
+                      auctionName: currentPlayer.lastYearAuctionName,
+                    } : null}
                     name={playerName}
                     imageUrl={(() => {
                       const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
@@ -877,19 +883,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     })()}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
-                    profileLink={(() => {
-                      const link = (playerData as any)?.['Cricheroes Profile link'] ||
-                                   (playerData as any)?.[' Cricheroes Profile link'] ||
-                                   (playerData as any)?.['cricheroes profile link']
-
-                      if (link && typeof link === 'string') {
-                        const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
-                        if (urlMatch && urlMatch[1]) {
-                          return urlMatch[1].trim()
-                        }
-                      }
-                      return undefined
-                    })()}
+                    profileLink={extractCricheroesLink(playerData)}
                     fields={(() => {
                       const essentials: Array<{ label: string; value: string }> = []
                       const add = (label: string, keys: string[]) => {

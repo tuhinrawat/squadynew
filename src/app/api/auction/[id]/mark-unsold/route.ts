@@ -176,7 +176,11 @@ export async function POST(
             status: true,
             isIcon: true,
             data: true, // Include full player data
-            auctionId: true
+            auctionId: true,
+            lastYearPrice: true,
+            lastYearTeamName: true,
+            lastYearBidderName: true,
+            lastYearAuctionName: true
           }
         })
       }

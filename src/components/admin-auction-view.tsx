@@ -18,6 +18,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ActivityLog } from '@/components/activity-log'
 import { isLiveStatus } from '@/lib/auction-status'
 import { formatCurrency } from '@/lib/currency'
+import { extractCricheroesLink } from '@/lib/cricheroes'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
@@ -1944,6 +1945,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 <div className={auctionPhase ? 'pt-8 sm:pt-10' : ''}>
                   <PlayerCard
                 currentBid={currentBid}
+                lastYear={currentPlayer?.lastYearPrice != null ? {
+                  price: currentPlayer.lastYearPrice,
+                  teamName: currentPlayer.lastYearTeamName,
+                  auctionName: currentPlayer.lastYearAuctionName,
+                } : null}
                 name={playerName}
                 imageUrl={(() => {
                   const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
@@ -1968,22 +1974,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 })()}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                 tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
-                profileLink={(() => {
-                  // Get the Cricheroes Profile link field
-                  const link = (playerData as any)?.['Cricheroes Profile link'] || 
-                               (playerData as any)?.[' Cricheroes Profile link'] ||
-                               (playerData as any)?.['cricheroes profile link']
-                  
-                  if (link && typeof link === 'string') {
-                    // Extract URL from the text (handles cases like "Hey, check out... https://...")
-                    const urlMatch = link.match(/(https?:\/\/[^\s]+)/i)
-                    if (urlMatch && urlMatch[1]) {
-                      return urlMatch[1].trim()
-                    }
-                  }
-                  
-                  return undefined
-                })()}
+                profileLink={extractCricheroesLink(playerData)}
                 fields={(() => {
                   
                   const essentials: Array<{ label: string; value: string }> = []

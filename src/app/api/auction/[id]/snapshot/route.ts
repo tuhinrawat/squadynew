@@ -45,7 +45,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const [players, bidders] = await Promise.all([
       prisma.player.findMany({
         where: { auctionId: auction.id },
-        select: { id: true, auctionId: true, data: true, status: true, isIcon: true, soldTo: true, soldPrice: true },
+        select: {
+          id: true, auctionId: true, data: true, status: true, isIcon: true, soldTo: true, soldPrice: true,
+          lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true,
+        },
       }),
       prisma.bidder.findMany({
         where: { auctionId: auction.id },

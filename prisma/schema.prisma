@@ -88,11 +88,13 @@ model Auction {
   scheduledStartDate DateTime? // When the auction is scheduled to start
 
   // Relations
-  createdBy    User          @relation(fields: [createdById], references: [id])
-  players      Player[]
-  bidders      Bidder[]
-  views        AuctionView[] // Individual view records
-  fixtures     Fixture[] // Fixtures/matches for this auction
+  createdBy         User          @relation(fields: [createdById], references: [id])
+  players           Player[]
+  bidders           Bidder[]
+  views             AuctionView[] // Individual view records
+  fixtures          Fixture[] // Fixtures/matches for this auction
+  linkedAuctions    AuctionLink[] @relation("AuctionLinksFrom") // Previous auctions THIS auction links to
+  linkedByAuctions  AuctionLink[] @relation("AuctionLinksTo") // Later auctions that link to THIS one as a previous year
 
   // Performance indexes
   @@index([createdById])
@@ -101,6 +103,23 @@ model Auction {
   @@index([createdById, status])
   @@index([slug])
   @@map("auctions")
+}
+
+// Links a new auction to a previous (COMPLETED) one so player sale history
+// can carry forward - see Player.lastYear* fields, which are computed from
+// the most recently linked auction a player matches in by Cricheroes link.
+model AuctionLink {
+  id              String   @id @default(cuid())
+  auctionId       String // the current auction doing the linking
+  linkedAuctionId String // a previous, completed auction being linked in
+  createdAt       DateTime @default(now())
+
+  auction       Auction @relation("AuctionLinksFrom", fields: [auctionId], references: [id], onDelete: Cascade)
+  linkedAuction Auction @relation("AuctionLinksTo", fields: [linkedAuctionId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, linkedAuctionId])
+  @@index([linkedAuctionId])
+  @@map("auction_links")
 }
 
 model Player {
@@ -112,6 +131,14 @@ model Player {
   soldTo    String?
   soldPrice Float?
   createdAt DateTime     @default(now())
+
+  // Snapshot of this player's most recent sale in a linked previous auction
+  // (see AuctionLink) - computed once when auctions are linked, not a live
+  // join, since the linked auction is completed/frozen by then.
+  lastYearPrice       Float?
+  lastYearTeamName    String?
+  lastYearBidderName  String?
+  lastYearAuctionName String?
 
   // Relations
   auction Auction @relation(fields: [auctionId], references: [id])
