@@ -13,15 +13,16 @@ import { prisma } from '@/lib/prisma'
 //
 // Two honest approximations instead of a fake precise number:
 //  - maxConnections is a manually-configured ceiling (env var, defaulting to
-//    Pusher's Sandbox/free-tier limit) compared against the live subscriber
-//    count above - tells you how close you are to a CONNECTION limit.
+//    a starting estimate below) compared against the live subscriber count
+//    above - tells you how close you are to a CONNECTION limit. Override via
+//    the PUSHER_MAX_CONNECTIONS env var once the real plan limit is known.
 //  - broadcastsToday counts this app's own logged 'pusher' trigger calls in
 //    the last 24h - a proxy for MESSAGE volume, not Pusher's real message
 //    count (a single trigger to N subscribers counts as N messages on
 //    Pusher's side, which this number does not multiply out). Labeled as
 //    such in the dashboard - never presented as the real quota number.
 
-const DEFAULT_MAX_CONNECTIONS = 100 // Pusher Channels Sandbox (free) plan limit
+const DEFAULT_MAX_CONNECTIONS = 4000 // starting estimate, override with PUSHER_MAX_CONNECTIONS once the real plan limit is confirmed
 
 interface PusherChannelInfo {
   subscription_count?: number
