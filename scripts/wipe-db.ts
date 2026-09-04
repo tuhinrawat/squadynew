@@ -51,7 +51,6 @@ async function main() {
 
 	await prisma.$transaction(async (tx) => {
 		// Delete in FK-safe order
-		await tx.chatMessage.deleteMany({})
 		await tx.player.deleteMany({})
 		await tx.bidder.deleteMany({})
 		await tx.auction.deleteMany({})
