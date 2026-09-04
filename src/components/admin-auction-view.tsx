@@ -19,6 +19,7 @@ import { ActivityLog } from '@/components/activity-log'
 import { isLiveStatus } from '@/lib/auction-status'
 import { formatCurrency } from '@/lib/currency'
 import { extractCricheroesLink } from '@/lib/cricheroes'
+import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
@@ -1975,6 +1976,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                 tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                 profileLink={extractCricheroesLink(playerData)}
+                battingStats={extractBattingStats(playerData)}
+                bowlingStats={extractBowlingStats(playerData)}
                 fields={(() => {
                   
                   const essentials: Array<{ label: string; value: string }> = []

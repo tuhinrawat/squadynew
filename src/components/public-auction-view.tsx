@@ -19,6 +19,7 @@ import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { GoingLiveBanner } from '@/components/going-live-banner'
 import { extractCricheroesLink } from '@/lib/cricheroes'
+import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 // Memoized components for performance
 import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
 
@@ -884,6 +885,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                     profileLink={extractCricheroesLink(playerData)}
+                    battingStats={extractBattingStats(playerData)}
+                    bowlingStats={extractBowlingStats(playerData)}
                     fields={(() => {
                       const essentials: Array<{ label: string; value: string }> = []
                       const add = (label: string, keys: string[]) => {

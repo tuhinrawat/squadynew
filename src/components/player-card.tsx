@@ -2,6 +2,16 @@
 
 import { ReactNode, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import {
+	BattingStats,
+	BowlingStats,
+	BATTING_AVERAGE_RANGE,
+	BATTING_STRIKE_RATE_RANGE,
+	BOWLING_ECONOMY_RANGE,
+	BOWLING_AVERAGE_RANGE,
+	scalePercent,
+} from '@/lib/cricket-stats'
 
 export interface PlayerCardProps {
 	name: string
@@ -20,14 +30,71 @@ export interface PlayerCardProps {
 	// auction (see src/lib/auction-history.ts) - the anchor/bidders' only
 	// reference point for what this player went for last time.
 	lastYear?: { price: number; teamName?: string | null; auctionName?: string | null } | null
+	// Career stats from the uploaded player data (see src/lib/cricket-stats.ts).
+	// Each panel only renders when its stats object is present, and each
+	// scale bar/tile only renders when that specific field has a value.
+	battingStats?: BattingStats | null
+	bowlingStats?: BowlingStats | null
 }
 
-export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear }: PlayerCardProps) {
+function BatIcon({ size = 16, color = '#5eead4' }: { size?: number; color?: string }) {
+	return (
+		<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+			<g transform="rotate(40 12 12)">
+				<rect x="10.5" y="2" width="3" height="8" rx="1.5"></rect>
+				<rect x="9" y="10" width="6" height="12" rx="3"></rect>
+			</g>
+		</svg>
+	)
+}
+
+function BallIcon({ size = 16, color = '#5eead4' }: { size?: number; color?: string }) {
+	return (
+		<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+			<circle cx="12" cy="12" r="9"></circle>
+			<path d="M12 3a9 9 0 0 1 0 18"></path>
+		</svg>
+	)
+}
+
+function ChevronRightIcon() {
+	return (
+		<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+			<polyline points="9 6 15 12 9 18"></polyline>
+		</svg>
+	)
+}
+
+function ScaleBar({ label, value, formatted }: { label: string; value: number; formatted: string }) {
+	return (
+		<div>
+			<div className="flex items-baseline justify-between mb-1.5">
+				<span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</span>
+				<span className="text-sm font-extrabold text-white tabular-nums">{formatted}</span>
+			</div>
+			<div className="relative h-1.5 rounded-full bg-white/10 overflow-hidden">
+				<div className="absolute inset-y-0 left-0 rounded-full bg-teal-400" style={{ width: `${value}%` }} />
+			</div>
+		</div>
+	)
+}
+
+function StatTile({ label, value }: { label: string; value: ReactNode }) {
+	return (
+		<div className="bg-white/[0.035] border border-white/[0.07] rounded-lg px-1.5 py-2.5 text-center">
+			<div className="text-[15px] font-extrabold text-gray-100 tabular-nums">{value}</div>
+			<div className="text-[8px] font-bold uppercase tracking-wider text-gray-500 mt-1 leading-tight">{label}</div>
+		</div>
+	)
+}
+
+export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear, battingStats, bowlingStats }: PlayerCardProps) {
 	// Extract field values
 	const speciality = fields.find(f => f.label === 'Speciality')?.value || ''
-	const batting = fields.find(f => f.label === 'Batting')?.value || ''
-	const bowling = fields.find(f => f.label === 'Bowling')?.value || ''
-	const wicketKeeper = fields.find(f => f.label === 'Wicket Keeper')?.value || ''
+	const battingStyle = fields.find(f => f.label === 'Batting')?.value || ''
+	const bowlingStyle = fields.find(f => f.label === 'Bowling')?.value || ''
+
+	const [openStats, setOpenStats] = useState<'batting' | 'bowling' | null>(null)
 
 	// Real source photos are informal, arbitrary-aspect-ratio phone shots.
 	// Rather than crop unpredictably, the full photo is always shown in full
@@ -141,27 +208,77 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 					</div>
 				)}
 
-				{/* Secondary player facts - ticker-style row with thin dividers.
-				    Grid + break-words (not truncate) so a longer value (e.g.
-				    "Right Arm Medium Pace") always shows in full, on any width. */}
-				{(batting || bowling || wicketKeeper) && (
-					<div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 py-3 border-y border-white/10 mb-3 sm:mb-5">
-						{batting && (
-							<div className="min-w-0 sm:text-center">
-								<div className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest">Batting</div>
-								<div className="text-xs sm:text-sm font-bold text-gray-100 uppercase break-words mt-0.5">{batting}</div>
+				{/* Batting / Bowling career stat panels - side by side, always
+				    visible. Each shows one career total plus the two metrics
+				    that actually decide how good a player is (see
+				    src/lib/cricket-stats.ts for why those two, not every
+				    uploaded column) as "how good is this" scale bars, not a
+				    raw number dump. A panel only renders when the player has
+				    that discipline's data at all; a pure batter gets one
+				    full-width panel with no Bowling panel beside it. */}
+				{(battingStats || bowlingStats) && (
+					<div className={`grid gap-3 mb-3 sm:mb-5 ${battingStats && bowlingStats ? 'grid-cols-2' : 'grid-cols-1'}`}>
+						{battingStats && (
+							<div className="bg-white/[0.03] border border-white/[0.08] rounded-lg p-3 sm:p-4">
+								<div className="flex items-start justify-between mb-3 sm:mb-4">
+									<div className="flex items-center gap-1.5">
+										<BatIcon />
+										<span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
+									</div>
+									{battingStats.runs !== undefined && (
+										<div className="text-right leading-none">
+											<span className="text-lg sm:text-xl font-black text-white tabular-nums">{battingStats.runs}</span>
+											<div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-gray-500 mt-0.5">Runs</div>
+										</div>
+									)}
+								</div>
+								<div className="space-y-3">
+									{battingStats.average !== undefined && (
+										<ScaleBar label="Average" value={scalePercent(battingStats.average, BATTING_AVERAGE_RANGE)} formatted={battingStats.average.toFixed(2)} />
+									)}
+									{battingStats.strikeRate !== undefined && (
+										<ScaleBar label="Strike Rate" value={scalePercent(battingStats.strikeRate, BATTING_STRIKE_RATE_RANGE)} formatted={battingStats.strikeRate.toFixed(2)} />
+									)}
+								</div>
+								<button
+									type="button"
+									onClick={() => setOpenStats('batting')}
+									className="inline-flex items-center gap-1 mt-3 sm:mt-3.5 text-teal-300 text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider"
+								>
+									View More <ChevronRightIcon />
+								</button>
 							</div>
 						)}
-						{wicketKeeper && (
-							<div className="min-w-0 sm:text-center sm:border-l sm:border-white/10 sm:pl-4 sm:order-3">
-								<div className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest">Keeper</div>
-								<div className="text-xs sm:text-sm font-bold text-gray-100 uppercase break-words mt-0.5">{wicketKeeper}</div>
-							</div>
-						)}
-						{bowling && (
-							<div className="min-w-0 col-span-2 sm:col-span-1 sm:order-2 sm:text-center sm:border-l sm:border-white/10 sm:pl-4 pt-3 sm:pt-0 border-t border-white/10 sm:border-t-0">
-								<div className="text-[9px] sm:text-[10px] font-bold text-gray-500 uppercase tracking-widest">Bowling</div>
-								<div className="text-xs sm:text-sm font-bold text-gray-100 uppercase break-words mt-0.5">{bowling}</div>
+
+						{bowlingStats && (
+							<div className="bg-white/[0.03] border border-white/[0.08] rounded-lg p-3 sm:p-4">
+								<div className="flex items-start justify-between mb-3 sm:mb-4">
+									<div className="flex items-center gap-1.5">
+										<BallIcon />
+										<span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
+									</div>
+									{bowlingStats.wickets !== undefined && (
+										<div className="text-right leading-none">
+											<span className="text-lg sm:text-xl font-black text-white tabular-nums">{bowlingStats.wickets}</span>
+											<div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-gray-500 mt-0.5">Wickets</div>
+										</div>
+									)}
+								</div>
+								<div className="space-y-3">
+									{bowlingStats.economy !== undefined && (
+										<ScaleBar label="Economy" value={scalePercent(bowlingStats.economy, BOWLING_ECONOMY_RANGE, true)} formatted={bowlingStats.economy.toFixed(2)} />
+									)}
+									{bowlingStats.average !== undefined && (
+										<ScaleBar label="Average" value={scalePercent(bowlingStats.average, BOWLING_AVERAGE_RANGE, true)} formatted={bowlingStats.average.toFixed(2)} />
+									)}
+								</div>
+								<button
+									type="button"
+									onClick={() => setOpenStats('bowling')}
+									className="inline-flex items-center gap-1 mt-3 sm:mt-3.5 text-teal-300 text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider"
+								>
+									View More <ChevronRightIcon />
+								</button>
 							</div>
 						)}
 					</div>
@@ -188,6 +305,134 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 					</div>
 				)}
 			</div>
+
+			{/* View More popups - recap of the card's own scale metrics (for
+			    continuity) plus the rest of that discipline's stats grouped
+			    into scannable tiles, instead of one long flat list. */}
+			<Dialog open={openStats === 'batting'} onOpenChange={(open) => setOpenStats(open ? 'batting' : null)}>
+				<DialogContent showCloseButton={false} className="bg-[#0d1015] border-white/10 text-white max-w-md p-5 sm:p-6 font-['Montserrat']">
+					<div className="flex items-start justify-between">
+						<div className="flex items-center gap-2.5">
+							<BatIcon size={18} />
+							<div>
+								<DialogTitle className="text-white text-sm font-extrabold uppercase tracking-wide">Batting</DialogTitle>
+								{battingStyle && (
+									<DialogDescription className="text-gray-500 text-[10px] font-semibold uppercase tracking-wide mt-0.5">{battingStyle}</DialogDescription>
+								)}
+							</div>
+						</div>
+						<button type="button" onClick={() => setOpenStats(null)} className="w-7 h-7 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+							<svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+								<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+							</svg>
+						</button>
+					</div>
+
+					{battingStats && (
+						<>
+							<div className="pt-4 mt-4 border-t border-white/[0.08] space-y-3">
+								{battingStats.runs !== undefined && (
+									<div className="flex items-baseline justify-between mb-1">
+										<span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Career Runs</span>
+										<span className="text-xl font-black text-white tabular-nums">{battingStats.runs}</span>
+									</div>
+								)}
+								{battingStats.average !== undefined && (
+									<ScaleBar label="Average" value={scalePercent(battingStats.average, BATTING_AVERAGE_RANGE)} formatted={battingStats.average.toFixed(2)} />
+								)}
+								{battingStats.strikeRate !== undefined && (
+									<ScaleBar label="Strike Rate" value={scalePercent(battingStats.strikeRate, BATTING_STRIKE_RATE_RANGE)} formatted={battingStats.strikeRate.toFixed(2)} />
+								)}
+							</div>
+
+							<div className="pt-4 mt-4 border-t border-white/[0.08]">
+								<div className="text-[10px] font-extrabold uppercase tracking-widest text-teal-300 mb-2.5">Innings &amp; Milestones</div>
+								<div className="grid grid-cols-3 gap-2 mb-4">
+									{battingStats.matches !== undefined && <StatTile label="Matches" value={battingStats.matches} />}
+									{battingStats.innings !== undefined && <StatTile label="Innings" value={battingStats.innings} />}
+									{battingStats.notOut !== undefined && <StatTile label="Not Out" value={battingStats.notOut} />}
+									{battingStats.thirties !== undefined && <StatTile label="30s" value={battingStats.thirties} />}
+									{battingStats.fifties !== undefined && <StatTile label="50s" value={battingStats.fifties} />}
+									{battingStats.hundreds !== undefined && <StatTile label="100s" value={battingStats.hundreds} />}
+								</div>
+
+								<div className="text-[10px] font-extrabold uppercase tracking-widest text-teal-300 mb-2.5">Boundaries &amp; Record</div>
+								<div className="grid grid-cols-3 gap-2">
+									{battingStats.highest !== undefined && <StatTile label="Highest" value={battingStats.highest} />}
+									{battingStats.fours !== undefined && <StatTile label="4s" value={battingStats.fours} />}
+									{battingStats.sixes !== undefined && <StatTile label="6s" value={battingStats.sixes} />}
+									{battingStats.ducks !== undefined && <StatTile label="Ducks" value={battingStats.ducks} />}
+									{battingStats.matchesWon !== undefined && <StatTile label="Matches Won" value={battingStats.matchesWon} />}
+									{battingStats.matchesLost !== undefined && <StatTile label="Matches Lost" value={battingStats.matchesLost} />}
+								</div>
+							</div>
+						</>
+					)}
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={openStats === 'bowling'} onOpenChange={(open) => setOpenStats(open ? 'bowling' : null)}>
+				<DialogContent showCloseButton={false} className="bg-[#0d1015] border-white/10 text-white max-w-md p-5 sm:p-6 font-['Montserrat']">
+					<div className="flex items-start justify-between">
+						<div className="flex items-center gap-2.5">
+							<BallIcon size={18} />
+							<div>
+								<DialogTitle className="text-white text-sm font-extrabold uppercase tracking-wide">Bowling</DialogTitle>
+								{bowlingStyle && (
+									<DialogDescription className="text-gray-500 text-[10px] font-semibold uppercase tracking-wide mt-0.5">{bowlingStyle}</DialogDescription>
+								)}
+							</div>
+						</div>
+						<button type="button" onClick={() => setOpenStats(null)} className="w-7 h-7 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+							<svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+								<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+							</svg>
+						</button>
+					</div>
+
+					{bowlingStats && (
+						<>
+							<div className="pt-4 mt-4 border-t border-white/[0.08] space-y-3">
+								{bowlingStats.wickets !== undefined && (
+									<div className="flex items-baseline justify-between mb-1">
+										<span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Career Wickets</span>
+										<span className="text-xl font-black text-white tabular-nums">{bowlingStats.wickets}</span>
+									</div>
+								)}
+								{bowlingStats.economy !== undefined && (
+									<ScaleBar label="Economy" value={scalePercent(bowlingStats.economy, BOWLING_ECONOMY_RANGE, true)} formatted={bowlingStats.economy.toFixed(2)} />
+								)}
+								{bowlingStats.average !== undefined && (
+									<ScaleBar label="Average" value={scalePercent(bowlingStats.average, BOWLING_AVERAGE_RANGE, true)} formatted={bowlingStats.average.toFixed(2)} />
+								)}
+							</div>
+
+							<div className="pt-4 mt-4 border-t border-white/[0.08]">
+								<div className="text-[10px] font-extrabold uppercase tracking-widest text-teal-300 mb-2.5">Overs &amp; Discipline</div>
+								<div className="grid grid-cols-3 gap-2 mb-4">
+									{bowlingStats.matches !== undefined && <StatTile label="Matches" value={bowlingStats.matches} />}
+									{bowlingStats.innings !== undefined && <StatTile label="Innings" value={bowlingStats.innings} />}
+									{bowlingStats.overs !== undefined && <StatTile label="Overs" value={bowlingStats.overs} />}
+									{bowlingStats.maidens !== undefined && <StatTile label="Maidens" value={bowlingStats.maidens} />}
+									{bowlingStats.runsConceded !== undefined && <StatTile label="Runs" value={bowlingStats.runsConceded} />}
+									{bowlingStats.dotBalls !== undefined && <StatTile label="Dot Balls" value={bowlingStats.dotBalls} />}
+								</div>
+
+								<div className="text-[10px] font-extrabold uppercase tracking-widest text-teal-300 mb-2.5">Wickets &amp; Extras</div>
+								<div className="grid grid-cols-3 gap-2">
+									{bowlingStats.best !== undefined && <StatTile label="Best" value={bowlingStats.best} />}
+									{bowlingStats.threeWickets !== undefined && <StatTile label="3 Wkts" value={bowlingStats.threeWickets} />}
+									{bowlingStats.fiveWickets !== undefined && <StatTile label="5 Wkts" value={bowlingStats.fiveWickets} />}
+									{bowlingStats.wides !== undefined && <StatTile label="Wides" value={bowlingStats.wides} />}
+									{bowlingStats.noBalls !== undefined && <StatTile label="No Balls" value={bowlingStats.noBalls} />}
+									{bowlingStats.fours !== undefined && <StatTile label="4s" value={bowlingStats.fours} />}
+									{bowlingStats.sixes !== undefined && <StatTile label="6s" value={bowlingStats.sixes} />}
+								</div>
+							</div>
+						</>
+					)}
+				</DialogContent>
+			</Dialog>
 		</div>
 	)
 }
