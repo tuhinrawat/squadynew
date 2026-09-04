@@ -1,9 +1,8 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { PublicHeaderWithChat } from './public-header-with-chat'
+import { useRef } from 'react'
+import { PublicHeader } from './public-header'
 import { PublicAuctionView } from './public-auction-view'
-import { LiveStreamChatOverlay } from './livestream-chat-overlay'
 import { Auction, Player } from '@prisma/client'
 
 interface BidHistoryEntry {
@@ -26,7 +25,6 @@ interface Bidder {
 }
 
 interface PublicAuctionWrapperProps {
-  auctionId: string
   auction: Auction & {
     players: Player[]
   }
@@ -42,7 +40,6 @@ interface PublicAuctionWrapperProps {
 }
 
 export function PublicAuctionWrapper({
-  auctionId,
   auction,
   currentPlayer,
   stats,
@@ -50,14 +47,10 @@ export function PublicAuctionWrapper({
   bidders
 }: PublicAuctionWrapperProps) {
   const openBidHistoryRef = useRef<(() => void) | null>(null)
-  const [chatMode, setChatMode] = useState<'traditional' | 'livestream'>('traditional')
 
   return (
     <>
-      <PublicHeaderWithChat 
-        auctionId={auctionId}
-        chatMode={chatMode}
-        setChatMode={setChatMode}
+      <PublicHeader
         onOpenBidHistory={() => {
           if (openBidHistoryRef.current) {
             openBidHistoryRef.current()
@@ -73,14 +66,6 @@ export function PublicAuctionWrapper({
         bidders={bidders}
         onOpenBidHistoryRef={openBidHistoryRef}
       />
-      
-      {/* LiveStream Chat Overlay - Only on mobile in livestream mode */}
-      {chatMode === 'livestream' && (
-        <div className="lg:hidden">
-          <LiveStreamChatOverlay auctionId={auctionId} />
-        </div>
-      )}
     </>
   )
 }
-

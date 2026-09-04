@@ -212,13 +212,6 @@ export async function POST(
       await triggerAuctionEvent(params.id, 'new-player', {
         player: nextPlayer
       } as any)
-
-      // Reset timer
-      const rules = auction.rules as any
-      const countdownSeconds = rules?.countdownSeconds || 30
-      await triggerAuctionEvent(params.id, 'timer-update', {
-        seconds: countdownSeconds
-      } as any)
     }
 
     // Broadcast players updated event

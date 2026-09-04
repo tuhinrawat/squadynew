@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { stopTimer } from '@/lib/auction-timer'
 import { logEventAsync } from '@/lib/observability'
 
 export async function POST(
@@ -59,9 +58,6 @@ export async function POST(
         bidHistory: []
       }
     })
-
-    // Stop timer if running
-    stopTimer(params.id)
 
     // Broadcast reset event
     await triggerAuctionEvent(params.id, 'auction-reset', {})

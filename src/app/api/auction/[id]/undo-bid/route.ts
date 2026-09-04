@@ -4,7 +4,6 @@ import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { resetTimer } from '@/lib/auction-timer'
 import { isLiveStatus } from '@/lib/auction-status'
 import { logEventAsync } from '@/lib/observability'
 
@@ -93,10 +92,8 @@ export async function POST(
       b.type !== 'bid-undo'
     ) || null
 
-    // Reset timer (non-blocking)
     const rules = auction.rules as any
     const countdownSeconds = rules?.countdownSeconds || 30
-    resetTimer(params.id, countdownSeconds)
 
     // Broadcast bid undo event BEFORE DB update for instant real-time updates
     const undoEventData = {

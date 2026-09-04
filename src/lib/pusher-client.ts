@@ -132,9 +132,6 @@ export interface AuctionEventData {
   'new-player': {
     player: any
   }
-  'timer-update': {
-    seconds: number
-  }
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
@@ -159,7 +156,6 @@ export interface UsePusherOptions {
   onPlayerSold?: (data: AuctionEventData['player-sold']) => void
   onSaleUndo?: (data: AuctionEventData['sale-undo']) => void
   onNewPlayer?: (data: AuctionEventData['new-player']) => void
-  onTimerUpdate?: (data: AuctionEventData['timer-update']) => void
   onAuctionPaused?: (data: AuctionEventData['auction-paused']) => void
   onAuctionResumed?: (data: AuctionEventData['auction-resumed']) => void
   onAuctionEnded?: (data: AuctionEventData['auction-ended']) => void
@@ -201,7 +197,6 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             channelToBind.unbind('player-sold')
             channelToBind.unbind('sale-undo')
             channelToBind.unbind('new-player')
-            channelToBind.unbind('timer-update')
             channelToBind.unbind('auction-paused')
             channelToBind.unbind('auction-resumed')
             channelToBind.unbind('auction-ended')
@@ -247,10 +242,6 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
               } catch (error) {
                 console.error('Error in new-player handler:', error)
               }
-            })
-            
-            channelToBind.bind('timer-update', (data: any) => {
-              callbacksRef.current.onTimerUpdate?.(data)
             })
             
             channelToBind.bind('auction-paused', (data: any) => {

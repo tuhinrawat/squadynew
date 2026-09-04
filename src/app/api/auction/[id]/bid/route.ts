@@ -5,7 +5,6 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { resetTimer } from '@/lib/auction-timer'
 import { RateLimiter } from '@/lib/rate-limiter'
 import { logEventAsync } from '@/lib/observability'
 
@@ -332,9 +331,7 @@ export async function POST(
     // Calculate new remaining purse (optimistic - will be confirmed by DB)
     const newRemainingPurse = bidder.remainingPurse - amount
 
-    // Reset timer (non-blocking)
     const countdownSeconds = rules?.countdownSeconds || 30
-    resetTimer(params.id, countdownSeconds)
 
     // Broadcast new bid event IMMEDIATELY (before DB write) for instant real-time updates
     // Fire-and-forget: clients get the update while DB write happens in parallel

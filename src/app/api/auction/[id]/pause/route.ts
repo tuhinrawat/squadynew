@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { pauseTimer } from '@/lib/auction-timer'
 import { isLiveStatus } from '@/lib/auction-status'
 import { logEventAsync } from '@/lib/observability'
 
@@ -35,9 +34,6 @@ export async function POST(
       where: { id: params.id },
       data: { status: 'PAUSED' }
     })
-
-    // Pause timer
-    pauseTimer(params.id)
 
     // Broadcast pause event
     await triggerAuctionEvent(params.id, 'auction-paused', {})

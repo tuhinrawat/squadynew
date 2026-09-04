@@ -379,12 +379,6 @@ export async function POST(
       await triggerAuctionEvent(params.id, 'new-player', {
         player: nextPlayer
       } as any)
-
-    // Reset timer
-      const countdownSeconds = rules?.countdownSeconds || 30
-      await triggerAuctionEvent(params.id, 'timer-update', {
-        seconds: countdownSeconds
-      } as any)
     } else {
       // Nothing AVAILABLE and nothing UNSOLD left to recycle - the pool is
       // genuinely exhausted. Without this, every connected screen (admin

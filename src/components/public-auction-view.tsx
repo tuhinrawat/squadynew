@@ -20,32 +20,6 @@ import { GoingLiveBanner } from '@/components/going-live-banner'
 // Memoized components for performance
 import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
 
-// Code-split heavy components for better initial load (PublicChat moved to header)
-
-// Custom hook for optimized timer updates (reduces re-renders by 66%)
-function useOptimizedTimer(timerValue: number): number {
-  const [displayTimer, setDisplayTimer] = useState(timerValue)
-  const lastUpdate = useRef(Date.now())
-  
-  useEffect(() => {
-    // Always update immediately if critical (< 6 seconds)
-    if (timerValue <= 5) {
-      setDisplayTimer(timerValue)
-      lastUpdate.current = Date.now()
-      return
-    }
-    
-    // For non-critical, only update every 2 seconds
-    const timeSinceLastUpdate = Date.now() - lastUpdate.current
-    if (timeSinceLastUpdate >= 2000) {
-      setDisplayTimer(timerValue)
-      lastUpdate.current = Date.now()
-    }
-  }, [timerValue])
-  
-  return displayTimer
-}
-
 interface BidHistoryEntry {
   bidderId: string
   amount: number
@@ -88,7 +62,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // the next player" apart from "there is no next player."
   const [poolExhausted, setPoolExhausted] = useState(false)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
-  const [timer, setTimer] = useState(30)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
   const [soldAnimation, setSoldAnimation] = useState(false)
@@ -141,8 +114,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     }
   }, [onOpenBidHistoryRef])
 
-  // Optimized timer for smoother countdown (updates less frequently when not critical)
-  const displayTimer = useOptimizedTimer(timer)
 
   // Set client-side rendered flag
   useEffect(() => {
@@ -326,8 +297,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         teamName: data.teamName
       })
       setHighestBidderId(data.bidderId)
-      setTimer(data.countdownSeconds || 30)
-      
+
       // Update bid history (separate update for large arrays)
       setBidHistory(prev => {
         logger.log('PublicAuctionView updating bid history', { prevLength: prev.length })
@@ -402,9 +372,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         setSoldAnimation(false)
         // Don't reload - updates are handled via Pusher
       }, 3000)
-    },
-    onTimerUpdate: (data) => {
-      setTimer(data.seconds)
     },
     onNewPlayer: (data) => {
       setPoolExhausted(false)

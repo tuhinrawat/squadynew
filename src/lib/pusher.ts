@@ -57,9 +57,6 @@ export interface AuctionEventData {
   'new-player': {
     player: any
   }
-  'timer-update': {
-    seconds: number
-  }
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
@@ -130,9 +127,8 @@ export function triggerAuctionEventToUser<T extends AuctionEventName>(
 }
 
 // For the handful of call sites that trigger a channel/event pair
-// triggerAuctionEvent's typed AuctionEventData doesn't cover (viewer counts,
-// chat messages, emoji reactions) - same timing/success telemetry, no type
-// constraint on the event name or payload.
+// triggerAuctionEvent's typed AuctionEventData doesn't cover (viewer counts) -
+// same timing/success telemetry, no type constraint on the event name or payload.
 export function triggerRawPusherEvent(
   auctionId: string,
   eventName: string,

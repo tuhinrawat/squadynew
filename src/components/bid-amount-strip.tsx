@@ -8,7 +8,6 @@ export interface BidAmountStripProps {
 	amount: number | null
 	bidderName?: string | null
 	teamName?: string | null
-	timerSeconds?: number
 	nextMin?: number
 	auctionId?: string
 }

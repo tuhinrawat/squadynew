@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, memo } from 'react'
-import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
@@ -27,36 +26,6 @@ import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 import { saveOfflineSnapshot } from '@/lib/offline-auction-store'
-
-// Dynamic import for PublicChat - code splitting for better performance
-const PublicChat = dynamic(
-  () => import('@/components/public-chat').then(mod => ({ default: mod.PublicChat })),
-  { ssr: false }
-)
-
-// Optimized timer hook - reduces re-renders by 66%
-function useOptimizedTimer(timerValue: number): number {
-  const [displayTimer, setDisplayTimer] = useState(timerValue)
-  const lastUpdate = useRef(Date.now())
-  
-  useEffect(() => {
-    // Always update immediately if critical (< 6 seconds)
-    if (timerValue <= 5) {
-      setDisplayTimer(timerValue)
-      lastUpdate.current = Date.now()
-      return
-    }
-    
-    // For non-critical, only update every 2 seconds
-    const timeSinceLastUpdate = Date.now() - lastUpdate.current
-    if (timeSinceLastUpdate >= 2000) {
-      setDisplayTimer(timerValue)
-      lastUpdate.current = Date.now()
-    }
-  }, [timerValue])
-  
-  return displayTimer
-}
 
 interface BidHistoryEntry {
   bidderId?: string // Optional for sale-undo events
@@ -123,10 +92,6 @@ interface PusherSaleUndoData {
   refundedAmount?: number
   bidderRemainingPurse?: number
   updatedBidders?: Array<{ id: string; remainingPurse: number }>
-}
-
-interface PusherTimerData {
-  seconds: number
 }
 
 interface PusherPlayerData {
@@ -356,11 +321,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // whoever was sold last.
   const [poolExhausted, setPoolExhausted] = useState(false)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
-  const [timer, setTimer] = useState(30)
   const [isPaused, setIsPaused] = useState(false)
-  
-  // Use optimized timer for smoother performance (reduces re-renders by 66%)
-  const displayTimer = useOptimizedTimer(timer)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [fullBidHistory, setFullBidHistory] = useState(initialHistory)
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
@@ -415,8 +376,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     pushBidError(message)
   }, [pushBidError])
   const canToggleConsole = !showPinnedConsole
-  const chatOffsetClass = (showPinnedConsole || isBidConsoleOpen) ? 'lg:right-[calc(30%+2rem)]' : 'lg:right-20'
-  
+
   // Alphabetical by display name, not by purse - the console's job is
   // "find this specific bidder fast while the room is calling out names",
   // which a name-sorted (and letter-grouped, see BidConsolePanel) list
@@ -891,11 +851,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         setHighestBidderId(null)
       }
       
-      // Reset timer
-      const countdownSeconds = data.countdownSeconds || 30
-      console.log('Resetting timer to:', countdownSeconds)
-      setTimer(countdownSeconds)
-      
       // Update purse instantly from Pusher data if available
       if (data.remainingPurse !== undefined && data.bidderId) {
         console.log('Updating purse for bidder:', data.bidderId, 'to:', data.remainingPurse)
@@ -1001,12 +956,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       // Show success toast
       toast.success(`Sale undone! Player restored and ₹${data.refundedAmount?.toLocaleString('en-IN') || 'amount'} refunded`)
   }, [])
-
-  const handleTimerUpdate = useCallback((data: PusherTimerData) => {
-      if (!isPaused) {
-        setTimer(data.seconds)
-      }
-  }, [isPaused])
 
   const handlePlayerSold = useCallback((data: PusherSoldData) => {
       setSoldAnimation(true)
@@ -1130,7 +1079,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         // Set all state updates together - React 18 batches these automatically
         setIsImageLoading(true)
         setCurrentPlayer(latestPendingPlayer) // Set player FIRST
-        setTimer(30)
         setBidHistory([]) // Clear bid history for new player
         setCurrentBid(null) // Clear current bid
         setHighestBidderId(null) // Clear highest bidder
@@ -1252,7 +1200,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     onNewBid: handleNewBid,
     onBidUndo: handleBidUndo,
     onSaleUndo: handleSaleUndo,
-    onTimerUpdate: handleTimerUpdate,
     onPlayerSold: handlePlayerSold,
     onNewPlayer: handleNewPlayer,
     onAuctionPaused: handleAuctionPaused,
@@ -1267,15 +1214,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     },
   })
 
-  // Countdown timer - don't auto-advance when timer hits 0
-  useEffect(() => {
-    if (!isPaused && timer > 0) {
-      const interval = setInterval(() => {
-        setTimer(prev => Math.max(prev - 1, 0))
-      }, 1000)
-      return () => clearInterval(interval)
-    }
-  }, [isPaused, timer])
 
 
   const handleStartAuction = async () => {
@@ -2267,7 +2205,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       amount={currentBid?.amount ?? null}
                       bidderName={currentBid?.bidderName}
                       teamName={currentBid?.teamName}
-                      timerSeconds={displayTimer}
                       nextMin={(() => {
                         const currentBidAmount = currentBid?.amount || 0
                         const rules = auction.rules as any
@@ -3158,9 +3095,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       )
     )}
 
-    {/* Public Chat */}
-    <PublicChat auctionId={auction.id} rightOffsetClass={chatOffsetClass} />
-    
     {/* Undo Sale Dialog */}
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
       <AlertDialogContent>

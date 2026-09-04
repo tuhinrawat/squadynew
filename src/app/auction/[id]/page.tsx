@@ -366,7 +366,7 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
           // a light page with a dark card floating on it - forcing dark mode
           // here (rather than only on the stage component) also activates
           // the dark: variants already authored, but never triggered, on the
-          // breadcrumb bar and PublicHeaderWithChat below, so the whole page
+          // breadcrumb bar and PublicHeader below, so the whole page
           // reads as one immersive surface instead of a dark box on white.
           <div className="dark">
           <div className="min-h-screen bg-[#05070a] pb-20 sm:pb-0">
@@ -387,7 +387,6 @@ export default async function LiveAuctionPage({ params }: { params: { id: string
             </div>
           
           <PublicAuctionWrapper
-            auctionId={auction.id}
             auction={auctionWithRelations as unknown as Parameters<typeof PublicAuctionWrapper>[0]['auction']}
             currentPlayer={currentPlayer}
             stats={auctionStats}

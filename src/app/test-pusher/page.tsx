@@ -72,7 +72,6 @@ export default function TestPusherPage() {
       'player-sold',
       'sale-undo',
       'new-player',
-      'timer-update',
       'auction-paused',
       'auction-resumed',
       'auction-ended',

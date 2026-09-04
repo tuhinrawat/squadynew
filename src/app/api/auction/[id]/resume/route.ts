@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { resumeTimer, getTimerValue } from '@/lib/auction-timer'
 import { logEventAsync } from '@/lib/observability'
 
 export async function POST(
@@ -29,20 +28,11 @@ export async function POST(
       return NextResponse.json({ error: 'Auction is not paused' }, { status: 400 })
     }
 
-    // Get remaining time from timer
-    const remainingSeconds = getTimerValue(params.id)
-    
     // Update status to LIVE
     await prisma.auction.update({
       where: { id: params.id },
       data: { status: 'LIVE' }
     })
-
-    // Resume timer
-    if (remainingSeconds > 0) {
-      // Timer exists, resume it
-      resumeTimer(params.id)
-    }
 
     // Broadcast resume event
     await triggerAuctionEvent(params.id, 'auction-resumed', {})
