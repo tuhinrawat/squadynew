@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 const markUnsoldSchema = z.object({
   playerId: z.string().trim().min(1),
@@ -95,6 +95,7 @@ export async function POST(
       // Safety check: ensure no SOLD players (shouldn't happen with status filter)
       if (unsoldPlayers.some(p => p.status !== 'UNSOLD')) {
         console.error('CRITICAL: Attempted to recycle SOLD players - this should never happen!')
+        logEventAsync({ category: 'api_error', eventName: 'mark_unsold', auctionId: params.id, success: false, message: 'CRITICAL: recycle-guard tripped - a SOLD player appeared in the UNSOLD recycling pool', metadata: { guard: 'recycle_sold_players' } })
         return NextResponse.json({ error: 'Internal error: Cannot recycle sold players' }, { status: 500 })
       }
       
@@ -224,7 +225,7 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error marking player as unsold:', error)
-    logEventAsync({ category: 'api_error', eventName: 'mark_unsold', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
+    logEventAsync({ category: 'api_error', eventName: 'mark_unsold', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 export async function POST(
   request: NextRequest,
@@ -200,7 +200,7 @@ export async function POST(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     const errorStack = error instanceof Error ? error.stack : undefined
     console.error('Error details:', { errorMessage, errorStack })
-    logEventAsync({ category: 'api_error', eventName: 'undo_sale', auctionId: params.id, success: false, message: errorMessage })
+    logEventAsync({ category: 'api_error', eventName: 'undo_sale', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({
       error: 'Internal server error',
       details: process.env.NODE_ENV === 'development' ? errorMessage : undefined

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { Prisma } from '@prisma/client'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { diagnose } from '@/lib/error-diagnosis'
 
 // Cross-auction infra telemetry (Pusher health, rate-limit rejections) -
 // SUPER_ADMIN only, same reasoning as /dashboard/settings: this isn't scoped
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     const auctionFilter = auctionId ? Prisma.sql`AND "auctionId" = ${auctionId}` : Prisma.empty
 
-    const [totalRows, breakdown, recentFailures, auctions, bidsPerMinute, syncLagRows, connectionHealthRows, latestCanary, recentAlerts] = await Promise.all([
+    const [totalRows, breakdown, recentFailures, slowEvents, auctions, bidsPerMinute, syncLagRows, connectionHealthRows, latestCanary, recentAlerts] = await Promise.all([
       prisma.$queryRaw<Array<{ total: bigint; failures: bigint }>>(Prisma.sql`
         SELECT COUNT(*)::int as total, COUNT(*) FILTER (WHERE success = false)::int as failures
         FROM observability_events
@@ -59,6 +60,21 @@ export async function GET(request: NextRequest) {
         take: 25,
         select: { id: true, category: true, eventName: true, auctionId: true, message: true, latencyMs: true, createdAt: true, metadata: true },
       }),
+      // Successful but slow - the "clogging" signal from the original
+      // incident: not a failure yet, but heading there. Thresholds match
+      // error-diagnosis.ts's SLOW_THRESHOLD_MS.
+      prisma.$queryRaw<Array<{ id: string; category: string; eventName: string; auctionId: string | null; message: string | null; latencyMs: number | null; createdAt: Date; metadata: unknown }>>(Prisma.sql`
+        SELECT id, category, "eventName", "auctionId", message, "latencyMs", "createdAt", metadata
+        FROM observability_events
+        WHERE success = true
+          AND (
+            (category = 'pusher' AND "latencyMs" > 3000)
+            OR (category = 'sync_lag' AND "latencyMs" > 5000)
+          )
+          AND "createdAt" >= ${since} ${auctionFilter}
+        ORDER BY "latencyMs" DESC
+        LIMIT 25
+      `),
       prisma.auction.findMany({
         orderBy: { createdAt: 'desc' },
         take: 30,
@@ -126,7 +142,14 @@ export async function GET(request: NextRequest) {
         count: Number(row.count),
         avgLatencyMs: row.avgLatencyMs,
       })),
-      recentFailures,
+      recentFailures: recentFailures.map(f => ({
+        ...f,
+        diagnosis: diagnose({ category: f.category, eventName: f.eventName, success: false, message: f.message, metadata: f.metadata as Record<string, unknown> | null, latencyMs: f.latencyMs }),
+      })),
+      slowEvents: slowEvents.map(s => ({
+        ...s,
+        diagnosis: diagnose({ category: s.category, eventName: s.eventName, success: true, message: s.message, metadata: s.metadata as Record<string, unknown> | null, latencyMs: s.latencyMs }),
+      })),
       bidsPerMinute: bidsPerMinute.map(row => ({ minute: row.minute, count: Number(row.count) })),
       auctions,
       syncLag: {

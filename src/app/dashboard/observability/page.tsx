@@ -16,6 +16,14 @@ interface BreakdownRow {
   avgLatencyMs: number | null
 }
 
+interface Diagnosis {
+  severity: 'failure' | 'slow'
+  summary: string
+  likelyCause: string
+  likelyFix: string
+  confidence: 'high' | 'medium' | 'low'
+}
+
 interface FailureRow {
   id: string
   category: string
@@ -25,6 +33,7 @@ interface FailureRow {
   latencyMs: number | null
   createdAt: string
   metadata: unknown
+  diagnosis: Diagnosis | null
 }
 
 interface Summary {
@@ -35,6 +44,7 @@ interface Summary {
   successRate: number
   breakdown: BreakdownRow[]
   recentFailures: FailureRow[]
+  slowEvents: FailureRow[]
   bidsPerMinute: Array<{ minute: string; count: number }>
   auctions: Array<{ id: string; name: string }>
   syncLag: { avgMs: number | null; maxMs: number | null; sampleCount: number }
@@ -68,6 +78,7 @@ interface TimelineEvent {
   latencyMs: number | null
   message: string | null
   createdAt: string
+  diagnosis: Diagnosis | null
 }
 
 const RANGE_OPTIONS = [
@@ -560,15 +571,60 @@ export default function ObservabilityPage() {
               ) : (
                 <div className="space-y-2">
                   {summary.recentFailures.map(f => (
-                    <div key={f.id} className="flex items-start justify-between gap-3 p-3 rounded-md bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">{f.category}/{f.eventName}</span>
-                          <span className="text-xs text-gray-400">{formatTime(f.createdAt)}</span>
-                          {f.latencyMs !== null && <span className="text-xs text-gray-400">{f.latencyMs}ms</span>}
-                        </div>
-                        {f.message && <p className="text-xs text-red-700 dark:text-red-300 mt-1 break-words">{f.message}</p>}
+                    <div key={f.id} className="p-3 rounded-md bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">{f.category}/{f.eventName}</span>
+                        <span className="text-xs text-gray-400">{formatTime(f.createdAt)}</span>
+                        {f.latencyMs !== null && <span className="text-xs text-gray-400">{f.latencyMs}ms</span>}
                       </div>
+                      {f.message && <p className="text-xs text-red-700 dark:text-red-300 mt-1 break-words">{f.message}</p>}
+                      {f.diagnosis && (
+                        <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-900/40 text-xs space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-800 dark:text-gray-200">{f.diagnosis.summary}</span>
+                            <Badge className={`border-0 text-[10px] ${f.diagnosis.confidence === 'high' ? 'bg-emerald-100 text-emerald-700' : f.diagnosis.confidence === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+                              {f.diagnosis.confidence} confidence
+                            </Badge>
+                          </div>
+                          <p className="text-gray-600 dark:text-gray-400"><span className="font-medium">Likely cause:</span> {f.diagnosis.likelyCause}</p>
+                          <p className="text-gray-600 dark:text-gray-400"><span className="font-medium">Likely fix:</span> {f.diagnosis.likelyFix}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Slow-but-successful calls - "clogging" before it becomes a
+              failure: latency crossing a threshold without an outright error. */}
+          <Card className="border-amber-200 dark:border-amber-900">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-500" />
+                Slow Calls
+              </CardTitle>
+              <CardDescription>Calls that succeeded but took unusually long - often the first sign of clogging before it turns into outright failures</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {summary.slowEvents.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4">Nothing unusually slow in this window.</p>
+              ) : (
+                <div className="space-y-2">
+                  {summary.slowEvents.map(s => (
+                    <div key={s.id} className="p-3 rounded-md bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">{s.category}/{s.eventName}</span>
+                        <span className="text-xs text-gray-400">{formatTime(s.createdAt)}</span>
+                        {s.latencyMs !== null && <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">{s.latencyMs}ms</span>}
+                      </div>
+                      {s.diagnosis && (
+                        <div className="mt-2 pt-2 border-t border-amber-200 dark:border-amber-900/40 text-xs space-y-1">
+                          <p className="text-gray-600 dark:text-gray-400"><span className="font-medium">Likely cause:</span> {s.diagnosis.likelyCause}</p>
+                          <p className="text-gray-600 dark:text-gray-400"><span className="font-medium">Likely fix:</span> {s.diagnosis.likelyFix}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -603,14 +659,23 @@ export default function ObservabilityPage() {
                 ) : (
                   <div className="max-h-96 overflow-y-auto space-y-1">
                     {timeline.map(ev => (
-                      <div key={ev.id} className="flex items-start gap-3 text-sm py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <span className="text-xs text-gray-400 w-32 flex-shrink-0 pt-0.5">{formatTime(ev.createdAt)}</span>
-                        <Badge className={`flex-shrink-0 ${ev.success ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'} border-0`}>
-                          {ev.category}
-                        </Badge>
-                        <span className="font-mono text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">{ev.eventName}</span>
-                        {ev.latencyMs !== null && <span className="text-xs text-gray-400 flex-shrink-0">{ev.latencyMs}ms</span>}
-                        {ev.message && <span className="text-xs text-red-600 dark:text-red-400 break-words min-w-0">{ev.message}</span>}
+                      <div key={ev.id} className="text-sm py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <div className="flex items-start gap-3">
+                          <span className="text-xs text-gray-400 w-32 flex-shrink-0 pt-0.5">{formatTime(ev.createdAt)}</span>
+                          <Badge className={`flex-shrink-0 ${ev.success ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'} border-0`}>
+                            {ev.category}
+                          </Badge>
+                          <span className="font-mono text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">{ev.eventName}</span>
+                          {ev.latencyMs !== null && <span className="text-xs text-gray-400 flex-shrink-0">{ev.latencyMs}ms</span>}
+                          {ev.message && <span className="text-xs text-red-600 dark:text-red-400 break-words min-w-0">{ev.message}</span>}
+                        </div>
+                        {ev.diagnosis && (
+                          <div className="ml-[calc(8rem+1.5rem)] mt-1 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                            <p><span className="font-medium">{ev.diagnosis.summary}</span> ({ev.diagnosis.confidence} confidence)</p>
+                            <p>Cause: {ev.diagnosis.likelyCause}</p>
+                            <p>Fix: {ev.diagnosis.likelyFix}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

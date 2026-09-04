@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 export async function POST(
   request: NextRequest,
@@ -66,7 +66,7 @@ export async function POST(
     return NextResponse.json({ success: true, message: 'Auction reset successfully' })
   } catch (error) {
     console.error('Error resetting auction:', error)
-    logEventAsync({ category: 'api_error', eventName: 'auction_reset', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
+    logEventAsync({ category: 'api_error', eventName: 'auction_reset', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

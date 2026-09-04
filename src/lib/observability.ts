@@ -49,6 +49,21 @@ async function writeEvent(input: ObservabilityEventInput): Promise<void> {
   }
 }
 
+// Prisma's known-request errors carry a documented .code (P1001 = can't
+// reach the database, P2024 = connection pool timeout, P2002 = unique
+// constraint violation, etc. - see prisma.io/docs/orm/reference/error-reference)
+// and a .meta object with per-code detail. Capturing .code separately from
+// the message lets the dashboard's diagnosis logic match on a stable,
+// documented value instead of parsing free-form error text.
+export function describeError(error: unknown): { message: string; metadata?: Record<string, unknown> } {
+  const message = error instanceof Error ? error.message : String(error)
+  const e = error as { code?: string; meta?: unknown; name?: string }
+  if (e?.code) {
+    return { message, metadata: { errorCode: e.code, errorName: e.name, errorMeta: e.meta } }
+  }
+  return { message }
+}
+
 export function logEventAsync(input: ObservabilityEventInput): void {
   waitUntil(writeEvent(input))
 }

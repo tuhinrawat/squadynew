@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { RateLimiter } from '@/lib/rate-limiter'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 const bidSchema = z.object({
   bidderId: z.string().trim().min(1),
@@ -359,7 +359,7 @@ export async function POST(
     })
   } catch (error) {
     logger.error('Error placing bid:', error)
-    logEventAsync({ category: 'api_error', eventName: 'bid', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
+    logEventAsync({ category: 'api_error', eventName: 'bid', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

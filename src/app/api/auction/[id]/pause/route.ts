@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { isLiveStatus } from '@/lib/auction-status'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 export async function POST(
   request: NextRequest,
@@ -42,7 +42,7 @@ export async function POST(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error pausing auction:', error)
-    logEventAsync({ category: 'api_error', eventName: 'auction_pause', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
+    logEventAsync({ category: 'api_error', eventName: 'auction_pause', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

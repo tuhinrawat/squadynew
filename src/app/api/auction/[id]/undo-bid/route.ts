@@ -5,7 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { isLiveStatus } from '@/lib/auction-status'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 const undoBidSchema = z.object({
   bidderId: z.string().trim().min(1),
@@ -123,7 +123,7 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error undoing bid:', error)
-    logEventAsync({ category: 'api_error', eventName: 'undo_bid', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
+    logEventAsync({ category: 'api_error', eventName: 'undo_bid', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

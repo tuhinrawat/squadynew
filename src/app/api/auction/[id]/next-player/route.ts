@@ -4,7 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { isLiveStatus } from '@/lib/auction-status'
-import { logEventAsync } from '@/lib/observability'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 export async function POST(
   request: NextRequest,
@@ -56,6 +56,7 @@ export async function POST(
       const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
       if (soldPlayers.length > 0 && unsoldPlayers.some(p => soldPlayers.find(sp => sp.id === p.id))) {
         console.error('CRITICAL: Attempted to recycle SOLD players - this should never happen!')
+        logEventAsync({ category: 'api_error', eventName: 'next_player', auctionId: params.id, success: false, message: 'CRITICAL: recycle-guard tripped - a SOLD player appeared in the UNSOLD recycling pool', metadata: { guard: 'recycle_sold_players' } })
         return NextResponse.json({ error: 'Internal error: Cannot recycle sold players' }, { status: 500 })
       }
       
@@ -135,7 +136,7 @@ export async function POST(
     return NextResponse.json({ success: true, player: randomPlayer })
   } catch (error) {
     console.error('Error moving to next player:', error)
-    logEventAsync({ category: 'api_error', eventName: 'next_player', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
+    logEventAsync({ category: 'api_error', eventName: 'next_player', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

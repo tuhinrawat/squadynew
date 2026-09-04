@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { diagnose } from '@/lib/error-diagnosis'
 
 // Everything the summary endpoint shows is sliced by category - Pusher
 // events in one table, rate limits in another, failures in a third. During
@@ -43,10 +44,15 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    const events = rows.reverse().map(r => ({
+      ...r,
+      diagnosis: diagnose({ category: r.category, eventName: r.eventName, success: r.success, message: r.message, metadata: r.metadata as Record<string, unknown> | null, latencyMs: r.latencyMs }),
+    }))
+
     return NextResponse.json({
       auctionId,
       truncated: rows.length === MAX_ROWS,
-      events: rows.reverse(),
+      events,
     })
   } catch (error) {
     console.error('Error building observability timeline:', error)

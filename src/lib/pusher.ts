@@ -79,6 +79,19 @@ export interface AuctionEventData {
 
 export type AuctionEventName = keyof AuctionEventData
 
+// The pusher npm package throws a PusherRequestError with .status and .body
+// attached whenever Pusher's REST API responds with an HTTP error (verified
+// in node_modules/pusher/lib/requests.js - it does `throw new
+// errors.RequestError("Unexpected status code " + res.status, url, err,
+// res.status, body)`). A network-level failure (couldn't reach Pusher at
+// all) throws the same error type but with no .status/.body. Capturing
+// these lets the observability dashboard show the actual HTTP status and
+// response body Pusher sent back, instead of just a generic message.
+function extractPusherErrorDetail(error: unknown): { status?: number; body?: string } {
+  const e = error as { status?: number; body?: string }
+  return { status: e?.status, body: typeof e?.body === 'string' ? e.body.slice(0, 500) : undefined }
+}
+
 // Optimized trigger with non-blocking promise
 export function triggerAuctionEvent<T extends AuctionEventName>(
   auctionId: string,
@@ -112,7 +125,7 @@ export function triggerAuctionEvent<T extends AuctionEventName>(
         success: false,
         latencyMs: Date.now() - start,
         message: error instanceof Error ? error.message : String(error),
-        metadata: { channel: channelName },
+        metadata: { channel: channelName, ...extractPusherErrorDetail(error) },
       })
       throw error
     })
@@ -156,7 +169,7 @@ export function triggerRawPusherEvent(
         success: false,
         latencyMs: Date.now() - start,
         message: error instanceof Error ? error.message : String(error),
-        metadata: { channel: channelName },
+        metadata: { channel: channelName, ...extractPusherErrorDetail(error) },
       })
       throw error
     })
