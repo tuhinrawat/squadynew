@@ -14,6 +14,7 @@ import { FixturesBracket } from '@/components/fixtures-bracket'
 import Link from 'next/link'
 import { initializePusher } from '@/lib/pusher-client'
 import { extractCricheroesLink } from '@/lib/cricheroes'
+import { extractBattingStats, extractBowlingStats, scalePercent, BATTING_STRIKE_RATE_RANGE, BOWLING_ECONOMY_RANGE } from '@/lib/cricket-stats'
 
 type BidderWithUser = Bidder & { user: { id: string; name: string | null; email: string | null } }
 type AuctionWithRelations = Auction & {
@@ -296,6 +297,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
         cricherosLink,
         lastYearPrice: player.lastYearPrice,
         lastYearTeamName: player.lastYearTeamName,
+        battingStats: extractBattingStats(playerData),
+        bowlingStats: extractBowlingStats(playerData),
       }
     })
   }, [sortedPlayers, auction.bidders])
@@ -1338,6 +1341,32 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                                     <p className="text-amber-300/90 text-[10px] sm:text-xs font-bold truncate mt-1">
                                       Last Year: ₹{card.lastYearPrice.toLocaleString('en-IN')}{card.lastYearTeamName ? ` · ${card.lastYearTeamName}` : ''}
                                     </p>
+                                  )}
+                                  {/* Condensed career-stats bars - one per
+                                      discipline the player has, matching the
+                                      fuller scale bars on the live-auction
+                                      card but sized for a dense grid. */}
+                                  {(card.battingStats?.strikeRate !== undefined || card.bowlingStats?.economy !== undefined) && (
+                                    <div className="space-y-1 mt-1.5">
+                                      {card.battingStats?.strikeRate !== undefined && (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[7px] font-bold uppercase tracking-wide text-white/40 w-6 flex-shrink-0">SR</span>
+                                          <div className="relative flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                                            <div className="absolute inset-y-0 left-0 rounded-full bg-teal-400" style={{ width: `${scalePercent(card.battingStats.strikeRate, BATTING_STRIKE_RATE_RANGE)}%` }} />
+                                          </div>
+                                          <span className="text-[9px] font-extrabold text-white tabular-nums w-8 text-right flex-shrink-0">{card.battingStats.strikeRate.toFixed(2)}</span>
+                                        </div>
+                                      )}
+                                      {card.bowlingStats?.economy !== undefined && (
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[7px] font-bold uppercase tracking-wide text-white/40 w-6 flex-shrink-0">ECO</span>
+                                          <div className="relative flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                                            <div className="absolute inset-y-0 left-0 rounded-full bg-teal-400" style={{ width: `${scalePercent(card.bowlingStats.economy, BOWLING_ECONOMY_RANGE, true)}%` }} />
+                                          </div>
+                                          <span className="text-[9px] font-extrabold text-white tabular-nums w-8 text-right flex-shrink-0">{card.bowlingStats.economy.toFixed(2)}</span>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
 
