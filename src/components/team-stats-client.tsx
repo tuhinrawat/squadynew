@@ -548,7 +548,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             <span className="text-sm sm:text-lg font-semibold text-white drop-shadow-lg">{team.totalPlayers}</span>
                           </div>
                           <div className="flex items-center justify-between bg-black/20 -mx-2 px-2 py-1 rounded">
-                            <span className="text-[6px] text-white font-semibold">Current Player Max Bid Allowed</span>
+                            <span className="text-[11px] sm:text-sm text-white font-semibold">Current Player Max Bid Allowed</span>
                             <span className="text-sm sm:text-lg font-bold text-lime-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                               {team.remainingSlots > 0
                                 ? `₹${team.maxSpendableNow.toLocaleString('en-IN')}`
@@ -556,7 +556,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                             </span>
                           </div>
                           <div className="flex items-center justify-between bg-black/20 -mx-2 px-2 py-1 rounded">
-                            <span className="text-[6px] text-white/90 font-medium">Reserve for remaining squad</span>
+                            <span className="text-[11px] sm:text-sm text-white/90 font-medium">Reserve for remaining squad</span>
                             <span className="text-sm sm:text-base font-semibold text-orange-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
                               {team.remainingSlots > 0
                                 ? `₹${team.requiredReserve.toLocaleString('en-IN')}`

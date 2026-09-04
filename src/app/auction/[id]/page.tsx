@@ -314,8 +314,12 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
             bidders={auctionWithRelations.bidders as unknown as Parameters<typeof PublicAuctionWrapper>[0]['bidders']}
           />
           
-          {/* Footer for Public View - Professional Single Line */}
-          <footer className="mt-8 sm:mt-8 bg-gradient-to-b from-gray-900 to-black border-t border-gray-800 fixed bottom-0 left-0 right-0 sm:relative sm:bottom-auto sm:left-auto sm:right-auto z-20">
+          {/* Footer for Public View - Professional Single Line. Mobile keeps
+              a fixed bar (content has pb-20 to clear it); desktop uses the
+              same sticky-top-[100vh] trick as the logged-in view's footer
+              below - pinned to the bottom of the viewport when the stage
+              content is shorter than it, in normal flow otherwise. */}
+          <footer className="mt-8 sm:mt-8 bg-gradient-to-b from-gray-900 to-black border-t border-gray-800 fixed bottom-0 left-0 right-0 sm:sticky sm:top-[100vh] sm:bottom-auto sm:left-auto sm:right-auto z-20">
             <div className="max-w-7xl mx-auto px-3 py-3">
               <div className="flex items-center justify-between gap-2">
                 {/* Left: Logo & Copyright */}
