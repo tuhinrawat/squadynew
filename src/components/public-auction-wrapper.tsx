@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { PublicHeader } from './public-header'
 import { PublicAuctionView } from './public-auction-view'
 import { Auction, Player } from '@prisma/client'
@@ -47,6 +48,10 @@ export function PublicAuctionWrapper({
   bidders
 }: PublicAuctionWrapperProps) {
   const openBidHistoryRef = useRef<(() => void) | null>(null)
+  // Presenter link (?presenter=1), handed specifically to whoever is running
+  // the live event off this screen - see PublicAuctionView for what this
+  // actually changes (a real Pusher connection vs. a background poll).
+  const isPresenter = useSearchParams().get('presenter') === '1'
 
   return (
     <>
@@ -65,6 +70,7 @@ export function PublicAuctionWrapper({
         bidHistory={bidHistory}
         bidders={bidders}
         onOpenBidHistoryRef={openBidHistoryRef}
+        isPresenter={isPresenter}
       />
     </>
   )

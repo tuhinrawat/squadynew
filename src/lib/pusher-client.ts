@@ -165,22 +165,29 @@ export interface UsePusherOptions {
   onBidError?: (data: AuctionEventData['bid-error']) => void
 }
 
-export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
+// enabled defaults true; pass false to skip subscribing to the Pusher
+// channel entirely - not just skip binding events. Delivery cost is driven
+// by how many connections are subscribed to a channel, not which events a
+// client happens to bind to after receiving them, so a client that never
+// subscribes never counts toward that channel's message-delivery cost.
+// Built for the public auction view's non-presenter viewers, who fall back
+// to polling instead of a live Pusher connection.
+export function usePusher(auctionId: string, options: UsePusherOptions = {}, enabled: boolean = true) {
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const channelRef = useRef<any>(null)
   const pusherRef = useRef<Pusher | null>(null)
-  
+
   // Store callbacks in refs to prevent re-subscription
   const callbacksRef = useRef<UsePusherOptions>(options)
-  
+
   // Update callbacks ref when options change without re-subscribing
   useEffect(() => {
     callbacksRef.current = options
   }, [options])
 
   useEffect(() => {
-    if (!auctionId) return
+    if (!auctionId || !enabled) return
 
     try {
       const pusher = initializePusher()
@@ -387,7 +394,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to initialize Pusher')
     }
-  }, [auctionId]) // Only depend on auctionId, not options
+  }, [auctionId, enabled]) // Only depend on auctionId/enabled, not options
   // Note: callbacks are stored in refs and updated via useEffect, so bindings always use latest callbacks
 
   const disconnect = () => {

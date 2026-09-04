@@ -301,9 +301,22 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   const handleCopyUrl = (auctionId: string) => {
     const url = `${window.location.origin}/auction/${auctionId}`
     navigator.clipboard.writeText(url).then(() => {
-      toast.success('Auction URL copied to clipboard!')
+      toast.success('Public link copied to clipboard!')
     }).catch(() => {
-      toast.error('Failed to copy URL')
+      toast.error('Failed to copy link')
+    })
+  }
+
+  // The ?presenter=1 flag - see public-auction-view.tsx. Meant for whoever
+  // is actually running the live event off this screen (the anchor calling
+  // bids), not for spectators: it keeps a real Pusher connection instead of
+  // the background poll every other viewer falls back to.
+  const handleCopyPresenterUrl = (auctionId: string) => {
+    const url = `${window.location.origin}/auction/${auctionId}?presenter=1`
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success('Presenter link copied to clipboard!')
+    }).catch(() => {
+      toast.error('Failed to copy link')
     })
   }
 
@@ -433,10 +446,16 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     </DropdownMenuItem>
                   )}
                   {auction.isPublished && (
-                    <DropdownMenuItem onClick={() => handleCopyUrl(auction.id)}>
-                      <Link2 className="mr-2 h-4 w-4" />
-                      Copy URL
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => handleCopyUrl(auction.id)}>
+                        <Link2 className="mr-2 h-4 w-4" />
+                        Copy Public Link
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCopyPresenterUrl(auction.id)}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Copy Presenter Link
+                      </DropdownMenuItem>
+                    </>
                   )}
                   <DropdownMenuItem
                     onClick={() => handleDelete(auction)}
@@ -580,10 +599,16 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                     </DropdownMenuItem>
                   )}
                   {auction.isPublished && (
-                    <DropdownMenuItem onClick={() => handleCopyUrl(auction.id)}>
-                      <Link2 className="mr-2 h-4 w-4" />
-                      Copy URL
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => handleCopyUrl(auction.id)}>
+                        <Link2 className="mr-2 h-4 w-4" />
+                        Copy Public Link
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCopyPresenterUrl(auction.id)}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Copy Presenter Link
+                      </DropdownMenuItem>
+                    </>
                   )}
                   <DropdownMenuItem variant="destructive" onClick={() => handleDelete(auction)}>
                     <Trash2 className="mr-2 h-4 w-4" />

@@ -6,7 +6,7 @@ import { Auction, Player } from '@prisma/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { ChevronRight, Eye, Trophy } from 'lucide-react'
+import { ChevronRight, Eye, Trophy, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
@@ -54,9 +54,41 @@ interface PublicAuctionViewProps {
   bidHistory: BidHistoryEntry[]
   bidders: Bidder[]
   onOpenBidHistoryRef?: React.MutableRefObject<(() => void) | null> // Ref to expose modal opener
+  // The presenter link (?presenter=1) - see public-auction-wrapper.tsx. True
+  // keeps a real Pusher connection (the anchor's screen needs instant
+  // updates); false (the default, every other viewer) drops Pusher entirely
+  // in favor of a background poll - see the effect below usePusher.
+  isPresenter?: boolean
 }
 
-export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef }: PublicAuctionViewProps) {
+interface AuctionSnapshot {
+  currentPlayer: Player | null
+  players: Player[]
+  bidders: Bidder[]
+  bidHistory: BidHistoryEntry[]
+  poolExhausted: boolean
+}
+
+function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: string | undefined) {
+  if (!playerId) return { sortedHistory: [] as BidHistoryEntry[], currentBid: null, highestBidderId: null }
+
+  const filtered = rawHistory.filter(bid => {
+    if (bid.type === 'bid-undo') return false
+    return !bid.playerId || bid.playerId === playerId
+  })
+  const sortedHistory = [...filtered].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  const latestBid = sortedHistory[0]
+  if (latestBid && (!latestBid.type || latestBid.type === 'bid')) {
+    return {
+      sortedHistory,
+      currentBid: { bidderId: latestBid.bidderId, amount: latestBid.amount, bidderName: latestBid.bidderName, teamName: latestBid.teamName },
+      highestBidderId: latestBid.bidderId,
+    }
+  }
+  return { sortedHistory, currentBid: null, highestBidderId: null }
+}
+
+export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, isPresenter = false }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
   // to recycle) - without this, spectators have no way to tell "waiting for
@@ -283,8 +315,55 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   }, [currentPlayer?.id])
 
 
-  // Real-time subscriptions
-  usePusher(auction.id, {
+  // Applies a snapshot fetched by the non-presenter polling fallback below.
+  // Deliberately direct (no reveal animation, no diffing) - that flourish is
+  // presenter/Pusher-specific eye candy; a background poller just needs the
+  // screen to catch up to the real state.
+  const applySnapshot = useCallback((snapshot: AuctionSnapshot) => {
+    setPlayers(snapshot.players)
+    setBiddersState(snapshot.bidders)
+    setPoolExhausted(snapshot.poolExhausted)
+    setCurrentPlayer(snapshot.currentPlayer)
+    const { sortedHistory, currentBid: derivedBid, highestBidderId: derivedHighest } =
+      deriveCurrentBidForPlayer(snapshot.bidHistory, snapshot.currentPlayer?.id)
+    setBidHistory(sortedHistory)
+    setCurrentBid(derivedBid)
+    setHighestBidderId(derivedHighest)
+  }, [])
+
+  const fetchSnapshot = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/auction/${auction.id}/snapshot`)
+      if (!response.ok) return
+      const data = await response.json()
+      applySnapshot({
+        currentPlayer: data.currentPlayer,
+        players: data.players,
+        bidders: data.bidders,
+        bidHistory: data.bidHistory,
+        poolExhausted: data.poolExhausted,
+      })
+    } catch (error) {
+      logger.error('Failed to fetch auction snapshot:', error)
+    }
+  }, [auction.id, applySnapshot])
+
+  // Non-presenter viewers (the default) never subscribe to Pusher at all -
+  // see the `enabled` argument on usePusher below - so this poll is their
+  // only source of live updates. The edge cache on the snapshot endpoint
+  // (see route.ts) is what makes this affordable regardless of how many
+  // viewers are polling at once.
+  useEffect(() => {
+    if (isPresenter) return
+    fetchSnapshot()
+    const interval = setInterval(fetchSnapshot, 6000)
+    return () => clearInterval(interval)
+  }, [isPresenter, fetchSnapshot])
+
+  // Real-time subscriptions. Only the presenter link actually subscribes to
+  // Pusher (see the `enabled` argument) - every other viewer relies on the
+  // poll above instead.
+  const { isConnected: pusherConnected } = usePusher(auction.id, {
     onNewBid: (data) => {
       console.log('[PublicAuctionView] onNewBid callback triggered', data)
       logger.log('PublicAuctionView onNewBid')
@@ -474,7 +553,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       }, 10000)
       bidErrorTimeouts.current[id] = timeout
     },
-  })
+  }, isPresenter)
 
   // Extract player data from JSON
   const getPlayerData = (player: Player | null) => {
@@ -676,6 +755,21 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
               <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-semibold">
                 <Eye className="h-3 w-3" /> {viewerCount || 0}
               </span>
+              {isPresenter ? (
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${pusherConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${pusherConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                  {pusherConnected ? 'Live' : 'Reconnecting…'}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fetchSnapshot()}
+                  className="inline-flex items-center gap-1 text-gray-400 hover:text-white text-xs font-semibold transition-colors"
+                  title="Refresh now"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh
+                </button>
+              )}
               <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
                 <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
                   <Trophy className="h-3 w-3 mr-1" />
@@ -697,6 +791,21 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 <Badge className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 gap-1 animate-pulse">● LIVE</Badge>
                 <span className="text-[9px] font-bold text-amber-400">{stats.sold} sold</span>
                 <span className="text-[9px] font-bold text-gray-500">&middot; {stats.remaining} left</span>
+                {isPresenter ? (
+                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${pusherConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${pusherConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                    {pusherConnected ? 'Live' : 'Reconnecting'}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fetchSnapshot()}
+                    className="inline-flex items-center gap-0.5 text-gray-400 text-[9px] font-bold flex-shrink-0"
+                    title="Refresh now"
+                  >
+                    <RefreshCw className="h-2.5 w-2.5" />
+                  </button>
+                )}
               </div>
             </div>
             <div className="relative h-[3px] bg-white/10 mx-3 mb-2 rounded-full overflow-hidden">
