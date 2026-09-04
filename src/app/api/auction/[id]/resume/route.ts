@@ -34,8 +34,9 @@ export async function POST(
       data: { status: 'LIVE' }
     })
 
-    // Broadcast resume event
-    await triggerAuctionEvent(params.id, 'auction-resumed', {})
+    // Broadcast resume event - the DB already moved to LIVE above, so a
+    // Pusher hiccup here must never turn that success into a 500.
+    await triggerAuctionEvent(params.id, 'auction-resumed', {}).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -374,17 +374,21 @@ export async function POST(
       }
     })
 
-    // Broadcast new player if exists
+    // Broadcast new player if exists - the sale already succeeded in the DB
+    // above, so a Pusher hiccup here (a rejected trigger, an exceeded daily
+    // message quota) must never turn that success into a misleading 500 -
+    // the admin would see "Internal server error" for a sale that actually
+    // went through, with the UI now out of sync with the database.
     if (nextPlayer) {
       await triggerAuctionEvent(params.id, 'new-player', {
         player: nextPlayer
-      } as any)
+      } as any).catch(err => console.error('Pusher error (non-critical):', err))
     } else {
       // Nothing AVAILABLE and nothing UNSOLD left to recycle - the pool is
       // genuinely exhausted. Without this, every connected screen (admin
       // included) waits forever for a 'new-player' event that will never
       // come, staying frozen on the player that was just sold.
-      await triggerAuctionEvent(params.id, 'auction-pool-exhausted', {})
+      await triggerAuctionEvent(params.id, 'auction-pool-exhausted', {}).catch(err => console.error('Pusher error (non-critical):', err))
     }
 
     // Broadcast players updated event with data to avoid fetch (fire and forget)

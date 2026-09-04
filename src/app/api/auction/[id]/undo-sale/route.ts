@@ -178,7 +178,9 @@ export async function POST(
       return NextResponse.json({ error: 'Bidder not found after undo' }, { status: 404 })
     }
 
-    // Broadcast sale undo event with full data for real-time updates
+    // Broadcast sale undo event with full data for real-time updates - the
+    // undo already succeeded in the DB transaction above, so a Pusher
+    // hiccup here must never turn that success into a 500.
     await triggerAuctionEvent(params.id, 'sale-undo', {
       playerId: lastSoldPlayer.id,
       player: updatedPlayer,
@@ -186,7 +188,7 @@ export async function POST(
       refundedAmount: refundAmount,
       bidderRemainingPurse: updatedBidder.remainingPurse,
       updatedBidders: [{ id: bidder.id, remainingPurse: updatedBidder.remainingPurse }]
-    })
+    }).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 
       success: true,

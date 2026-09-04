@@ -12,6 +12,7 @@ import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
+import { formatCurrency } from '@/lib/currency'
 import { useViewerCount } from '@/hooks/use-viewer-count'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
@@ -918,7 +919,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         {bid.bidderName}
                       </div>
                       <div className={`font-bold tabular-nums ${index === 0 ? 'text-amber-400 text-sm' : 'text-gray-500 text-xs'}`}>
-                        ₹{bid.amount.toLocaleString('en-IN')}
+                        {formatCurrency(bid.amount)}
                       </div>
                     </div>
                   ))
@@ -992,7 +993,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         <div className="flex items-center gap-2">
                           {bid.amount && (
                             <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                              ₹{bid.amount.toLocaleString('en-IN')}
+                              {formatCurrency(bid.amount)}
                             </span>
                           )}
                           <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
@@ -1072,7 +1073,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         {bid.amount && (
                           <div className="flex items-center gap-2">
                             <span className="text-lg font-bold text-red-600 dark:text-red-400">
-                              ₹{bid.amount.toLocaleString('en-IN')}
+                              {formatCurrency(bid.amount)}
                             </span>
                             <span className="text-xs text-red-600 dark:text-red-400">⏰ {timeAgo}</span>
                           </div>
@@ -1131,7 +1132,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           )}
                         </div>
                         <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                          ₹{bid.amount.toLocaleString('en-IN')}
+                          {formatCurrency(bid.amount)}
                         </span>
                       </div>
                       {increment && increment > 0 && (

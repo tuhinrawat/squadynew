@@ -12,18 +12,25 @@ export function formatCurrency(
     showDecimals?: boolean
   }
 ): string {
-  const { 
-    minimumFractionDigits = 0, 
+  const {
+    minimumFractionDigits = 0,
     maximumFractionDigits = 0,
-    showDecimals = false 
+    showDecimals = false
   } = options || {}
+
+  // Intl.NumberFormat happily formats NaN as the literal string "NaN" - a
+  // real, observed failure mode when a value derived from a missed or
+  // malformed real-time update (a Pusher payload that never arrived, a
+  // stale optimistic entry) reaches this formatter. Falling back to 0 keeps
+  // the UI showing a plausible number instead of visibly broken text.
+  const safeAmount = Number.isFinite(amount) ? amount : 0
 
   const formatted = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: showDecimals ? Math.max(0, Math.min(20, minimumFractionDigits)) : 0,
     maximumFractionDigits: showDecimals ? Math.max(0, Math.min(20, maximumFractionDigits || 2)) : 0,
-  }).format(amount)
+  }).format(safeAmount)
 
   return formatted
 }

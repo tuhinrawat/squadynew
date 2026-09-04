@@ -71,8 +71,10 @@ export async function POST(
       }
     })
 
-    // Broadcast player-sold event
-    await triggerAuctionEvent(params.id, 'new-player', { player: randomPlayer })
+    // Broadcast new-player event - the DB already moved to LIVE with this
+    // player above, so a Pusher hiccup here must never turn that success
+    // into a 500.
+    await triggerAuctionEvent(params.id, 'new-player', { player: randomPlayer }).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ success: true, player: randomPlayer })
   } catch (error) {

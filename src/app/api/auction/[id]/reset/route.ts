@@ -59,8 +59,9 @@ export async function POST(
       }
     })
 
-    // Broadcast reset event
-    await triggerAuctionEvent(params.id, 'auction-reset', {})
+    // Broadcast reset event - the reset already succeeded in the DB above,
+    // so a Pusher hiccup here must never turn that success into a 500.
+    await triggerAuctionEvent(params.id, 'auction-reset', {}).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ success: true, message: 'Auction reset successfully' })
   } catch (error) {

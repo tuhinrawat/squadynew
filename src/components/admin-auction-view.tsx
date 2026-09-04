@@ -17,6 +17,7 @@ import { usePusher } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ActivityLog } from '@/components/activity-log'
 import { isLiveStatus } from '@/lib/auction-status'
+import { formatCurrency } from '@/lib/currency'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
@@ -1853,7 +1854,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         <span className="font-semibold text-xs uppercase tracking-wide">Current Bid</span>
                       </div>
                       <div className="text-lg font-bold">
-                        ₹{currentBid.amount.toLocaleString('en-IN')}
+                        {formatCurrency(currentBid.amount)}
                       </div>
                     </div>
                     <div className="flex items-center justify-between text-xs">
@@ -2237,14 +2238,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 <CardContent className="p-4 sm:p-6 space-y-3">
                   {/* Remaining Purse */}
                   <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    Remaining Purse: <span className="text-green-600 font-bold">₹{userBidder.remainingPurse.toLocaleString('en-IN')}</span>
+                    Remaining Purse: <span className="text-green-600 font-bold">{formatCurrency(userBidder.remainingPurse)}</span>
                   </div>
                   
                   {/* Current Bid Display */}
                   {currentBid && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
                       <div className="text-sm text-gray-700 dark:text-gray-300">
-                        Current Bid: <span className="font-bold text-blue-600">₹{currentBid.amount.toLocaleString('en-IN')}</span>
+                        Current Bid: <span className="font-bold text-blue-600">{formatCurrency(currentBid.amount)}</span>
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                         By: {currentBid.bidderName} {currentBid.teamName && `(${currentBid.teamName})`}
@@ -2639,7 +2640,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         <div className="flex items-center gap-2">
                           {bid.amount && (
                             <span className="text-xl font-bold text-green-600 dark:text-green-400">
-                              ₹{bid.amount.toLocaleString('en-IN')}
+                              {formatCurrency(bid.amount)}
                             </span>
                           )}
                           <span className="text-xs text-green-600 dark:text-green-400">⏰ {timeAgo}</span>
@@ -2710,7 +2711,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                       </div>
                       {bid.refundedAmount && (
                         <div className="text-sm text-purple-700 dark:text-purple-400 mb-1">
-                          Refunded ₹{bid.refundedAmount.toLocaleString('en-IN')} • Player restored to available
+                          Refunded {formatCurrency(bid.refundedAmount)} • Player restored to available
                         </div>
                       )}
                       <div className="text-xs text-purple-600 dark:text-purple-400">
@@ -2787,7 +2788,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                           {commentary}
                         </span>
                         <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                          ₹{bid.amount.toLocaleString('en-IN')}
+                          {formatCurrency(bid.amount)}
                         </span>
                       </div>
                       {isLatestBid && viewMode === 'admin' && (
@@ -2868,7 +2869,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded">
                 <div className="text-sm text-gray-700 dark:text-gray-300">Remaining Purse</div>
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  ₹{activeBidder.remainingPurse.toLocaleString('en-IN')}
+                  {formatCurrency(activeBidder.remainingPurse)}
                 </div>
               </div>
             )
@@ -2879,7 +2880,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
               <div className="text-sm text-gray-700 dark:text-gray-300">Current Bid</div>
               <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                ₹{currentBid.amount.toLocaleString('en-IN')}
+                {formatCurrency(currentBid.amount)}
               </div>
             </div>
           )}

@@ -42,8 +42,9 @@ export async function POST(
     })
 
 
-    // Broadcast end event
-    await triggerAuctionEvent(params.id, 'auction-ended', {})
+    // Broadcast end event - the DB already moved to COMPLETED above, so a
+    // Pusher hiccup here must never turn that success into a 500.
+    await triggerAuctionEvent(params.id, 'auction-ended', {}).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ success: true })
   } catch (error) {

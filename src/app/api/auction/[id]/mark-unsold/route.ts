@@ -207,15 +207,16 @@ export async function POST(
       }
     })
 
-    // Broadcast new player if exists
+    // Broadcast new player if exists - the DB already moved on above, so a
+    // Pusher hiccup here must never turn that success into a 500.
     if (nextPlayer) {
       await triggerAuctionEvent(params.id, 'new-player', {
         player: nextPlayer
-      } as any)
+      } as any).catch(err => console.error('Pusher error (non-critical):', err))
     }
 
     // Broadcast players updated event
-    await triggerAuctionEvent(params.id, 'players-updated', {})
+    await triggerAuctionEvent(params.id, 'players-updated', {}).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ 
       success: true,

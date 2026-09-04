@@ -35,8 +35,9 @@ export async function POST(
       data: { status: 'PAUSED' }
     })
 
-    // Broadcast pause event
-    await triggerAuctionEvent(params.id, 'auction-paused', {})
+    // Broadcast pause event - the DB already moved to PAUSED above, so a
+    // Pusher hiccup here must never turn that success into a 500.
+    await triggerAuctionEvent(params.id, 'auction-paused', {}).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ success: true })
   } catch (error) {
