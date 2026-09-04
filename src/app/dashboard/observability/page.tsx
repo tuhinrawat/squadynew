@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, RefreshCw, AlertTriangle, Activity, Zap, ShieldAlert } from 'lucide-react'
+import { Loader2, RefreshCw, AlertTriangle, Activity, Zap, ShieldAlert, Radio, Timer, Wifi } from 'lucide-react'
 
 interface BreakdownRow {
   category: string
@@ -37,6 +37,22 @@ interface Summary {
   recentFailures: FailureRow[]
   bidsPerMinute: Array<{ minute: string; count: number }>
   auctions: Array<{ id: string; name: string }>
+  syncLag: { avgMs: number | null; maxMs: number | null; sampleCount: number }
+  connectionHealth: { connected: number; connection_error: number; rebind: number }
+}
+
+interface PusherChannelStatus {
+  channel: string
+  auctionId: string
+  auctionName: string | null
+  auctionStatus: string | null
+  subscriptionCount: number
+}
+
+interface PusherStatus {
+  totalChannels: number
+  totalSubscribers: number
+  channels: PusherChannelStatus[]
 }
 
 const RANGE_OPTIONS = [
@@ -99,6 +115,33 @@ export default function ObservabilityPage() {
     return () => clearInterval(interval)
   }, [fetchSummary])
 
+  // Live Pusher connection panel - deliberately separate from the
+  // range/auction-filtered summary above: this is "right now" headroom, not
+  // a historical window, so it always reflects the full account regardless
+  // of what's selected up top, and refreshes faster since that's the point.
+  const [pusherStatus, setPusherStatus] = useState<PusherStatus | null>(null)
+  const [pusherStatusError, setPusherStatusError] = useState<string | null>(null)
+
+  const fetchPusherStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/observability/pusher-status')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to reach Pusher')
+      }
+      setPusherStatus(await response.json())
+      setPusherStatusError(null)
+    } catch (err) {
+      setPusherStatusError(err instanceof Error ? err.message : 'Failed to reach Pusher')
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPusherStatus()
+    const interval = setInterval(fetchPusherStatus, 10000)
+    return () => clearInterval(interval)
+  }, [fetchPusherStatus])
+
   if (status !== 'authenticated' || session?.user?.role !== 'SUPER_ADMIN') {
     return null
   }
@@ -146,6 +189,61 @@ export default function ObservabilityPage() {
         </div>
       </div>
 
+      {/* Live Pusher connections - "how close are we to the ceiling right
+          now," independent of the range/auction filters above */}
+      <Card className="border-blue-200 dark:border-blue-900">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Radio className="h-4 w-4 text-blue-500" />
+            Live Connections
+          </CardTitle>
+          <CardDescription>
+            Occupied auction channels and subscriber counts, straight from Pusher&apos;s API - right now, not a historical window.
+            Daily message-quota usage isn&apos;t exposed the same way; check that in Pusher&apos;s own dashboard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {pusherStatusError ? (
+            <p className="text-sm text-red-600 dark:text-red-400">{pusherStatusError}</p>
+          ) : !pusherStatus ? (
+            <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Checking Pusher...
+            </div>
+          ) : pusherStatus.totalChannels === 0 ? (
+            <p className="text-sm text-gray-500 py-2">No auction channels are occupied right now - nobody has an auction page open.</p>
+          ) : (
+            <div>
+              <div className="flex gap-6 mb-3 text-sm">
+                <div><span className="text-gray-500">Active auctions:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.totalChannels}</span></div>
+                <div><span className="text-gray-500">Total subscribers:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.totalSubscribers}</span></div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200 dark:border-gray-700">
+                      <th className="pb-2 pr-2">Auction</th>
+                      <th className="pb-2 pr-2">Status</th>
+                      <th className="pb-2 text-right">Subscribers</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pusherStatus.channels.map(c => (
+                      <tr key={c.channel} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <td className="py-2 pr-2">{c.auctionName ?? <span className="font-mono text-xs text-gray-400">{c.auctionId}</span>}</td>
+                        <td className="py-2 pr-2">
+                          {c.auctionStatus && <Badge className="bg-gray-100 text-gray-700 border-0">{c.auctionStatus}</Badge>}
+                        </td>
+                        <td className="py-2 text-right font-semibold">{c.subscriptionCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {error && (
         <Card className="border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
           <CardContent className="pt-6 text-sm text-red-700 dark:text-red-300">{error}</CardContent>
@@ -166,7 +264,7 @@ export default function ObservabilityPage() {
       ) : summary && (
         <>
           {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Events</CardTitle>
@@ -197,6 +295,41 @@ export default function ObservabilityPage() {
               <CardContent>
                 <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{summary.failureCount.toLocaleString('en-IN')}</div>
                 <p className="text-xs text-gray-500 mt-1">Pusher trigger failures + rate-limit rejections</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Sync Lag</CardTitle>
+                <Timer className="h-4 w-4 text-gray-400" />
+              </CardHeader>
+              <CardContent>
+                {summary.syncLag.sampleCount > 0 ? (
+                  <>
+                    <div className={`text-2xl font-bold ${(summary.syncLag.avgMs ?? 0) > 2000 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                      {summary.syncLag.avgMs}ms
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">avg · {summary.syncLag.maxMs}ms max · {summary.syncLag.sampleCount} reports</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold text-gray-400">—</div>
+                    <p className="text-xs text-gray-500 mt-1">No bidder browsers reporting yet</p>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Connection Health</CardTitle>
+                <Wifi className="h-4 w-4 text-gray-400" />
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-3 text-sm">
+                  <span className="text-green-600 font-bold">{summary.connectionHealth.connected}</span>
+                  <span className="text-red-600 font-bold">{summary.connectionHealth.connection_error}</span>
+                  <span className="text-amber-600 font-bold">{summary.connectionHealth.rebind}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">connected · errors · rebinds needed</p>
               </CardContent>
             </Card>
           </div>

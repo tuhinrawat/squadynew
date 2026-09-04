@@ -7,6 +7,27 @@ if (!process.env.NEXT_PUBLIC_PUSHER_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUST
   console.warn('Missing Pusher environment variables for client')
 }
 
+// Reports what only the browser can see - real receipt lag and real
+// subscription health - to the observability dashboard. Fire-and-forget by
+// design: a failed report must never affect the actual bidding UI, so this
+// never throws and its result is never awaited by callers.
+function reportClientEvent(
+  auctionId: string,
+  eventName: 'sync_lag' | 'connected' | 'connection_error' | 'rebind',
+  extra: { latencyMs?: number; message?: string } = {}
+) {
+  try {
+    fetch('/api/observability/client-event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auctionId, eventName, ...extra }),
+      keepalive: true,
+    }).catch(() => {})
+  } catch {
+    // Never let telemetry reporting throw into the caller
+  }
+}
+
 let pusherClient: Pusher | null = null
 
 export function initializePusher(): Pusher {
@@ -153,6 +174,15 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             // Bind all event handlers
             channelToBind.bind('new-bid', (data: any) => {
               console.log('[Pusher] new-bid event received, calling callback', { hasCallback: !!callbacksRef.current.onNewBid, amount: data.amount })
+              // Sync lag: time between the server stamping this bid and this
+              // browser actually receiving it - the one thing "clogged"
+              // literally means, measured directly instead of inferred.
+              if (data?.timestamp) {
+                const lag = Date.now() - new Date(data.timestamp).getTime()
+                if (Number.isFinite(lag) && lag >= 0) {
+                  reportClientEvent(auctionId, 'sync_lag', { latencyMs: lag })
+                }
+              }
               callbacksRef.current.onNewBid?.(data)
             })
             
@@ -234,6 +264,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         channel.bind('pusher:subscription_succeeded', () => {
           console.log('[Pusher] Subscription succeeded, binding events', { channelName })
           setIsConnected(true)
+          reportClientEvent(auctionId, 'connected')
           // Bind events after subscription succeeds
           bindAllEvents(channel)
           // Mark as bound
@@ -241,10 +272,11 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             channelRef.current.callbacksBound = true
           }
         })
-        
+
         channel.bind('pusher:subscription_error', (error: any) => {
           console.error('Pusher subscription error:', error)
           setError('Subscription failed')
+          reportClientEvent(auctionId, 'connection_error', { message: 'subscription_error' })
         })
         
         // Always try to bind events immediately if channel is subscribed
@@ -289,11 +321,13 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
             if (currentChannel) {
               currentChannel.callbacksBound = true
             }
+            reportClientEvent(auctionId, 'rebind', { message: 'channel instance changed' })
           } else if (!currentChannel.callbacksBound) {
             // Same channel but events not bound - rebind them
             console.log('[Pusher] Events not bound, rebinding', { channelName })
             bindAllEvents(currentChannel)
             currentChannel.callbacksBound = true
+            reportClientEvent(auctionId, 'rebind', { message: 'callbacks were unbound' })
           }
         }
       }, 500) // Check every 500ms
@@ -302,6 +336,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
       const handleError = (err: any) => {
         console.error('Connection error:', err)
         setError(err.message || 'Connection error')
+        reportClientEvent(auctionId, 'connection_error', { message: err?.message || 'connection error' })
       }
 
       pusher.connection.bind('error', handleError)

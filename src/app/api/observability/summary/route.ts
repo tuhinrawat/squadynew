@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     const auctionFilter = auctionId ? Prisma.sql`AND "auctionId" = ${auctionId}` : Prisma.empty
 
-    const [totalRows, breakdown, recentFailures, auctions, bidsPerMinute] = await Promise.all([
+    const [totalRows, breakdown, recentFailures, auctions, bidsPerMinute, syncLagRows, connectionHealthRows] = await Promise.all([
       prisma.$queryRaw<Array<{ total: bigint; failures: bigint }>>(Prisma.sql`
         SELECT COUNT(*)::int as total, COUNT(*) FILTER (WHERE success = false)::int as failures
         FROM observability_events
@@ -72,10 +72,32 @@ export async function GET(request: NextRequest) {
         GROUP BY minute
         ORDER BY minute ASC
       `),
+      // Client-reported: real time from server-stamped bid to this browser
+      // receiving it - the literal measure of "clogged."
+      prisma.$queryRaw<Array<{ avgMs: number | null; maxMs: number | null; sampleCount: bigint }>>(Prisma.sql`
+        SELECT AVG("latencyMs")::int as "avgMs", MAX("latencyMs")::int as "maxMs", COUNT(*)::int as "sampleCount"
+        FROM observability_events
+        WHERE category = 'sync_lag' AND "createdAt" >= ${since} ${auctionFilter}
+      `),
+      // Client-reported: subscription health and how often the rebind
+      // workaround (pusher-client.ts's periodic recheck) actually fired.
+      prisma.$queryRaw<Array<{ eventName: string; count: bigint }>>(Prisma.sql`
+        SELECT "eventName", COUNT(*)::int as count
+        FROM observability_events
+        WHERE category = 'pusher_client' AND "createdAt" >= ${since} ${auctionFilter}
+        GROUP BY "eventName"
+      `),
     ])
 
     const totalCount = Number(totalRows[0]?.total ?? 0)
     const failureCount = Number(totalRows[0]?.failures ?? 0)
+
+    const connectionHealth = { connected: 0, connection_error: 0, rebind: 0 }
+    for (const row of connectionHealthRows) {
+      if (row.eventName in connectionHealth) {
+        connectionHealth[row.eventName as keyof typeof connectionHealth] = Number(row.count)
+      }
+    }
 
     return NextResponse.json({
       range,
@@ -93,6 +115,12 @@ export async function GET(request: NextRequest) {
       recentFailures,
       bidsPerMinute: bidsPerMinute.map(row => ({ minute: row.minute, count: Number(row.count) })),
       auctions,
+      syncLag: {
+        avgMs: syncLagRows[0]?.avgMs ?? null,
+        maxMs: syncLagRows[0]?.maxMs ?? null,
+        sampleCount: Number(syncLagRows[0]?.sampleCount ?? 0),
+      },
+      connectionHealth,
     })
   } catch (error) {
     console.error('Error building observability summary:', error)
