@@ -24,6 +24,26 @@ if (!process.env.NEXT_PUBLIC_PUSHER_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUST
 // them would hide the exact "why did it break" detail this was built for.
 const SYNC_LAG_SAMPLE_RATE = 0.2
 
+// Pusher's connection/subscription error objects rarely carry a plain
+// .message string - the actual diagnostic detail (error type, close code)
+// lives nested under .type / .data / .error.data. Without this, every
+// connection_error report reads as an identical, useless "connection error"
+// string no matter what actually went wrong.
+function describePusherError(err: unknown): string {
+  try {
+    const e = err as { type?: string; message?: string; data?: { code?: number; message?: string }; error?: { data?: { code?: number; message?: string } } }
+    const parts = [
+      e?.type,
+      e?.data?.code ?? e?.error?.data?.code,
+      e?.data?.message ?? e?.error?.data?.message ?? e?.message,
+    ].filter((p): p is string | number => p !== undefined && p !== null)
+    if (parts.length > 0) return parts.join(' - ')
+    return JSON.stringify(err).slice(0, 200)
+  } catch {
+    return 'unknown connection error'
+  }
+}
+
 function reportClientEvent(
   auctionId: string,
   eventName: 'sync_lag' | 'connected' | 'connection_error' | 'rebind',
@@ -292,7 +312,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
         channel.bind('pusher:subscription_error', (error: any) => {
           console.error('Pusher subscription error:', error)
           setError('Subscription failed')
-          reportClientEvent(auctionId, 'connection_error', { message: 'subscription_error' })
+          reportClientEvent(auctionId, 'connection_error', { message: `subscription_error: ${describePusherError(error)}` })
         })
         
         // Always try to bind events immediately if channel is subscribed
@@ -350,9 +370,10 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}) {
       
       // Connection error handler
       const handleError = (err: any) => {
+        const description = describePusherError(err)
         console.error('Connection error:', err)
-        setError(err.message || 'Connection error')
-        reportClientEvent(auctionId, 'connection_error', { message: err?.message || 'connection error' })
+        setError(description)
+        reportClientEvent(auctionId, 'connection_error', { message: description })
       }
 
       pusher.connection.bind('error', handleError)
