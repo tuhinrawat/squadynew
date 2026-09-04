@@ -11,11 +11,27 @@ if (!process.env.NEXT_PUBLIC_PUSHER_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUST
 // subscription health - to the observability dashboard. Fire-and-forget by
 // design: a failed report must never affect the actual bidding UI, so this
 // never throws and its result is never awaited by callers.
+//
+// sync_lag fires on every new-bid receipt, in every connected browser - so
+// its request volume scales with audience size, not with server activity. A
+// popular auction with hundreds of concurrent viewers would otherwise turn
+// every single bid into a self-inflicted burst of simultaneous requests
+// against this same server - the kind of thundering herd this whole system
+// exists to catch, not cause. Sampling keeps the median/p95 statistically
+// meaningful while keeping total volume flat regardless of crowd size.
+// connected/connection_error/rebind are never sampled: they're inherently
+// rare (one per session, not one per bid) and high-signal - losing any of
+// them would hide the exact "why did it break" detail this was built for.
+const SYNC_LAG_SAMPLE_RATE = 0.2
+
 function reportClientEvent(
   auctionId: string,
   eventName: 'sync_lag' | 'connected' | 'connection_error' | 'rebind',
   extra: { latencyMs?: number; message?: string } = {}
 ) {
+  if (eventName === 'sync_lag' && Math.random() >= SYNC_LAG_SAMPLE_RATE) {
+    return
+  }
   try {
     fetch('/api/observability/client-event', {
       method: 'POST',

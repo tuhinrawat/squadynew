@@ -1,0 +1,40 @@
+name: Observability scheduled checks
+
+# Vercel's Hobby (free) plan only runs cron jobs once a day, which is too
+# coarse for an alert check or a heartbeat that need to catch a live
+# incident within minutes. GitHub Actions scheduled workflows are free and
+# can run as often as every 5 minutes, so all scheduled observability jobs
+# live here instead of in vercel.json.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   PRODUCTION_URL             e.g. https://squady.vercel.app (no trailing slash)
+#   OBSERVABILITY_CRON_SECRET  same value as the Vercel env var of the same name
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # alert-check
+    - cron: '*/10 * * * *' # canary heartbeat
+    - cron: '0 3 * * *'    # daily cleanup, 3am UTC
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alert check
+        if: github.event.schedule == '*/5 * * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sf -X POST "${{ secrets.PRODUCTION_URL }}/api/observability/alert-check" \
+            -H "Authorization: Bearer ${{ secrets.OBSERVABILITY_CRON_SECRET }}"
+
+      - name: Canary heartbeat
+        if: github.event.schedule == '*/10 * * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sf -X POST "${{ secrets.PRODUCTION_URL }}/api/observability/canary" \
+            -H "Authorization: Bearer ${{ secrets.OBSERVABILITY_CRON_SECRET }}"
+
+      - name: Daily cleanup
+        if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -sf -X POST "${{ secrets.PRODUCTION_URL }}/api/observability/cleanup" \
+            -H "Authorization: Bearer ${{ secrets.OBSERVABILITY_CRON_SECRET }}"

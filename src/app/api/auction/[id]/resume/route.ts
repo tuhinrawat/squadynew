@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { resumeTimer, getTimerValue } from '@/lib/auction-timer'
+import { logEventAsync } from '@/lib/observability'
 
 export async function POST(
   request: NextRequest,
@@ -49,6 +50,7 @@ export async function POST(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error resuming auction:', error)
+    logEventAsync({ category: 'api_error', eventName: 'auction_resume', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

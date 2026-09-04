@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { pauseTimer } from '@/lib/auction-timer'
 import { isLiveStatus } from '@/lib/auction-status'
+import { logEventAsync } from '@/lib/observability'
 
 export async function POST(
   request: NextRequest,
@@ -44,6 +45,7 @@ export async function POST(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error pausing auction:', error)
+    logEventAsync({ category: 'api_error', eventName: 'auction_pause', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

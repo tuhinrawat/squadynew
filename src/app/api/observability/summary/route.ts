@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     const auctionFilter = auctionId ? Prisma.sql`AND "auctionId" = ${auctionId}` : Prisma.empty
 
-    const [totalRows, breakdown, recentFailures, auctions, bidsPerMinute, syncLagRows, connectionHealthRows] = await Promise.all([
+    const [totalRows, breakdown, recentFailures, auctions, bidsPerMinute, syncLagRows, connectionHealthRows, latestCanary, recentAlerts] = await Promise.all([
       prisma.$queryRaw<Array<{ total: bigint; failures: bigint }>>(Prisma.sql`
         SELECT COUNT(*)::int as total, COUNT(*) FILTER (WHERE success = false)::int as failures
         FROM observability_events
@@ -87,6 +87,20 @@ export async function GET(request: NextRequest) {
         WHERE category = 'pusher_client' AND "createdAt" >= ${since} ${auctionFilter}
         GROUP BY "eventName"
       `),
+      // Synthetic heartbeat, independent of live traffic - see canary/route.ts.
+      prisma.observabilityEvent.findFirst({
+        where: { category: 'canary', eventName: 'heartbeat' },
+        orderBy: { createdAt: 'desc' },
+        select: { success: true, latencyMs: true, createdAt: true, message: true },
+      }),
+      // What the alert-check job actually fired recently, so an admin can see
+      // whether alerting is wired up and working, not just configured.
+      prisma.observabilityEvent.findMany({
+        where: { category: 'alert' },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { eventName: true, message: true, createdAt: true },
+      }),
     ])
 
     const totalCount = Number(totalRows[0]?.total ?? 0)
@@ -121,6 +135,9 @@ export async function GET(request: NextRequest) {
         sampleCount: Number(syncLagRows[0]?.sampleCount ?? 0),
       },
       connectionHealth,
+      latestCanary,
+      alertingConfigured: !!process.env.ALERT_WEBHOOK_URL,
+      recentAlerts,
     })
   } catch (error) {
     console.error('Error building observability summary:', error)

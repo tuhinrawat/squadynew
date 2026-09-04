@@ -362,6 +362,7 @@ export async function POST(
     })
   } catch (error) {
     logger.error('Error placing bid:', error)
+    logEventAsync({ category: 'api_error', eventName: 'bid', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

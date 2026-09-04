@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, RefreshCw, AlertTriangle, Activity, Zap, ShieldAlert, Radio, Timer, Wifi } from 'lucide-react'
+import { Loader2, RefreshCw, AlertTriangle, Activity, Zap, ShieldAlert, Radio, Timer, Wifi, HeartPulse, BellRing, History } from 'lucide-react'
 
 interface BreakdownRow {
   category: string
@@ -39,6 +39,9 @@ interface Summary {
   auctions: Array<{ id: string; name: string }>
   syncLag: { avgMs: number | null; maxMs: number | null; sampleCount: number }
   connectionHealth: { connected: number; connection_error: number; rebind: number }
+  latestCanary: { success: boolean; latencyMs: number | null; createdAt: string; message: string | null } | null
+  alertingConfigured: boolean
+  recentAlerts: Array<{ eventName: string; message: string | null; createdAt: string }>
 }
 
 interface PusherChannelStatus {
@@ -53,6 +56,18 @@ interface PusherStatus {
   totalChannels: number
   totalSubscribers: number
   channels: PusherChannelStatus[]
+  connectionCeiling: { maxConnections: number; usedPercent: number | null }
+  broadcastsToday: number
+}
+
+interface TimelineEvent {
+  id: string
+  category: string
+  eventName: string
+  success: boolean
+  latencyMs: number | null
+  message: string | null
+  createdAt: string
 }
 
 const RANGE_OPTIONS = [
@@ -142,6 +157,38 @@ export default function ObservabilityPage() {
     return () => clearInterval(interval)
   }, [fetchPusherStatus])
 
+  // Single-auction timeline - only meaningful once a specific auction is
+  // selected, since a merged feed across every auction ever run isn't a
+  // "what happened during this incident" view, it's noise.
+  const [timeline, setTimeline] = useState<TimelineEvent[]>([])
+  const [timelineTruncated, setTimelineTruncated] = useState(false)
+  const [timelineLoading, setTimelineLoading] = useState(false)
+  const [timelineError, setTimelineError] = useState<string | null>(null)
+
+  const fetchTimeline = useCallback(async () => {
+    if (auctionId === 'all') return
+    setTimelineLoading(true)
+    setTimelineError(null)
+    try {
+      const response = await fetch(`/api/observability/timeline?auctionId=${encodeURIComponent(auctionId)}`)
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to load timeline')
+      }
+      const data = await response.json()
+      setTimeline(data.events)
+      setTimelineTruncated(data.truncated)
+    } catch (err) {
+      setTimelineError(err instanceof Error ? err.message : 'Failed to load timeline')
+    } finally {
+      setTimelineLoading(false)
+    }
+  }, [auctionId])
+
+  useEffect(() => {
+    fetchTimeline()
+  }, [fetchTimeline])
+
   if (status !== 'authenticated' || session?.user?.role !== 'SUPER_ADMIN') {
     return null
   }
@@ -199,7 +246,8 @@ export default function ObservabilityPage() {
           </CardTitle>
           <CardDescription>
             Occupied auction channels and subscriber counts, straight from Pusher&apos;s API - right now, not a historical window.
-            Daily message-quota usage isn&apos;t exposed the same way; check that in Pusher&apos;s own dashboard.
+            The connection ceiling below is a manually-configured plan limit, and &quot;broadcasts today&quot; is this app&apos;s own
+            trigger count (a proxy for message volume, not Pusher&apos;s real quota) - check Pusher&apos;s own dashboard for the authoritative number.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -209,36 +257,46 @@ export default function ObservabilityPage() {
             <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Checking Pusher...
             </div>
-          ) : pusherStatus.totalChannels === 0 ? (
-            <p className="text-sm text-gray-500 py-2">No auction channels are occupied right now - nobody has an auction page open.</p>
           ) : (
             <div>
-              <div className="flex gap-6 mb-3 text-sm">
+              <div className="flex flex-wrap gap-6 mb-3 text-sm">
                 <div><span className="text-gray-500">Active auctions:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.totalChannels}</span></div>
                 <div><span className="text-gray-500">Total subscribers:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.totalSubscribers}</span></div>
+                <div>
+                  <span className="text-gray-500">Connection ceiling:</span>{' '}
+                  <span className={`font-bold ${(pusherStatus.connectionCeiling.usedPercent ?? 0) > 80 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {pusherStatus.totalSubscribers}/{pusherStatus.connectionCeiling.maxConnections}
+                    {pusherStatus.connectionCeiling.usedPercent !== null && ` (${pusherStatus.connectionCeiling.usedPercent}%)`}
+                  </span>
+                </div>
+                <div><span className="text-gray-500">Broadcasts today:</span> <span className="font-bold text-gray-900 dark:text-gray-100">{pusherStatus.broadcastsToday.toLocaleString('en-IN')}</span></div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200 dark:border-gray-700">
-                      <th className="pb-2 pr-2">Auction</th>
-                      <th className="pb-2 pr-2">Status</th>
-                      <th className="pb-2 text-right">Subscribers</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pusherStatus.channels.map(c => (
-                      <tr key={c.channel} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
-                        <td className="py-2 pr-2">{c.auctionName ?? <span className="font-mono text-xs text-gray-400">{c.auctionId}</span>}</td>
-                        <td className="py-2 pr-2">
-                          {c.auctionStatus && <Badge className="bg-gray-100 text-gray-700 border-0">{c.auctionStatus}</Badge>}
-                        </td>
-                        <td className="py-2 text-right font-semibold">{c.subscriptionCount}</td>
+              {pusherStatus.totalChannels === 0 ? (
+                <p className="text-sm text-gray-500 py-2">No auction channels are occupied right now - nobody has an auction page open.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 uppercase border-b border-gray-200 dark:border-gray-700">
+                        <th className="pb-2 pr-2">Auction</th>
+                        <th className="pb-2 pr-2">Status</th>
+                        <th className="pb-2 text-right">Subscribers</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {pusherStatus.channels.map(c => (
+                        <tr key={c.channel} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
+                          <td className="py-2 pr-2">{c.auctionName ?? <span className="font-mono text-xs text-gray-400">{c.auctionId}</span>}</td>
+                          <td className="py-2 pr-2">
+                            {c.auctionStatus && <Badge className="bg-gray-100 text-gray-700 border-0">{c.auctionStatus}</Badge>}
+                          </td>
+                          <td className="py-2 text-right font-semibold">{c.subscriptionCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -308,7 +366,7 @@ export default function ObservabilityPage() {
                     <div className={`text-2xl font-bold ${(summary.syncLag.avgMs ?? 0) > 2000 ? 'text-red-600' : 'text-gray-900 dark:text-gray-100'}`}>
                       {summary.syncLag.avgMs}ms
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">avg · {summary.syncLag.maxMs}ms max · {summary.syncLag.sampleCount} reports</p>
+                    <p className="text-xs text-gray-500 mt-1">avg · {summary.syncLag.maxMs}ms max · {summary.syncLag.sampleCount} reports (~20% sampled)</p>
                   </>
                 ) : (
                   <>
@@ -355,6 +413,63 @@ export default function ObservabilityPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Synthetic heartbeat + alerting status - the "is anyone watching
+              right now" panel. Independent of live traffic on purpose. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <HeartPulse className="h-4 w-4 text-pink-500" />
+                  System Heartbeat
+                </CardTitle>
+                <CardDescription>A scheduled Pusher + database round-trip, independent of real bidder traffic</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!summary.latestCanary ? (
+                  <p className="text-sm text-gray-500 py-2">No heartbeat recorded yet - the scheduled check hasn&apos;t run, or hasn&apos;t been set up. See setup notes.</p>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <Badge className={summary.latestCanary.success ? 'bg-green-100 text-green-700 border-0' : 'bg-red-100 text-red-700 border-0'}>
+                      {summary.latestCanary.success ? 'Healthy' : 'Failing'}
+                    </Badge>
+                    <span className="text-sm text-gray-500">
+                      last checked {formatTime(summary.latestCanary.createdAt)}
+                      {summary.latestCanary.latencyMs !== null && ` · ${summary.latestCanary.latencyMs}ms`}
+                    </span>
+                  </div>
+                )}
+                {summary.latestCanary && !summary.latestCanary.success && summary.latestCanary.message && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mt-2">{summary.latestCanary.message}</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BellRing className="h-4 w-4 text-amber-500" />
+                  Alerting
+                </CardTitle>
+                <CardDescription>Pushes to a webhook when thresholds are breached, instead of waiting for someone to open this page</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Badge className={summary.alertingConfigured ? 'bg-green-100 text-green-700 border-0' : 'bg-gray-100 text-gray-600 border-0'}>
+                  {summary.alertingConfigured ? 'Webhook configured' : 'Not configured'}
+                </Badge>
+                {summary.recentAlerts.length === 0 ? (
+                  <p className="text-sm text-gray-500 mt-2">No alerts fired recently.</p>
+                ) : (
+                  <div className="mt-2 space-y-1">
+                    {summary.recentAlerts.map((a, i) => (
+                      <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                        {formatTime(a.createdAt)} · {a.eventName}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Pusher breakdown */}
@@ -460,6 +575,49 @@ export default function ObservabilityPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Single-auction timeline - only makes sense once one auction is
+              picked; a merged feed across every auction ever run is noise,
+              not an incident replay. */}
+          {auctionId !== 'all' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-indigo-500" />
+                  Auction Timeline
+                </CardTitle>
+                <CardDescription>
+                  Every event for this auction, merged and in order - correlate a rate-limit rejection against the sync-lag
+                  spike and connection errors that followed it. Shows the most recent {timelineTruncated ? '500 (older events cut off)' : `${timeline.length}`} events.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {timelineError ? (
+                  <p className="text-sm text-red-600 dark:text-red-400">{timelineError}</p>
+                ) : timelineLoading && timeline.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading timeline...
+                  </div>
+                ) : timeline.length === 0 ? (
+                  <p className="text-sm text-gray-500 py-4">No events recorded for this auction yet.</p>
+                ) : (
+                  <div className="max-h-96 overflow-y-auto space-y-1">
+                    {timeline.map(ev => (
+                      <div key={ev.id} className="flex items-start gap-3 text-sm py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
+                        <span className="text-xs text-gray-400 w-32 flex-shrink-0 pt-0.5">{formatTime(ev.createdAt)}</span>
+                        <Badge className={`flex-shrink-0 ${ev.success ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'} border-0`}>
+                          {ev.category}
+                        </Badge>
+                        <span className="font-mono text-xs text-gray-700 dark:text-gray-300 flex-shrink-0">{ev.eventName}</span>
+                        {ev.latencyMs !== null && <span className="text-xs text-gray-400 flex-shrink-0">{ev.latencyMs}ms</span>}
+                        {ev.message && <span className="text-xs text-red-600 dark:text-red-400 break-words min-w-0">{ev.message}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </div>

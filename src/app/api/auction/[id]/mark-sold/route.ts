@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
+import { logEventAsync } from '@/lib/observability'
 
 const markSoldSchema = z.object({
   playerId: z.string().trim().min(1),
@@ -407,6 +408,7 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error marking player as sold:', error)
+    logEventAsync({ category: 'api_error', eventName: 'mark_sold', auctionId: params.id, success: false, message: error instanceof Error ? error.message : String(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
