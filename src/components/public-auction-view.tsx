@@ -67,7 +67,13 @@ interface PublicAuctionViewProps {
 interface AuctionSnapshot {
   currentPlayer: Player | null
   players: Player[]
-  bidders: Bidder[]
+  // Team name/logo/username never change during a live auction and are
+  // already known from the initial page load - the poll only needs to carry
+  // the one thing that actually changes per team, the remaining purse. See
+  // applySnapshot below, which merges this into the existing bidder records
+  // instead of replacing them (a replace would blank out the display fields
+  // this trimmed shape no longer carries).
+  bidders: Array<{ id: string; remainingPurse: number }>
   bidHistory: BidHistoryEntry[]
   poolExhausted: boolean
 }
@@ -316,7 +322,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // screen to catch up to the real state.
   const applySnapshot = useCallback((snapshot: AuctionSnapshot) => {
     setPlayers(snapshot.players)
-    setBiddersState(snapshot.bidders)
+    setBiddersState(prev => prev.map(b => {
+      const update = snapshot.bidders.find(u => u.id === b.id)
+      return update ? { ...b, remainingPurse: update.remainingPurse } : b
+    }))
     setPoolExhausted(snapshot.poolExhausted)
     setCurrentPlayer(snapshot.currentPlayer)
     const { sortedHistory, currentBid: derivedBid, highestBidderId: derivedHighest } =

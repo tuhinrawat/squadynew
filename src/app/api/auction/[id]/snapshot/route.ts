@@ -55,9 +55,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         where: { auctionId: auction.id },
         select: { id: true, status: true, isIcon: true },
       }),
+      // Team name/username/logo never change during a live auction and are
+      // already on the client from the initial page load (confirmed via load
+      // testing - team logos alone were 99%+ of this endpoint's payload).
+      // Only the remaining purse actually needs to travel on every poll; the
+      // client merges this into its existing bidder records instead of
+      // replacing them - see applySnapshot in public-auction-view.tsx.
       prisma.bidder.findMany({
         where: { auctionId: auction.id },
-        select: { id: true, teamName: true, username: true, remainingPurse: true, logoUrl: true },
+        select: { id: true, remainingPurse: true },
       }),
       auction.currentPlayerId
         ? prisma.player.findUnique({
