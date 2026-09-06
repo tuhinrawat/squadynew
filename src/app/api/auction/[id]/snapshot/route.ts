@@ -42,29 +42,38 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: 'Not available' }, { status: 403 })
     }
 
-    const [players, bidders] = await Promise.all([
+    // The public view only ever reads two things off the bulk player list:
+    // status and isIcon (for the sold/unsold/remaining counts and the
+    // Bidder Choice phase check) - never a name, photo, or stat. Only the
+    // single player currently on stage needs its full uploaded data. Fetching
+    // everyone's full data on every 6-second poll from every viewer was the
+    // actual driver of this endpoint's payload size (confirmed via load
+    // testing - a several-MB response per poll, independent of audience
+    // size), not the audience size itself.
+    const [players, bidders, currentPlayerFull] = await Promise.all([
       prisma.player.findMany({
         where: { auctionId: auction.id },
-        select: {
-          id: true, auctionId: true, data: true, status: true, isIcon: true, soldTo: true, soldPrice: true,
-          lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true,
-        },
+        select: { id: true, status: true, isIcon: true },
       }),
       prisma.bidder.findMany({
         where: { auctionId: auction.id },
         select: { id: true, teamName: true, username: true, remainingPurse: true, logoUrl: true },
       }),
+      auction.currentPlayerId
+        ? prisma.player.findUnique({
+            where: { id: auction.currentPlayerId },
+            select: {
+              id: true, auctionId: true, data: true, status: true, isIcon: true, soldTo: true, soldPrice: true,
+              lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true,
+            },
+          })
+        : Promise.resolve(null),
     ])
 
-    let currentPlayer = auction.currentPlayerId
-      ? players.find(p => p.id === auction.currentPlayerId) ?? null
-      : null
     // Defensive, read-only mirror of the same check the SSR page makes: a
     // SOLD player should never be shown as "current" even if a stale
     // currentPlayerId briefly points at one.
-    if (currentPlayer && currentPlayer.status === 'SOLD') {
-      currentPlayer = null
-    }
+    const currentPlayer = currentPlayerFull && currentPlayerFull.status !== 'SOLD' ? currentPlayerFull : null
 
     const poolExhausted = !currentPlayer
       && (isLiveStatus(auction.status) || auction.status === 'PAUSED')
