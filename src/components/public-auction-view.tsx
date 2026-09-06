@@ -559,8 +559,18 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return player.data as Record<string, any>
   }
 
-  const playerData = getPlayerData(currentPlayer)
+  // Memoized so it's a stable reference across re-renders of the same
+  // player (every incoming bid re-renders this component) - both this and
+  // the derived stats below were previously recomputed from scratch on
+  // every render regardless of whether the player on screen had changed.
+  const playerData = useMemo(() => getPlayerData(currentPlayer), [currentPlayer])
   const playerName = playerData.name || playerData.Name || 'No Player Selected'
+  // extractBattingStats/extractBowlingStats each rebuild a normalized map of
+  // every field on the player's raw uploaded data - real, avoidable work
+  // when only the purse/bid amount changed, not the player.
+  const battingStats = useMemo(() => extractBattingStats(playerData), [playerData])
+  const bowlingStats = useMemo(() => extractBowlingStats(playerData), [playerData])
+  const cricherosLink = useMemo(() => extractCricheroesLink(playerData), [playerData])
 
   // Determine auction phase based on player status and icon status
   const auctionPhase = useMemo(() => {
@@ -715,10 +725,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const presenterRole = playerData?.Speciality || playerData?.speciality || playerData?.Role || playerData?.role
     const presenterBasePrice = Number(playerData?.['Base Price'] || playerData?.['base price']) || 1000
     const presenterPhotoUrl = getProfilePhotoUrl(playerData)
-    const presenterBattingStats = extractBattingStats(playerData)
-    const presenterBowlingStats = extractBowlingStats(playerData)
+    const presenterBattingStats = battingStats
+    const presenterBowlingStats = bowlingStats
     const presenterIsBidderChoice = !!(currentPlayer?.isIcon || (currentPlayer?.data as any)?.isIcon)
-    const presenterCricherosLink = extractCricheroesLink(playerData)
+    const presenterCricherosLink = cricherosLink
 
     return (
       <>
@@ -1106,9 +1116,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     })()}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
-                    profileLink={extractCricheroesLink(playerData)}
-                    battingStats={extractBattingStats(playerData)}
-                    bowlingStats={extractBowlingStats(playerData)}
+                    profileLink={cricherosLink}
+                    battingStats={battingStats}
+                    bowlingStats={bowlingStats}
                     fields={(() => {
                       const essentials: Array<{ label: string; value: string }> = []
                       const add = (label: string, keys: string[]) => {

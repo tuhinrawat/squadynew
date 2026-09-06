@@ -1506,6 +1506,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const playerName = useMemo(() => {
     return playerData.name || playerData.Name || 'No Player Selected'
   }, [playerData])
+  // extractBattingStats/extractBowlingStats each rebuild a normalized map of
+  // every field on the player's raw uploaded data - real work, previously
+  // redone from scratch on every re-render of this component (which happens
+  // on every incoming bid during live bidding) even when the player on
+  // screen hadn't changed.
+  const battingStats = useMemo(() => extractBattingStats(playerData), [playerData])
+  const bowlingStats = useMemo(() => extractBowlingStats(playerData), [playerData])
+  const cricherosLink = useMemo(() => extractCricheroesLink(playerData), [playerData])
 
   // Determine auction phase based on player status and icon status
   const auctionPhase = useMemo(() => {
@@ -1982,9 +1990,9 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 })()}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                 tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
-                profileLink={extractCricheroesLink(playerData)}
-                battingStats={extractBattingStats(playerData)}
-                bowlingStats={extractBowlingStats(playerData)}
+                profileLink={cricherosLink}
+                battingStats={battingStats}
+                bowlingStats={bowlingStats}
                 fields={(() => {
                   
                   const essentials: Array<{ label: string; value: string }> = []
