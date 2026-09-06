@@ -62,10 +62,33 @@ export default function BidderManagement() {
     logoUrl: ''
   })
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
 
   useEffect(() => {
     fetchBidders()
   }, [auctionId])
+
+  // Uploads the selected file through the shared image endpoint, which
+  // resizes/compresses it server-side before it's ever stored - a raw
+  // FileReader.readAsDataURL() here would store the full, uncompressed photo
+  // directly in the database and ship it in full to every viewer on every
+  // page load.
+  const handleLogoFileChange = async (file: File) => {
+    setLogoFile(file)
+    setIsUploadingLogo(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const response = await fetch('/api/upload-auction-image', { method: 'POST', body })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to upload image')
+      setFormData(prev => ({ ...prev, logoUrl: data.imageUrl }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload image')
+    } finally {
+      setIsUploadingLogo(false)
+    }
+  }
 
   const fetchBidders = async () => {
     try {
@@ -589,20 +612,15 @@ export default function BidderManagement() {
                   accept="image/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      setLogoFile(file)
-                      // Preview the image
-                      const reader = new FileReader()
-                      reader.onloadend = () => {
-                        setFormData({ ...formData, logoUrl: reader.result as string })
-                      }
-                      reader.readAsDataURL(file)
-                    }
+                    if (file) handleLogoFileChange(file)
                   }}
                   className="cursor-pointer"
+                  disabled={isUploadingLogo}
                   required
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400">Required. Will be displayed in team stats</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {isUploadingLogo ? 'Uploading...' : 'Required. Will be displayed in team stats'}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -666,7 +684,7 @@ export default function BidderManagement() {
               </Button>
               <Button
                 type="submit"
-                disabled={isCreating}
+                disabled={isCreating || isUploadingLogo}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isCreating ? (
@@ -776,19 +794,14 @@ export default function BidderManagement() {
                   accept="image/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      setLogoFile(file)
-                      // Preview the image
-                      const reader = new FileReader()
-                      reader.onloadend = () => {
-                        setFormData({ ...formData, logoUrl: reader.result as string })
-                      }
-                      reader.readAsDataURL(file)
-                    }
+                    if (file) handleLogoFileChange(file)
                   }}
                   className="cursor-pointer"
+                  disabled={isUploadingLogo}
                 />
-                <p className="text-xs text-gray-500 dark:text-gray-400">Optional. Will be displayed in team stats</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {isUploadingLogo ? 'Uploading...' : 'Optional. Will be displayed in team stats'}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -858,7 +871,7 @@ export default function BidderManagement() {
               </Button>
               <Button
                 type="submit"
-                disabled={isUpdating}
+                disabled={isUpdating || isUploadingLogo}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isUpdating ? (
