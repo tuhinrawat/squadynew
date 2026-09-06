@@ -52,6 +52,14 @@ interface Summary {
   latestCanary: { success: boolean; latencyMs: number | null; createdAt: string; message: string | null } | null
   alertingConfigured: boolean
   recentAlerts: Array<{ eventName: string; message: string | null; createdAt: string }>
+  snapshotHealth: {
+    avgBytes: number | null
+    maxBytes: number | null
+    avgLatencyMs: number | null
+    maxLatencyMs: number | null
+    sampleCount: number
+    failureCount: number
+  }
 }
 
 interface PusherChannelStatus {
@@ -141,10 +149,11 @@ export default function ObservabilityPage() {
     fetchSummary()
   }, [fetchSummary])
 
-  // Light auto-refresh - this is the kind of page someone leaves open during
-  // a live auction, not a one-time report.
+  // Auto-refresh - this is the kind of page someone leaves open on a second
+  // screen during a live auction, watching for a problem as it happens
+  // rather than reading about it afterward.
   useEffect(() => {
-    const interval = setInterval(fetchSummary, 30000)
+    const interval = setInterval(fetchSummary, 15000)
     return () => clearInterval(interval)
   }, [fetchSummary])
 
@@ -205,7 +214,10 @@ export default function ObservabilityPage() {
 
   useEffect(() => {
     fetchTimeline()
-  }, [fetchTimeline])
+    if (auctionId === 'all') return
+    const interval = setInterval(fetchTimeline, 15000)
+    return () => clearInterval(interval)
+  }, [fetchTimeline, auctionId])
 
   if (status !== 'authenticated' || session?.user?.role !== 'SUPER_ADMIN') {
     return null
@@ -355,7 +367,7 @@ export default function ObservabilityPage() {
       ) : summary && (
         <>
           {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Events</CardTitle>
@@ -421,6 +433,29 @@ export default function ObservabilityPage() {
                   <span className="text-amber-600 font-bold">{summary.connectionHealth.rebind}</span>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">connected · errors · rebinds needed</p>
+              </CardContent>
+            </Card>
+            <Card className={(summary.snapshotHealth.avgBytes ?? 0) > 153600 ? 'border-red-300 dark:border-red-800' : (summary.snapshotHealth.avgBytes ?? 0) > 51200 ? 'border-amber-300 dark:border-amber-800' : undefined}>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">Viewer Poll Payload</CardTitle>
+                <Radio className="h-4 w-4 text-gray-400" />
+              </CardHeader>
+              <CardContent>
+                {summary.snapshotHealth.sampleCount === 0 ? (
+                  <>
+                    <div className="text-2xl font-bold text-gray-400">—</div>
+                    <p className="text-xs text-gray-500 mt-1">No polls sampled yet</p>
+                  </>
+                ) : (
+                  <>
+                    <div className={`text-2xl font-bold ${(summary.snapshotHealth.avgBytes ?? 0) > 153600 ? 'text-red-600' : (summary.snapshotHealth.avgBytes ?? 0) > 51200 ? 'text-amber-600' : 'text-green-600'}`}>
+                      {Math.round((summary.snapshotHealth.avgBytes ?? 0) / 1024)}KB
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      avg · {Math.round((summary.snapshotHealth.maxBytes ?? 0) / 1024)}KB max · healthy is 10-15KB
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>

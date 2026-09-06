@@ -37,7 +37,20 @@ const SLOW_THRESHOLD_MS: Record<string, number> = {
   pusher: 3000,
   sync_lag: 5000,
   api_error: 5000,
+  // A healthy poll response measured well under 100ms once trimmed to only
+  // what the public view actually reads; this is a generous margin above
+  // that, not a tight one, since one slow poll under real network variance
+  // is normal - a cluster of them isn't.
+  snapshot: 2000,
 }
+
+// Every public viewer's browser polls this endpoint every 6 seconds - its
+// size is the one thing that turns "1 viewer" into "1000 viewers" as a
+// bandwidth multiplier. A well-trimmed response lands around 10-15KB
+// (verified via load testing); this threshold sits well above that, at the
+// point where an uploaded image slipping through uncompressed would push it,
+// so it flags the real problem without false-alarming on normal variance.
+const SNAPSHOT_SIZE_WARN_BYTES = 150 * 1024
 
 function prismaCodeDiagnosis(code: string): { summary: string; likelyCause: string; likelyFix: string; confidence: DiagnosisConfidence } | null {
   switch (code) {
@@ -142,7 +155,7 @@ export function diagnose(event: DiagnosableEvent): ErrorDiagnosis | null {
       return { severity: 'failure', ...pusherFailureDiagnosis(message, metadata) }
     }
 
-    if (category === 'api_error') {
+    if (category === 'api_error' || category === 'snapshot') {
       if (metadata?.guard === 'recycle_sold_players') {
         return {
           severity: 'failure',
@@ -190,10 +203,38 @@ export function diagnose(event: DiagnosableEvent): ErrorDiagnosis | null {
     }
   }
 
+  // Oversized-but-successful poll response - independent of latency, since a
+  // multi-MB response can still come back "fast" on a good connection while
+  // still being the actual bandwidth problem once multiplied by every viewer
+  // polling every 6 seconds. This is the exact signature of an uncompressed
+  // team logo or player photo slipping back into the database.
+  if (category === 'snapshot') {
+    const responseBytes = metadata?.responseBytes as number | undefined
+    if (typeof responseBytes === 'number' && responseBytes > SNAPSHOT_SIZE_WARN_BYTES) {
+      const kb = Math.round(responseBytes / 1024)
+      return {
+        severity: 'slow',
+        summary: `Auction snapshot response was ${kb}KB (normally 10-15KB)`,
+        likelyCause: 'An uploaded image (a team logo or player photo) is stored uncompressed, and is now being sent in full on every single poll to every viewer - the exact pattern that drove a past incident to several MB per poll.',
+        likelyFix: 'Run the cleanup pass: POST /api/debug/compress-bidder-logos (scope to this auction with {"auctionId": "..."} in the body) from an admin session, then confirm this number drops.',
+        confidence: 'high',
+      }
+    }
+  }
+
   // Successful but slow - the "clogging" signal: not a failure yet, but
   // getting there. Only flag categories with a known meaningful threshold.
   const threshold = SLOW_THRESHOLD_MS[category]
   if (threshold && typeof latencyMs === 'number' && latencyMs > threshold) {
+    if (category === 'snapshot') {
+      return {
+        severity: 'slow',
+        summary: `Auction snapshot poll took ${latencyMs}ms (normally well under ${threshold}ms)`,
+        likelyCause: 'The database query behind this poll is slow, or too many concurrent viewers are missing the edge cache at once and hitting the database directly.',
+        likelyFix: 'Check whether this clusters around a spike in concurrent viewers. If it\'s widespread and sustained, the database may need more connection headroom (Prisma Accelerate connection limits).',
+        confidence: 'medium',
+      }
+    }
     if (category === 'pusher') {
       return {
         severity: 'slow',

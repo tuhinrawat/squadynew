@@ -17,7 +17,7 @@ import type { Prisma } from '@prisma/client'
 // Both share the same swallow-all error handling, because a broken metrics
 // pipe should never surface as a broken auction.
 
-export type ObservabilityCategory = 'pusher' | 'rate_limit' | 'bid' | 'sync_lag' | 'api_error' | 'pusher_client' | 'canary' | 'alert'
+export type ObservabilityCategory = 'pusher' | 'rate_limit' | 'bid' | 'sync_lag' | 'api_error' | 'pusher_client' | 'canary' | 'alert' | 'snapshot'
 
 interface ObservabilityEventInput {
   category: ObservabilityCategory

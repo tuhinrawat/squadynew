@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { isCuid } from '@/lib/slug'
 import { isLiveStatus } from '@/lib/auction-status'
 import { parseBidHistory, filterBidHistoryForCurrentPlayer } from '@/lib/auction-view-data'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 // Read-only "current truth" snapshot for viewers who aren't on a live Pusher
 // connection - the polling fallback for the public auction view's
@@ -17,6 +18,11 @@ import { parseBidHistory, filterBidHistoryForCurrentPlayer } from '@/lib/auction
 // serves the cached response to everyone else in that window.
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const start = Date.now()
+  // Set once the auction is found, so a failure logged after that point still
+  // carries which auction it happened on - a genuinely unattributable error
+  // (e.g. the initial lookup itself throws) logs without one instead.
+  let resolvedAuctionId: string | undefined
   try {
     const idOrSlug = params.id
     const isId = isCuid(idOrSlug)
@@ -34,6 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
+    resolvedAuctionId = auction.id
 
     // Same access rule as the page itself: unpublished auctions aren't
     // servable to anonymous viewers, and this endpoint only exists to feed
@@ -91,20 +98,53 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // auction's entire history instead of just the current lot.
     const bidHistory = filterBidHistoryForCurrentPlayer(parseBidHistory(auction.bidHistory), currentPlayer?.id)
 
-    return NextResponse.json(
-      {
+    const body = {
+      auctionId: auction.id,
+      auctionStatus: auction.status,
+      currentPlayer,
+      players,
+      bidders,
+      bidHistory,
+      poolExhausted,
+    }
+
+    // The one signal that would have caught today's incident before a real
+    // audience ever saw it: response size. NOT logged on every poll, though -
+    // at 1000 viewers polling every 6s that's ~167 requests/sec, which would
+    // write over a million rows to observability_events across a 2-hour
+    // auction from this endpoint alone, trading the exact "load scales with
+    // viewer count" problem this session fixed for a database-write version
+    // of the same problem. A 10% sample is still hundreds of data points a
+    // minute at real audience sizes - plenty to catch a size regression fast
+    // (a systemic bloat, like an uncompressed logo, shows up in the very
+    // next sampled poll, not eventually) without multiplying writes by
+    // audience size the way the un-sampled response body already did once.
+    if (Math.random() < 0.1) {
+      logEventAsync({
+        category: 'snapshot',
+        eventName: 'poll',
         auctionId: auction.id,
-        auctionStatus: auction.status,
-        currentPlayer,
-        players,
-        bidders,
-        bidHistory,
-        poolExhausted,
-      },
-      { headers: { 'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5' } }
-    )
+        success: true,
+        latencyMs: Date.now() - start,
+        metadata: { responseBytes: Buffer.byteLength(JSON.stringify(body), 'utf8') },
+      })
+    }
+
+    return NextResponse.json(body, {
+      headers: { 'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5' },
+    })
   } catch (error) {
     console.error('Error building auction snapshot:', error)
+    const { message, metadata } = describeError(error)
+    logEventAsync({
+      category: 'snapshot',
+      eventName: 'poll',
+      auctionId: resolvedAuctionId,
+      success: false,
+      latencyMs: Date.now() - start,
+      message,
+      metadata,
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

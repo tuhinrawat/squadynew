@@ -28,8 +28,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Most recent MAX_ROWS, then reversed to read oldest-first like a timeline.
+    // Excludes routine (successful) snapshot polls: at 1000 viewers polling
+    // every 6s, those alone would fill this entire cap within seconds during
+    // exactly the high-traffic moments this timeline matters most for -
+    // they'd bury every Pusher/bid/rate-limit event under pure heartbeat
+    // noise. A snapshot poll that failed, ran slow, or came back oversized
+    // still shows up here; the summary page's stat card and Slow Calls
+    // section already surface the routine trend for the ones that didn't.
     const rows = await prisma.observabilityEvent.findMany({
-      where: { auctionId },
+      where: {
+        auctionId,
+        NOT: { category: 'snapshot', success: true },
+      },
       orderBy: { createdAt: 'desc' },
       take: MAX_ROWS,
       select: {
