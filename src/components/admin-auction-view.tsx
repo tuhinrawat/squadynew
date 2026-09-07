@@ -29,6 +29,7 @@ import { toast } from 'sonner'
 import { useSession } from 'next-auth/react'
 import { preloadImage } from '@/lib/image-preloader'
 import { saveOfflineSnapshot } from '@/lib/offline-auction-store'
+import { useConnectivityBeacon } from '@/hooks/use-connectivity-beacon'
 
 interface BidHistoryEntry {
   bidderId?: string // Optional for sale-undo events
@@ -1227,6 +1228,14 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     },
   })
 
+  // Proactive connectivity check - independent of Pusher and of whatever the
+  // admin is doing, so an outage is detected before an action ever fails.
+  // The local snapshot below already mirrors continuously, so the moment
+  // this flips, the offline console (which reads that snapshot) is ready
+  // with current data, not whatever was last saved before the tab was
+  // originally opened.
+  const { isOnline } = useConnectivityBeacon(auction.id)
+
 
 
   const handleStartAuction = async () => {
@@ -1661,9 +1670,31 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // Main return
   return (
     <>
+      {/* Connectivity lost - only the admin can record sales, so only they
+          need the offline console; a bidder viewing their own console has
+          nothing to do there. The local snapshot below already mirrors
+          continuously, so it's current the moment this appears - no delay
+          between "connection dropped" and "offline console is ready." */}
+      {!isOnline && viewMode === 'admin' && (
+        <div className="fixed top-0 inset-x-0 z-[100] bg-red-600 text-white px-4 py-2.5 shadow-lg">
+          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <WifiOff className="h-4 w-4 flex-shrink-0" />
+              <span>Connection lost - your device can&apos;t reach the server right now.</span>
+            </div>
+            <Link
+              href={`/auction/${auction.id}/offline`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-red-700 text-xs font-bold hover:bg-red-50 flex-shrink-0"
+            >
+              Switch to Offline Console
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Going Live Banner - Full Page Overlay */}
-      <GoingLiveBanner 
-        show={showGoingLiveBanner} 
+      <GoingLiveBanner
+        show={showGoingLiveBanner}
         onComplete={() => setShowGoingLiveBanner(false)}
       />
       

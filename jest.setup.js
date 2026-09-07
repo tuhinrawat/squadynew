@@ -40,12 +40,18 @@ if (typeof global.Response === 'undefined') {
       this.status = init.status || 200
       this.statusText = init.statusText || 'OK'
       this.headers = new Map(Object.entries(init.headers || {}))
+      // Matches the real Fetch API spec (ok = status in [200, 300)) - this
+      // polyfill previously never set .ok at all, silently `undefined`,
+      // which is truthy-falsy-wrong for BOTH success and failure statuses
+      // (any code checking `!response.ok` always saw a failure, even for a
+      // real 200 - found via a real test that only failed because of this).
+      this.ok = this.status >= 200 && this.status < 300
     }
-    
+
     async json() {
       return typeof this.body === 'string' ? JSON.parse(this.body) : this.body
     }
-    
+
     async text() {
       return typeof this.body === 'string' ? this.body : JSON.stringify(this.body)
     }

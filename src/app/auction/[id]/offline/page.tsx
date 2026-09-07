@@ -10,7 +10,7 @@
 // either. The operational habit this is built around: open this page in a
 // second tab at the start of every auction, and never refresh it.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import PlayerCard from '@/components/player-card'
 import {
   OfflineAuctionSnapshot,
@@ -19,6 +19,7 @@ import {
   loadPendingResults,
   savePendingResults
 } from '@/lib/offline-auction-store'
+import { useConnectivityBeacon } from '@/hooks/use-connectivity-beacon'
 
 type PlayerData = Record<string, unknown> | null | undefined
 
@@ -201,6 +202,23 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     }
   }
 
+  // Proactive connectivity check, independent of whatever the admin is
+  // doing here - the same beacon the live console uses. The moment it says
+  // we're back online and there's something waiting, push it automatically
+  // instead of relying on the admin to remember to tap Sync. Safe to retry
+  // on its own: reconcile-offline/route.ts is idempotent (a result already
+  // applied comes back "skipped," never re-applied) and never silently
+  // overwrites a conflicting outcome.
+  const { isOnline } = useConnectivityBeacon(auctionId)
+  const syncNowRef = useRef(syncNow)
+  syncNowRef.current = syncNow
+
+  useEffect(() => {
+    if (isOnline && pending.length > 0 && !syncing) {
+      syncNowRef.current()
+    }
+  }, [isOnline, pending.length, syncing])
+
   if (!snapshot) {
     return (
       <div className="min-h-screen bg-[#05070a] text-white flex items-center justify-center p-6">
@@ -218,10 +236,15 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
 
   return (
     <div className="min-h-screen bg-[#05070a] text-white">
-      <div className="sticky top-0 z-10 bg-red-900/90 backdrop-blur-sm border-b border-red-500/30 px-4 py-2 text-center">
-        <span className="text-[11px] font-black uppercase tracking-widest text-red-200">
+      <div className="sticky top-0 z-10 bg-red-900/90 backdrop-blur-sm border-b border-red-500/30 px-4 py-2 text-center space-y-0.5">
+        <div className="text-[11px] font-black uppercase tracking-widest text-red-200">
           Offline Fallback Mode &middot; Do not refresh this tab
-        </span>
+        </div>
+        <div className={`text-[10px] font-bold uppercase tracking-wide ${isOnline ? 'text-emerald-300' : 'text-red-300/80'}`}>
+          {isOnline
+            ? (pending.length > 0 ? 'Connection detected - syncing automatically…' : 'Connection detected')
+            : 'Checking for connection every few seconds…'}
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto p-4 space-y-4">
