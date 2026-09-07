@@ -335,10 +335,21 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setHighestBidderId(derivedHighest)
   }, [])
 
+  // Tracks whether OUR polling is actually succeeding - the correct signal
+  // for a non-presenter viewer's "Live/Reconnecting" badge, since these
+  // viewers never hold a Pusher connection at all (see the `enabled` flag
+  // below) and previously showed that same badge wired to `pusherConnected`,
+  // which is permanently false for them regardless of whether polling is
+  // working - a false "Reconnecting" shown to every real viewer, always.
+  // Two consecutive failures before flipping unhealthy (one blip shouldn't
+  // alarm anyone); a single success recovers it immediately.
+  const [pollHealthy, setPollHealthy] = useState(true)
+  const pollFailureStreakRef = useRef(0)
+
   const fetchSnapshot = useCallback(async () => {
     try {
       const response = await fetch(`/api/auction/${auction.id}/snapshot`)
-      if (!response.ok) return
+      if (!response.ok) throw new Error(`Snapshot poll failed: HTTP ${response.status}`)
       const data = await response.json()
       applySnapshot({
         currentPlayer: data.currentPlayer,
@@ -347,8 +358,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         bidHistory: data.bidHistory,
         poolExhausted: data.poolExhausted,
       })
+      pollFailureStreakRef.current = 0
+      setPollHealthy(true)
     } catch (error) {
       logger.error('Failed to fetch auction snapshot:', error)
+      pollFailureStreakRef.current += 1
+      if (pollFailureStreakRef.current >= 2) setPollHealthy(false)
     }
   }, [auction.id, applySnapshot])
 
@@ -968,9 +983,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 <Eye className="h-3 w-3" /> {viewerCount || 0}
               </span>
               {isPresenter ? (
-                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${pusherConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${pusherConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                  {pusherConnected ? 'Live' : 'Reconnecting…'}
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${pollHealthy ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${pollHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                  {pollHealthy ? 'Live' : 'Reconnecting…'}
                 </span>
               ) : (
                 <button
@@ -1004,9 +1019,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 <span className="text-[9px] font-bold text-amber-400">{stats.sold} sold</span>
                 <span className="text-[9px] font-bold text-gray-500">&middot; {stats.remaining} left</span>
                 {isPresenter ? (
-                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${pusherConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${pusherConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                    {pusherConnected ? 'Live' : 'Reconnecting'}
+                  <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${pollHealthy ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${pollHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+                    {pollHealthy ? 'Live' : 'Reconnecting'}
                   </span>
                 ) : (
                   <button
