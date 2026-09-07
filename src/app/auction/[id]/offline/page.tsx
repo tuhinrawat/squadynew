@@ -77,19 +77,25 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
 
   useEffect(() => {
     const loadedSnapshot = loadOfflineSnapshot(auctionId)
+    const loadedPending = loadPendingResults(auctionId)
     setSnapshot(loadedSnapshot)
-    setPending(loadPendingResults(auctionId))
+    setPending(loadedPending)
 
-    // Resume a player already being recorded offline (a persisted pick
-    // survives a refresh of this tab). Otherwise, continue whatever was
-    // actually live on the block at the moment the snapshot was taken -
-    // that player may already have bids on it, so this is the one case
-    // where the console must NOT draw a fresh random pick.
-    const persistedPlayerId = loadCurrentOfflinePlayer(auctionId)
+    // The persisted pick only means something while there's actual offline
+    // work resting on it - a sale/unsold recorded here but not yet synced,
+    // where the live snapshot's currentPlayerId can no longer be trusted
+    // (this console has already moved past it). With nothing pending, that
+    // pin is just leftover state from an earlier visit that recorded
+    // nothing - trusting it forever, even after the live auction has moved
+    // on to a different player, is exactly how this console ends up
+    // showing someone the outage already left behind (mismatched against
+    // the admin console, which reads current truth from the database).
+    const hasUnsyncedWork = loadedPending.length > 0
+    const persistedPlayerId = hasUnsyncedWork ? loadCurrentOfflinePlayer(auctionId) : null
     const resumedPlayerId = persistedPlayerId ?? loadedSnapshot?.currentPlayerId ?? null
     setCurrentPlayerId(resumedPlayerId)
+    saveCurrentOfflinePlayer(auctionId, resumedPlayerId)
     if (!persistedPlayerId && resumedPlayerId) {
-      saveCurrentOfflinePlayer(auctionId, resumedPlayerId)
       // Only meaningful when we're continuing that same live player -
       // prefill what was already bid so nothing typed live has to be
       // re-entered or remembered from memory.
@@ -182,6 +188,16 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     const nextId = next?.id ?? null
     setCurrentPlayerId(nextId)
     saveCurrentOfflinePlayer(auctionId, nextId)
+    // Keep the snapshot's own currentPlayerId (and currentBid, now stale -
+    // this is a fresh pick with no known live bid) in lockstep with the
+    // pick above. Without this, a reload once everything's synced (nothing
+    // pending, so the initial-load effect above trusts the snapshot
+    // directly) would read back whatever pre-outage player the last LIVE
+    // mirror happened to freeze on, not this console's own current pick.
+    setSnapshot(prev => (prev ? { ...prev, currentPlayerId: nextId, currentBid: null } : prev))
+    if (snapshot.currentPlayerId !== nextId || snapshot.currentBid) {
+      saveOfflineSnapshot({ ...snapshot, currentPlayerId: nextId, currentBid: null })
+    }
   }, [snapshot, availablePlayers, currentPlayerId, auctionId])
 
   const resetSaleForm = () => {
