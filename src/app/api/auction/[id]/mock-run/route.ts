@@ -25,6 +25,15 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
+    // Security: role alone isn't ownership - without this, any ADMIN
+    // account could start a mock run on a different admin's auction.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can start a mock run' }, { status: 403 })
+    }
+
     // Can only start mock run from DRAFT or PAUSED status
     if (auction.status === 'LIVE') {
       return NextResponse.json({ error: 'Auction is already live. Please pause it first.' }, { status: 400 })

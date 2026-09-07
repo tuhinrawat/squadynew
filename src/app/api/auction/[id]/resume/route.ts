@@ -24,6 +24,15 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
+    // Security: role alone isn't ownership - without this, any ADMIN
+    // account could resume a different admin's auction.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can resume it' }, { status: 403 })
+    }
+
     if (auction.status !== 'PAUSED') {
       return NextResponse.json({ error: 'Auction is not paused' }, { status: 400 })
     }

@@ -40,6 +40,21 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
+    // Security: this is an admin-only override (undoing someone else's bid),
+    // not a self-service action - the body's bidderId is never checked
+    // against the caller's own identity below, only against whichever
+    // bidderId happens to be the last bid. Previously this route only
+    // checked that *someone* was logged in, so any authenticated account
+    // could undo any bidder's bid on any auction just by knowing (or
+    // guessing) whose turn it was - the bid history that reveals that is
+    // publicly visible.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can undo a bid' }, { status: 403 })
+    }
+
     if (!isLiveStatus(auction.status)) {
       return NextResponse.json({ error: 'Auction is not live' }, { status: 400 })
     }

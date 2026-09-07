@@ -27,6 +27,15 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
+    // Security: role alone isn't ownership - without this, any ADMIN
+    // account could undo sales on a different admin's auction.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can undo a sale' }, { status: 403 })
+    }
+
     // Parse bid history to find the most recent sale
     let bidHistory: any[] = []
     if (auction.bidHistory && typeof auction.bidHistory === 'object') {

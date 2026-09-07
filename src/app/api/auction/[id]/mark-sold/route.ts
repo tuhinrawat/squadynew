@@ -11,6 +11,13 @@ const markSoldSchema = z.object({
   playerId: z.string().trim().min(1),
 })
 
+// Thrown inside the sale transaction below when a concurrent request (a
+// double-click racing the button's own disabled state, or two admin tabs)
+// already resolved this exact player between our initial read and this
+// write - the DB update itself is the only thing that can't race, so it's
+// also the only place this can be caught for certain.
+class AlreadySoldError extends Error {}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -39,6 +46,7 @@ export async function POST(
           id: true,
           status: true,
           currentPlayerId: true,
+          createdById: true,
           rules: true,
           bidHistory: true,
           bidders: {
@@ -71,6 +79,17 @@ export async function POST(
 
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
+    }
+
+    // Security: only this auction's own admin (or a super admin) may resolve
+    // a sale for it. Previously this route only checked that *someone* was
+    // logged in - any bidder account, or an admin of a completely different
+    // auction, could call this endpoint directly with any player id.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can mark a sale' }, { status: 403 })
     }
 
     if (!currentPlayer || currentPlayer.auctionId !== params.id) {
@@ -211,27 +230,6 @@ export async function POST(
       bidderRemainingPurse: newRemainingPurse,
       updatedBidders: [{ id: winningBidder.id, remainingPurse: newRemainingPurse }]
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
-
-    // Update player and bidder atomically - if one fails, neither should
-    // commit, otherwise a player can end up SOLD with the buyer's purse
-    // never debited (or vice versa).
-    await prisma.$transaction([
-      prisma.player.update({
-        where: { id: playerId },
-        data: {
-          status: 'SOLD',
-          soldTo: winningBidder.id,
-          soldPrice: highestBid.amount
-        }
-      }),
-      // Deduct from bidder's remaining purse
-      prisma.bidder.update({
-        where: { id: winningBidder.id },
-        data: {
-          remainingPurse: newRemainingPurse
-        }
-      })
-    ])
 
     // OPTIMIZED: Fetch only AVAILABLE players needed for next player selection (not all auction data)
     // This is much faster than fetching all players and bidders
@@ -385,14 +383,55 @@ export async function POST(
       currentPlayerId: currentPlayer.id
     })
 
-    // Update auction
-    await prisma.auction.update({
-      where: { id: params.id },
-      data: {
-        currentPlayerId: nextPlayer?.id || null,
-        bidHistory: updatedHistory as any
+    // Commit the sale, the purse deduction, and the advance to the next
+    // player as one atomic unit. Previously the sale (player+bidder) was
+    // its own transaction and this auction update was a separate, later
+    // call - a failure in between left a player correctly SOLD with the
+    // purse correctly deducted, but the auction still pointing at that now-
+    // dead player forever (nothing else ever re-checks currentPlayerId).
+    // The race-guarded updateMany also closes the gap where two
+    // near-simultaneous requests both pass the earlier status check before
+    // either writes: only one can actually flip status AVAILABLE -> SOLD,
+    // so only one can ever deduct this bidder's purse for this player.
+    try {
+      await prisma.$transaction(async (tx) => {
+        const saleResult = await tx.player.updateMany({
+          where: { id: playerId, status: 'AVAILABLE' },
+          data: {
+            status: 'SOLD',
+            soldTo: winningBidder.id,
+            soldPrice: highestBid.amount
+          }
+        })
+        if (saleResult.count === 0) {
+          throw new AlreadySoldError()
+        }
+        await tx.bidder.update({
+          where: { id: winningBidder.id },
+          data: { remainingPurse: newRemainingPurse }
+        })
+        await tx.auction.update({
+          where: { id: params.id },
+          data: {
+            currentPlayerId: nextPlayer?.id || null,
+            bidHistory: updatedHistory as any
+          }
+        })
+      })
+    } catch (error) {
+      if (error instanceof AlreadySoldError) {
+        const latest = await prisma.player.findUnique({ where: { id: playerId }, select: { status: true, soldTo: true } })
+        if (latest?.status === 'SOLD' && latest.soldTo === winningBidder.id) {
+          return NextResponse.json({
+            error: `This player is already sold to this bidder. Duplicate sale prevented. The bidder's purse was not deducted.`
+          }, { status: 400 })
+        }
+        return NextResponse.json({
+          error: `This player is already sold to another bidder. Cannot sell again.`
+        }, { status: 400 })
       }
-    })
+      throw error
+    }
 
     // Broadcast new player if exists - the sale already succeeded in the DB
     // above, so a Pusher hiccup here (a rejected trigger, an exceeded daily

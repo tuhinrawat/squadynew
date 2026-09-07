@@ -10,6 +10,11 @@ const markUnsoldSchema = z.object({
   playerId: z.string().trim().min(1),
 })
 
+// Thrown inside the transaction below when a concurrent request (a retried
+// call after a dropped response, or two admin tabs) already resolved this
+// exact player between our initial read and this write.
+class AlreadyResolvedError extends Error {}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -35,17 +40,44 @@ export async function POST(
     // narrowly-scoped player rows further down).
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
-      select: { id: true, bidHistory: true }
+      select: { id: true, bidHistory: true, createdById: true }
     })
 
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
+    // Security: only this auction's own admin (or a super admin) may resolve
+    // a player for it. Previously this route only checked that *someone*
+    // was logged in - any bidder account, or an admin of a completely
+    // different auction, could call this endpoint directly with any player id.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can mark a player unsold' }, { status: 403 })
+    }
+
     // Fetch current player
     const currentPlayer = await prisma.player.findUnique({
       where: { id: playerId }
     })
+
+    if (!currentPlayer || currentPlayer.auctionId !== params.id) {
+      return NextResponse.json({ error: 'Invalid player' }, { status: 400 })
+    }
+
+    // Idempotency guard - mark-sold already has an equivalent check
+    // ("already sold, duplicate prevented"); this route never had one. A
+    // retried or raced call would otherwise re-run the whole "pick a next
+    // player" step below a second time and silently overwrite the first
+    // call's already-correct currentPlayerId with a fresh random pick,
+    // skipping a player's turn without ever actually presenting it.
+    if (currentPlayer.status !== 'AVAILABLE') {
+      return NextResponse.json({
+        error: 'This player has already been resolved (sold or unsold). Duplicate call prevented.'
+      }, { status: 400 })
+    }
 
     const playerName = currentPlayer?.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
 
@@ -55,21 +87,14 @@ export async function POST(
       playerName: playerName
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
-    // Update player status to UNSOLD
-    await prisma.player.update({
-      where: { id: playerId },
-      data: {
-        status: 'UNSOLD',
-        soldTo: null,
-        soldPrice: null
-      }
-    })
-
-    // OPTIMIZED: Fetch only AVAILABLE players (not all players)
+    // OPTIMIZED: Fetch only AVAILABLE players (not all players). Excludes
+    // this player explicitly - its own status update hasn't been written
+    // yet (that now happens later, inside the atomic transaction below).
     let availablePlayers = await prisma.player.findMany({
       where: {
         auctionId: params.id,
-        status: 'AVAILABLE'
+        status: 'AVAILABLE',
+        id: { not: playerId }
       },
       select: {
         id: true,
@@ -127,7 +152,8 @@ export async function POST(
         const recycledPlayers = await prisma.player.findMany({
           where: {
             auctionId: params.id,
-            status: 'AVAILABLE'
+            status: 'AVAILABLE',
+            id: { not: playerId }
           },
           select: {
             id: true,
@@ -217,14 +243,40 @@ export async function POST(
     
     const updatedHistory = [unsoldEvent, ...cleanedHistory]
 
-    // Update auction
-    await prisma.auction.update({
-      where: { id: params.id },
-      data: {
-        currentPlayerId: nextPlayer?.id || null,
-        bidHistory: updatedHistory as any
+    // Commit the UNSOLD status and the advance to the next player as one
+    // atomic unit - previously these were two separate, sequential writes
+    // (player.update, then a later auction.update), so a failure between
+    // them left the player correctly UNSOLD but the auction still pointing
+    // at that now-resolved player forever. The race-guarded updateMany also
+    // closes the gap the idempotency check above can't catch on its own:
+    // two requests racing so closely that both pass that check before
+    // either writes would otherwise both run "pick a next player" and the
+    // second call's pick would silently clobber the first's.
+    try {
+      await prisma.$transaction(async (tx) => {
+        const unsoldResult = await tx.player.updateMany({
+          where: { id: playerId, status: 'AVAILABLE' },
+          data: { status: 'UNSOLD', soldTo: null, soldPrice: null }
+        })
+        if (unsoldResult.count === 0) {
+          throw new AlreadyResolvedError()
+        }
+        await tx.auction.update({
+          where: { id: params.id },
+          data: {
+            currentPlayerId: nextPlayer?.id || null,
+            bidHistory: updatedHistory as any
+          }
+        })
+      })
+    } catch (error) {
+      if (error instanceof AlreadyResolvedError) {
+        return NextResponse.json({
+          error: 'This player has already been resolved (sold or unsold). Duplicate call prevented.'
+        }, { status: 400 })
       }
-    })
+      throw error
+    }
 
     // Broadcast new player if exists - the DB already moved on above, so a
     // Pusher hiccup here must never turn that success into a 500.

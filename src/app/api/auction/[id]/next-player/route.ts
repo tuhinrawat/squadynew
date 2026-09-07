@@ -27,6 +27,7 @@ export async function POST(
         id: true,
         status: true,
         currentPlayerId: true,
+        createdById: true,
         players: {
           select: { id: true, status: true, isIcon: true }
         }
@@ -35,6 +36,15 @@ export async function POST(
 
     if (!auction) {
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
+    }
+
+    // Security: role alone isn't ownership - without this, any ADMIN
+    // account could skip through a different admin's auction.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can advance to the next player' }, { status: 403 })
     }
 
     if (!isLiveStatus(auction.status)) {

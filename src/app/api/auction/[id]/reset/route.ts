@@ -28,6 +28,17 @@ export async function POST(
       return NextResponse.json({ error: 'Auction not found' }, { status: 404 })
     }
 
+    // Security: role alone isn't ownership - without this, any ADMIN
+    // account (of a completely different auction) could wipe someone
+    // else's auction back to scratch, which is the most destructive action
+    // in this entire API.
+    const isAuctionAdmin =
+      session.user?.role === 'SUPER_ADMIN' ||
+      (session.user?.role === 'ADMIN' && auction.createdById === session.user?.id)
+    if (!isAuctionAdmin) {
+      return NextResponse.json({ error: 'Only this auction\'s admin can reset it' }, { status: 403 })
+    }
+
     // Reset all players to AVAILABLE status and clear sale data
     await prisma.player.updateMany({
       where: { auctionId: params.id },
