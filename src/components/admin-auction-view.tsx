@@ -125,6 +125,22 @@ interface BidConsolePanelProps {
   onClose?: () => void
 }
 
+// Same extraction the player card itself uses (duplicated inline there too -
+// see the imageUrl IIFE below) - kept standalone here since the prefetch
+// effect needs it before any player is actually being rendered.
+function extractPlayerImageUrl(data: Record<string, unknown> | null | undefined): string | undefined {
+  const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
+  const value = keys.map(key => data?.[key]).find(v => v && String(v).trim())
+  if (!value) return undefined
+  const photoStr = String(value).trim()
+  let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
+  if (match?.[1]) return `/api/proxy-image?id=${match[1]}`
+  match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
+  if (match?.[1]) return `/api/proxy-image?id=${match[1]}`
+  if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) return photoStr
+  return undefined
+}
+
 // A real, stable, module-scope component - NOT a useCallback/useMemo defined
 // inline in AdminAuctionView's render. A component whose function identity
 // changes across renders (as a useCallback would, once its deps include
@@ -648,6 +664,49 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       rules: (auction.rules as Record<string, unknown>) ?? null
     })
   }, [auction.id, auction.name, auction.rules, players, bidders, currentPlayer, currentBid])
+
+  // Warm this browser's own HTTP cache with every player's photo, once,
+  // so the offline fallback console - which can only ever show a photo
+  // this exact browser has already fetched, since it makes zero network
+  // calls of its own (see offline/page.tsx) - isn't missing one just
+  // because that particular player hasn't come up live yet. proxy-image
+  // already marks these immutable for a year, so once fetched they cost
+  // nothing again regardless of how many times any page asks for them.
+  //
+  // Deliberately admin-only and one-time per mount: a bidder or public
+  // viewer only ever needs the one player currently on screen (already
+  // cached + coalesced for them via proxy-image), so eagerly fetching the
+  // whole roster for every viewer would burn their bandwidth on photos
+  // they were never going to need - this is purely an offline-reliability
+  // measure for whichever browser might have to run that console, not a
+  // general caching change for the live auction.
+  const imagePrefetchStartedRef = useRef(false)
+  useEffect(() => {
+    if (viewMode !== 'admin' || imagePrefetchStartedRef.current || players.length === 0) return
+    imagePrefetchStartedRef.current = true
+
+    const urls = players
+      .map(p => extractPlayerImageUrl(p.data as Record<string, unknown>))
+      .filter((url): url is string => !!url)
+
+    let cancelled = false
+    const CONCURRENCY = 4
+    let nextIndex = 0
+
+    const fetchNext = () => {
+      if (cancelled || nextIndex >= urls.length) return
+      const url = urls[nextIndex]
+      nextIndex += 1
+      const img = new Image()
+      img.onload = fetchNext
+      img.onerror = fetchNext
+      img.src = url
+    }
+
+    for (let i = 0; i < CONCURRENCY; i++) fetchNext()
+
+    return () => { cancelled = true }
+  }, [viewMode, players])
 
   // Detect when auction goes live and show banner
   useEffect(() => {
