@@ -57,7 +57,7 @@ export async function POST(
 
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
-      select: { id: true, createdById: true, bidHistory: true }
+      select: { id: true, createdById: true, bidHistory: true, currentPlayerId: true }
     })
 
     if (!auction) {
@@ -77,6 +77,12 @@ export async function POST(
       : []
     const outcomes: ResultOutcome[] = []
     const touchedBidderIds = new Set<string>()
+    // What actually changed this call, for the live 'players-updated'
+    // broadcast below - mirrors the shape mark-sold/route.ts sends, so an
+    // admin console connected live merges these in instead of needing a
+    // reload to see purses/statuses this batch touched.
+    const changedPlayers: Array<{ id: string; status: string; soldTo: string | null; soldPrice: number | null }> = []
+    const bidderPurseAfter = new Map<string, number>()
 
     // Sequential on purpose: each SOLD result reads-then-writes a bidder's
     // remainingPurse, so two results for the same bidder must not overlap.
@@ -119,6 +125,7 @@ export async function POST(
           data: { status: 'UNSOLD', soldTo: null, soldPrice: null }
         })
         bidHistory = [{ type: 'unsold', playerId: result.playerId, playerName, timestamp: result.id }, ...bidHistory]
+        changedPlayers.push({ id: result.playerId, status: 'UNSOLD', soldTo: null, soldPrice: null })
         outcomes.push({ id: result.id, playerId: result.playerId, outcome: 'applied' })
         continue
       }
@@ -164,6 +171,11 @@ export async function POST(
         amount: result.amount,
         timestamp: result.id
       }, ...bidHistory]
+      changedPlayers.push({ id: result.playerId, status: 'SOLD', soldTo: bidder.id, soldPrice: result.amount })
+      // Last write wins if this bidder appears in more than one result in
+      // the same batch - bidderPurseAfter always ends up holding their
+      // truly final purse, since results are applied sequentially above.
+      bidderPurseAfter.set(bidder.id, newRemainingPurse)
 
       outcomes.push({
         id: result.id,
@@ -184,7 +196,88 @@ export async function POST(
 
       // One refresh broadcast for anyone still connected, rather than one
       // per reconciled result - this is a bulk catch-up, not a live event.
-      triggerAuctionEvent(params.id, 'players-updated', {}).catch(() => {})
+      // Carries the same shape mark-sold/route.ts sends (changed players +
+      // bidder purses) rather than an empty payload, so a still-open admin
+      // console actually merges these in instead of silently no-op'ing.
+      triggerAuctionEvent(params.id, 'players-updated', {
+        players: changedPlayers,
+        bidders: Array.from(bidderPurseAfter.entries()).map(([id, remainingPurse]) => ({ id, remainingPurse }))
+      } as any).catch(() => {})
+    }
+
+    // The live auction's currentPlayerId is untouched by everything above -
+    // this endpoint applies FINAL results, it never runs the "pick the next
+    // player" step mark-sold/route.ts does after every sale. If the player
+    // that was live when the outage started got resolved (here, or by an
+    // earlier sync) that leaves the auction silently pointing at a dead
+    // player forever: nothing broadcasts, nothing advances, and the admin
+    // console that comes back online just sits frozen on it. Catch that up
+    // now, mirroring mark-sold's own selection exactly (icon players first,
+    // recycle UNSOLD back to AVAILABLE once none remain, then regular
+    // players) - but only when the current pick is actually dead; a
+    // still-AVAILABLE current player (the outage ended before it got
+    // resolved) is correctly left alone.
+    if (auction.currentPlayerId) {
+      const stuckPlayer = await prisma.player.findUnique({
+        where: { id: auction.currentPlayerId },
+        select: { status: true }
+      })
+
+      if (!stuckPlayer || stuckPlayer.status !== 'AVAILABLE') {
+        let availablePlayers = await prisma.player.findMany({
+          where: { auctionId: params.id, status: 'AVAILABLE' },
+          select: { id: true, isIcon: true }
+        })
+
+        if (availablePlayers.length === 0) {
+          const unsoldPlayers = await prisma.player.findMany({
+            where: { auctionId: params.id, status: 'UNSOLD' },
+            select: { id: true }
+          })
+          if (unsoldPlayers.length > 0) {
+            await prisma.player.updateMany({
+              where: { id: { in: unsoldPlayers.map(p => p.id) }, auctionId: params.id, status: 'UNSOLD' },
+              data: { status: 'AVAILABLE', soldTo: null, soldPrice: null }
+            })
+            availablePlayers = await prisma.player.findMany({
+              where: { auctionId: params.id, status: 'AVAILABLE' },
+              select: { id: true, isIcon: true }
+            })
+            triggerAuctionEvent(params.id, 'players-updated', {
+              players: availablePlayers.map(p => ({ id: p.id, status: 'AVAILABLE', soldTo: null, soldPrice: null }))
+            } as any).catch(() => {})
+          }
+        }
+
+        const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
+        const pool = iconPlayersAvailable.length > 0 ? iconPlayersAvailable : availablePlayers.filter(p => !p.isIcon)
+        const nextPlayerId = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)].id : null
+
+        await prisma.auction.update({
+          where: { id: params.id },
+          data: { currentPlayerId: nextPlayerId }
+        })
+
+        if (nextPlayerId) {
+          const fullNextPlayer = await prisma.player.findUnique({
+            where: { id: nextPlayerId },
+            select: {
+              id: true,
+              status: true,
+              isIcon: true,
+              data: true,
+              auctionId: true,
+              lastYearPrice: true,
+              lastYearTeamName: true,
+              lastYearBidderName: true,
+              lastYearAuctionName: true
+            }
+          })
+          triggerAuctionEvent(params.id, 'new-player', { player: fullNextPlayer } as any).catch(() => {})
+        } else {
+          triggerAuctionEvent(params.id, 'auction-pool-exhausted', {}).catch(() => {})
+        }
+      }
     }
 
     return NextResponse.json({ success: true, outcomes })
