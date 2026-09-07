@@ -12,12 +12,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PlayerCard from '@/components/player-card'
+import Link from 'next/link'
 import {
   OfflineAuctionSnapshot,
   OfflineResult,
   loadOfflineSnapshot,
   loadPendingResults,
   savePendingResults,
+  saveOfflineSnapshot,
   loadCurrentOfflinePlayer,
   saveCurrentOfflinePlayer,
   pickRandomPlayer,
@@ -153,19 +155,14 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     return snapshot.players.filter(p => p.status === 'AVAILABLE' && !resolvedPlayerIds.has(p.id))
   }, [snapshot, resolvedPlayerIds])
 
-  const groupedBidders = useMemo(() => {
+  // A dropdown, not a tap-grid of buttons - this page is meant to be read
+  // off a projector, where a scrolling grid of bidder buttons is the one
+  // thing nobody in the room can follow along with.
+  const sortedBidders = useMemo(() => {
     if (!snapshot) return []
-    const sorted = snapshot.bidders.slice().sort((a, b) =>
+    return snapshot.bidders.slice().sort((a, b) =>
       (a.name || a.username).localeCompare(b.name || b.username)
     )
-    const groups: { letter: string; bidders: typeof sorted }[] = []
-    sorted.forEach(b => {
-      const letter = (b.name || b.username).charAt(0).toUpperCase() || '#'
-      const last = groups[groups.length - 1]
-      if (last && last.letter === letter) last.bidders.push(b)
-      else groups.push({ letter, bidders: [b] })
-    })
-    return groups
   }, [snapshot])
 
   const currentPlayer = snapshot?.players.find(p => p.id === currentPlayerId) || null
@@ -258,6 +255,38 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
       const resolvedIds = new Set(
         outcomes.filter(o => o.outcome === 'applied' || o.outcome === 'applied_with_warning' || o.outcome === 'skipped').map(o => o.id)
       )
+
+      // A synced result stops being excluded via "pending" the moment it's
+      // removed below - without folding it into the snapshot itself first,
+      // that player's status here would still read AVAILABLE (the snapshot
+      // is otherwise only ever refreshed by the admin console mirroring a
+      // new one), so it would silently count as available again and could
+      // even be drawn a second time by the random-pick effect.
+      const resolvedResults = pending.filter(r => resolvedIds.has(r.id))
+      if (resolvedResults.length > 0 && snapshot) {
+        const updatedSnapshot: OfflineAuctionSnapshot = {
+          ...snapshot,
+          players: snapshot.players.map(p => {
+            const result = resolvedResults.find(r => r.playerId === p.id)
+            if (!result) return p
+            return {
+              ...p,
+              status: result.status,
+              soldTo: result.status === 'SOLD' ? result.bidderId ?? null : null,
+              soldPrice: result.status === 'SOLD' ? result.amount ?? null : null
+            }
+          }),
+          bidders: snapshot.bidders.map(b => {
+            const spent = resolvedResults
+              .filter(r => r.status === 'SOLD' && r.bidderId === b.id && r.amount != null)
+              .reduce((sum, r) => sum + (r.amount as number), 0)
+            return spent > 0 ? { ...b, remainingPurse: b.remainingPurse - spent } : b
+          })
+        }
+        setSnapshot(updatedSnapshot)
+        saveOfflineSnapshot(updatedSnapshot)
+      }
+
       const stillPending = pending.filter(r => !resolvedIds.has(r.id))
       persistPending(stillPending)
       const needsReview = outcomes.filter(o => o.outcome === 'conflict' || o.outcome === 'error')
@@ -316,6 +345,17 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
             ? (pending.length > 0 ? 'Connection detected - syncing automatically…' : 'Connection detected')
             : 'Checking for connection every few seconds…'}
         </div>
+        <div className="text-[10px] font-bold uppercase tracking-wide">
+          {isOnline && pending.length === 0 ? (
+            <Link href={`/auction/${auctionId}`} className="text-emerald-300 underline underline-offset-2">
+              Everything&apos;s synced - back to the live admin console →
+            </Link>
+          ) : (
+            <span className="text-gray-400">
+              {pending.length > 0 ? `Back to the admin console once these ${pending.length} sync` : 'Back to the admin console once reconnected'}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto p-4 space-y-4">
@@ -351,36 +391,28 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
               onChange={e => setAmountInput(e.target.value.replace(/[^0-9]/g, ''))}
               className="w-full bg-white/5 border border-white/15 rounded-md px-3 py-2 text-white placeholder:text-gray-500"
             />
-            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tap the buyer</div>
-            {groupedBidders.map(group => (
-              <div key={group.letter}>
-                <div className="text-[9px] font-black text-teal-400/80 uppercase tracking-widest mb-1">{group.letter}</div>
-                <div className="grid grid-cols-2 gap-1.5 mb-2">
-                  {group.bidders.map(b => {
-                    const teamFull = Boolean(rules.maxTeamSize && (playersBoughtByBidder.get(b.id) ?? 0) >= rules.maxTeamSize - 1)
-                    return (
-                      <button
-                        key={b.id}
-                        onClick={() => !teamFull && setSelectedBidderId(b.id)}
-                        disabled={teamFull}
-                        className={`text-left p-1.5 rounded-lg border min-w-0 ${
-                          teamFull
-                            ? 'bg-white/[0.02] border-white/5 opacity-40 cursor-not-allowed'
-                            : selectedBidderId === b.id ? 'bg-teal-500/15 border-teal-500' : 'bg-white/[0.03] border-white/10'
-                        }`}
-                      >
-                        <div className="text-[10px] font-bold truncate">{b.name || b.username}</div>
-                        <div className="text-[9px] text-gray-500 truncate">
-                          {teamFull ? 'Team full' : (
-                            <>{b.teamName} &middot; ₹{(purseByBidder.get(b.id) ?? b.remainingPurse).toLocaleString('en-IN')} left</>
-                          )}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Buyer</div>
+            <select
+              value={selectedBidderId ?? ''}
+              onChange={e => setSelectedBidderId(e.target.value || null)}
+              className="w-full h-14 bg-white/5 border border-white/15 rounded-md px-3 text-base font-bold text-white"
+            >
+              <option value="" disabled>Select the buyer…</option>
+              {sortedBidders.map(b => {
+                const teamFull = Boolean(rules.maxTeamSize && (playersBoughtByBidder.get(b.id) ?? 0) >= rules.maxTeamSize - 1)
+                const purseLeft = (purseByBidder.get(b.id) ?? b.remainingPurse).toLocaleString('en-IN')
+                return (
+                  <option key={b.id} value={b.id} disabled={teamFull}>
+                    {b.name || b.username} — {b.teamName || 'No Team'} — {teamFull ? 'Team Full' : `₹${purseLeft} left`}
+                  </option>
+                )
+              })}
+            </select>
+            {selectedBidder && (
+              <div className="text-xs text-gray-400">
+                {selectedBidder.teamName || 'No Team'} &middot; ₹{(purseByBidder.get(selectedBidder.id) ?? selectedBidder.remainingPurse).toLocaleString('en-IN')} remaining
               </div>
-            ))}
+            )}
 
             {saleError && (
               <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
