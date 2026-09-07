@@ -17,7 +17,10 @@ import {
   OfflineResult,
   loadOfflineSnapshot,
   loadPendingResults,
-  savePendingResults
+  savePendingResults,
+  loadCurrentOfflinePlayer,
+  saveCurrentOfflinePlayer,
+  pickRandomPlayer
 } from '@/lib/offline-auction-store'
 import { useConnectivityBeacon } from '@/hooks/use-connectivity-beacon'
 
@@ -62,8 +65,7 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
   const auctionId = params.id
   const [snapshot, setSnapshot] = useState<OfflineAuctionSnapshot | null>(null)
   const [pending, setPending] = useState<OfflineResult[]>([])
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
-  const [saleMode, setSaleMode] = useState(false)
+  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null)
   const [selectedBidderId, setSelectedBidderId] = useState<string | null>(null)
   const [amountInput, setAmountInput] = useState('')
   const [syncing, setSyncing] = useState(false)
@@ -72,6 +74,7 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
   useEffect(() => {
     setSnapshot(loadOfflineSnapshot(auctionId))
     setPending(loadPendingResults(auctionId))
+    setCurrentPlayerId(loadCurrentOfflinePlayer(auctionId))
   }, [auctionId])
 
   const persistPending = (next: OfflineResult[]) => {
@@ -115,37 +118,51 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     return groups
   }, [snapshot])
 
-  const selectedPlayer = snapshot?.players.find(p => p.id === selectedPlayerId) || null
+  const currentPlayer = snapshot?.players.find(p => p.id === currentPlayerId) || null
   const selectedBidder = snapshot?.bidders.find(b => b.id === selectedBidderId) || null
 
-  const resetPicker = () => {
-    setSelectedPlayerId(null)
-    setSaleMode(false)
+  // The auction picks who's on the block, not the admin (mirrors the live
+  // server's icon-first random rule - see pickRandomPlayer). Whenever the
+  // current pick is missing or has just been resolved (sold/unsold, so it
+  // fell out of availablePlayers), draw the next one and persist it so a
+  // refreshed/reopened tab resumes on the same player instead of drawing
+  // again.
+  useEffect(() => {
+    if (!snapshot) return
+    const stillOnTheBlock = currentPlayerId && availablePlayers.some(p => p.id === currentPlayerId)
+    if (stillOnTheBlock) return
+    const next = pickRandomPlayer(availablePlayers)
+    const nextId = next?.id ?? null
+    setCurrentPlayerId(nextId)
+    saveCurrentOfflinePlayer(auctionId, nextId)
+  }, [snapshot, availablePlayers, currentPlayerId, auctionId])
+
+  const resetSaleForm = () => {
     setSelectedBidderId(null)
     setAmountInput('')
   }
 
   const recordUnsold = () => {
-    if (!selectedPlayer) return
+    if (!currentPlayer) return
     const entry: OfflineResult = {
       id: crypto.randomUUID(),
-      playerId: selectedPlayer.id,
-      playerName: extractName(selectedPlayer.data),
+      playerId: currentPlayer.id,
+      playerName: extractName(currentPlayer.data),
       status: 'UNSOLD',
       recordedAt: new Date().toISOString()
     }
     persistPending([entry, ...pending])
-    resetPicker()
+    resetSaleForm()
   }
 
   const recordSale = () => {
-    if (!selectedPlayer || !selectedBidder) return
+    if (!currentPlayer || !selectedBidder) return
     const amount = parseInt(amountInput.replace(/[^0-9]/g, ''), 10)
     if (!amount || amount <= 0) return
     const entry: OfflineResult = {
       id: crypto.randomUUID(),
-      playerId: selectedPlayer.id,
-      playerName: extractName(selectedPlayer.data),
+      playerId: currentPlayer.id,
+      playerName: extractName(currentPlayer.data),
       status: 'SOLD',
       bidderId: selectedBidder.id,
       bidderName: selectedBidder.name || selectedBidder.username,
@@ -153,7 +170,7 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
       recordedAt: new Date().toISOString()
     }
     persistPending([entry, ...pending])
-    resetPicker()
+    resetSaleForm()
   }
 
   const removePending = (id: string) => {
@@ -258,62 +275,20 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
           </div>
         </div>
 
-        {!selectedPlayer && (
-          <div>
-            <div className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">
-              Pick the player on the block
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {availablePlayers.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setSelectedPlayerId(p.id)}
-                  className="text-left p-2.5 rounded-lg border border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
-                >
-                  <div className="font-bold text-sm truncate">{extractName(p.data)}</div>
-                </button>
-              ))}
-              {availablePlayers.length === 0 && (
-                <div className="col-span-full text-gray-500 text-sm">No players left to auction.</div>
-              )}
-            </div>
-          </div>
+        {!currentPlayer && (
+          <div className="text-center py-8 text-gray-500 text-sm">No players left to auction.</div>
         )}
 
-        {selectedPlayer && !saleMode && (
+        {currentPlayer && (
           <div className="space-y-3">
             <PlayerCard
-              name={extractName(selectedPlayer.data)}
-              imageUrl={extractImageUrl(selectedPlayer.data)}
-              basePrice={Number(selectedPlayer.data?.['Base Price'] ?? selectedPlayer.data?.['base price'] ?? 1000)}
-              fields={extractFields(selectedPlayer.data)}
-              tags={selectedPlayer.isIcon ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
+              name={extractName(currentPlayer.data)}
+              imageUrl={extractImageUrl(currentPlayer.data)}
+              basePrice={Number(currentPlayer.data?.['Base Price'] ?? currentPlayer.data?.['base price'] ?? 1000)}
+              fields={extractFields(currentPlayer.data)}
+              tags={currentPlayer.isIcon ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
             />
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setSaleMode(true)}
-                className="h-12 rounded-lg bg-teal-500 hover:bg-teal-600 text-gray-950 font-bold"
-              >
-                Mark Sold
-              </button>
-              <button
-                onClick={recordUnsold}
-                className="h-12 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold"
-              >
-                Mark Unsold
-              </button>
-            </div>
-            <button onClick={resetPicker} className="text-xs text-gray-500 underline">
-              Back to player list
-            </button>
-          </div>
-        )}
 
-        {selectedPlayer && saleMode && (
-          <div className="space-y-3">
-            <div className="text-sm text-gray-300">
-              Selling <span className="font-bold text-white">{extractName(selectedPlayer.data)}</span>
-            </div>
             <input
               type="text"
               inputMode="numeric"
@@ -344,16 +319,22 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
                 </div>
               </div>
             ))}
-            <button
-              onClick={recordSale}
-              disabled={!selectedBidderId || !amountInput}
-              className="w-full h-12 rounded-lg bg-teal-500 disabled:bg-white/10 disabled:text-gray-600 text-gray-950 font-bold"
-            >
-              Confirm Sale
-            </button>
-            <button onClick={() => setSaleMode(false)} className="text-xs text-gray-500 underline">
-              Back
-            </button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={recordSale}
+                disabled={!selectedBidderId || !amountInput}
+                className="h-12 rounded-lg bg-teal-500 disabled:bg-white/10 disabled:text-gray-600 text-gray-950 font-bold"
+              >
+                Confirm Sale
+              </button>
+              <button
+                onClick={recordUnsold}
+                className="h-12 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold"
+              >
+                Mark Unsold
+              </button>
+            </div>
           </div>
         )}
 

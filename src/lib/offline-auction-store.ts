@@ -43,6 +43,7 @@ export interface OfflineResult {
 
 const snapshotKey = (auctionId: string) => `squady-offline-snapshot-${auctionId}`
 const pendingKey = (auctionId: string) => `squady-offline-pending-${auctionId}`
+const currentPlayerKey = (auctionId: string) => `squady-offline-current-${auctionId}`
 
 export function saveOfflineSnapshot(snapshot: OfflineAuctionSnapshot) {
   try {
@@ -86,4 +87,42 @@ export function clearPendingResults(auctionId: string) {
   } catch {
     // Same rationale as saveOfflineSnapshot.
   }
+}
+
+// Which player is "on the block" right now in the offline console - the
+// auction decides this, not the admin (see pickRandomPlayer below), so it's
+// persisted the same way the pending queue is: it has to survive this page
+// staying open, untouched, for however long an outage lasts.
+export function saveCurrentOfflinePlayer(auctionId: string, playerId: string | null) {
+  try {
+    if (playerId) localStorage.setItem(currentPlayerKey(auctionId), playerId)
+    else localStorage.removeItem(currentPlayerKey(auctionId))
+  } catch {
+    // Same rationale as saveOfflineSnapshot.
+  }
+}
+
+export function loadCurrentOfflinePlayer(auctionId: string): string | null {
+  try {
+    return localStorage.getItem(currentPlayerKey(auctionId))
+  } catch {
+    return null
+  }
+}
+
+// Mirrors the exact rule the live auction's mark-sold/next-player routes
+// use server-side (see src/app/api/auction/[id]/mark-sold/route.ts): icon
+// ("Bidder Choice") players are auctioned first as a group, in random order;
+// only once none remain does the pool open up to regular players, also in
+// random order. An admin picking whichever player they like off a list -
+// the offline console's original behavior - isn't an auction, it's a
+// negotiation; this keeps the same random, icon-first rule offline that the
+// live app enforces online, so which mode you're in doesn't change how a
+// player's turn comes up.
+export function pickRandomPlayer<T extends { isIcon: boolean }>(available: T[]): T | null {
+  if (available.length === 0) return null
+  const iconPlayers = available.filter(p => p.isIcon)
+  const pool = iconPlayers.length > 0 ? iconPlayers : available.filter(p => !p.isIcon)
+  if (pool.length === 0) return null
+  return pool[Math.floor(Math.random() * pool.length)]
 }
