@@ -41,7 +41,19 @@ export function ScaleBar({ label, value, formatted }: { label: string; value: nu
 	)
 }
 
-export function StatTile({ label, value }: { label: string; value: ReactNode }) {
+// size="lg" is for the presenter stage specifically - a big screen viewed
+// from across a room, where the default tile (sized for a dense grid card
+// or a popup dialog) reads as a blur. Same visual language, scaled up:
+// same border/background treatment, just bigger type and breathing room.
+export function StatTile({ label, value, size = 'sm' }: { label: string; value: ReactNode; size?: 'sm' | 'lg' }) {
+	if (size === 'lg') {
+		return (
+			<div className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-4 text-center">
+				<div className="text-2xl lg:text-3xl font-black text-white tabular-nums">{value}</div>
+				<div className="text-[11px] lg:text-xs font-bold uppercase tracking-wider text-gray-400 mt-1.5 leading-tight">{label}</div>
+			</div>
+		)
+	}
 	return (
 		<div className="bg-white/[0.035] border border-white/[0.07] rounded-lg px-1.5 py-2.5 text-center">
 			<div className="text-[15px] font-extrabold text-gray-100 tabular-nums">{value}</div>

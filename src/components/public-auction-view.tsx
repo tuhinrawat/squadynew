@@ -836,13 +836,23 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     <h1 className="text-3xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[0.98] mb-3 break-words">
                       {playerName}
                     </h1>
-                    <div className="flex flex-col gap-1 mb-6 text-sm lg:text-base font-bold">
-                      <span className="text-white/55">Base ₹{presenterBasePrice.toLocaleString('en-IN')}</span>
+                    {/* Badges, not fine print - this reads from across a
+                        room, so base/last-year price get the same
+                        pill treatment as the "Bidder Choice"/Cricheroes
+                        badges further down, just carrying a number. */}
+                    <div className="flex flex-wrap items-center gap-3 mb-6">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-2">
+                        <span className="text-xs lg:text-sm font-bold uppercase tracking-wide text-white/50">Base</span>
+                        <span className="text-lg lg:text-2xl font-black text-white tabular-nums">₹{presenterBasePrice.toLocaleString('en-IN')}</span>
+                      </div>
                       {currentPlayer?.lastYearPrice != null && (
-                        <span className="text-white/70">
-                          Last Year <span className="text-amber-400">₹{currentPlayer.lastYearPrice.toLocaleString('en-IN')}</span>
-                          {currentPlayer.lastYearTeamName ? ` · ${currentPlayer.lastYearTeamName}` : ''}
-                        </span>
+                        <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2">
+                          <span className="text-xs lg:text-sm font-bold uppercase tracking-wide text-amber-200/80">Last Year</span>
+                          <span className="text-lg lg:text-2xl font-black text-amber-400 tabular-nums">₹{currentPlayer.lastYearPrice.toLocaleString('en-IN')}</span>
+                          {currentPlayer.lastYearTeamName && (
+                            <span className="text-xs lg:text-sm font-bold text-amber-200/70">· {currentPlayer.lastYearTeamName}</span>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -879,36 +889,36 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       <div className="flex flex-col gap-4 mb-6">
                         {presenterBattingStats && (
                           <div>
-                            <div className="flex items-center gap-3 text-sm lg:text-base flex-wrap mb-2">
-                              <BatIcon size={18} />
-                              {presenterBattingStats.runs !== undefined && <span className="font-black text-white">{presenterBattingStats.runs} Runs</span>}
-                              {presenterBattingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white">{presenterBattingStats.average.toFixed(2)}</b></span>}
-                              {presenterBattingStats.strikeRate !== undefined && <span className="font-bold text-white/60">SR <b className="text-white">{presenterBattingStats.strikeRate.toFixed(2)}</b></span>}
+                            <div className="flex items-center gap-4 text-base lg:text-xl flex-wrap mb-3">
+                              <BatIcon size={26} />
+                              {presenterBattingStats.runs !== undefined && <span className="font-black text-white tabular-nums">{presenterBattingStats.runs} Runs</span>}
+                              {presenterBattingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white tabular-nums">{presenterBattingStats.average.toFixed(2)}</b></span>}
+                              {presenterBattingStats.strikeRate !== undefined && <span className="font-bold text-white/60">SR <b className="text-white tabular-nums">{presenterBattingStats.strikeRate.toFixed(2)}</b></span>}
                             </div>
                             {(presenterBattingStats.matches !== undefined || presenterBattingStats.highest !== undefined || presenterBattingStats.fours !== undefined || presenterBattingStats.sixes !== undefined) && (
-                              <div className="grid grid-cols-4 gap-2">
-                                {presenterBattingStats.matches !== undefined && <StatTile label="Matches" value={presenterBattingStats.matches} />}
-                                {presenterBattingStats.highest !== undefined && <StatTile label="Highest" value={presenterBattingStats.highest} />}
-                                {presenterBattingStats.fours !== undefined && <StatTile label="4s" value={presenterBattingStats.fours} />}
-                                {presenterBattingStats.sixes !== undefined && <StatTile label="6s" value={presenterBattingStats.sixes} />}
+                              <div className="grid grid-cols-4 gap-3">
+                                {presenterBattingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBattingStats.matches} />}
+                                {presenterBattingStats.highest !== undefined && <StatTile size="lg" label="Highest" value={presenterBattingStats.highest} />}
+                                {presenterBattingStats.fours !== undefined && <StatTile size="lg" label="4s" value={presenterBattingStats.fours} />}
+                                {presenterBattingStats.sixes !== undefined && <StatTile size="lg" label="6s" value={presenterBattingStats.sixes} />}
                               </div>
                             )}
                           </div>
                         )}
                         {presenterBowlingStats && (
                           <div>
-                            <div className="flex items-center gap-3 text-sm lg:text-base flex-wrap mb-2">
-                              <BallIcon size={18} />
-                              {presenterBowlingStats.wickets !== undefined && <span className="font-black text-white">{presenterBowlingStats.wickets} Wkts</span>}
-                              {presenterBowlingStats.economy !== undefined && <span className="font-bold text-white/60">Econ <b className="text-white">{presenterBowlingStats.economy.toFixed(2)}</b></span>}
-                              {presenterBowlingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white">{presenterBowlingStats.average.toFixed(2)}</b></span>}
+                            <div className="flex items-center gap-4 text-base lg:text-xl flex-wrap mb-3">
+                              <BallIcon size={26} />
+                              {presenterBowlingStats.wickets !== undefined && <span className="font-black text-white tabular-nums">{presenterBowlingStats.wickets} Wkts</span>}
+                              {presenterBowlingStats.economy !== undefined && <span className="font-bold text-white/60">Econ <b className="text-white tabular-nums">{presenterBowlingStats.economy.toFixed(2)}</b></span>}
+                              {presenterBowlingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white tabular-nums">{presenterBowlingStats.average.toFixed(2)}</b></span>}
                             </div>
                             {(presenterBowlingStats.matches !== undefined || presenterBowlingStats.best !== undefined || presenterBowlingStats.maidens !== undefined || presenterBowlingStats.overs !== undefined) && (
-                              <div className="grid grid-cols-4 gap-2">
-                                {presenterBowlingStats.matches !== undefined && <StatTile label="Matches" value={presenterBowlingStats.matches} />}
-                                {presenterBowlingStats.best !== undefined && <StatTile label="Best" value={presenterBowlingStats.best} />}
-                                {presenterBowlingStats.maidens !== undefined && <StatTile label="Maidens" value={presenterBowlingStats.maidens} />}
-                                {presenterBowlingStats.overs !== undefined && <StatTile label="Overs" value={presenterBowlingStats.overs} />}
+                              <div className="grid grid-cols-4 gap-3">
+                                {presenterBowlingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBowlingStats.matches} />}
+                                {presenterBowlingStats.best !== undefined && <StatTile size="lg" label="Best" value={presenterBowlingStats.best} />}
+                                {presenterBowlingStats.maidens !== undefined && <StatTile size="lg" label="Maidens" value={presenterBowlingStats.maidens} />}
+                                {presenterBowlingStats.overs !== undefined && <StatTile size="lg" label="Overs" value={presenterBowlingStats.overs} />}
                               </div>
                             )}
                           </div>
