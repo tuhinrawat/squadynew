@@ -320,27 +320,14 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
 
       // The pick was either accepted, already matched, or conflicted with
       // something that changed the live auction in the meantime - either
-      // way, this console shouldn't keep asserting it, and its own view of
-      // "current" needs to reflect whichever value actually won.
+      // way, this console shouldn't keep asserting it. The actual "who's
+      // current now" reconciliation happens once, unconditionally, below
+      // via data.currentPlayer - this just decides what to tell the admin.
       let currentPickMessage: string | null = null
       if (data.currentPickOutcome) {
         selfDrawnPickRef.current = null
         if (data.currentPickOutcome === 'conflict') {
-          const liveId = data.liveCurrentPlayer?.id ?? null
-          setSnapshot(prev => {
-            if (!prev) return prev
-            const updated = { ...prev, currentPlayerId: liveId, currentBid: null }
-            saveOfflineSnapshot(updated)
-            return updated
-          })
           currentPickMessage = 'The live auction had already moved on to a different player while this console was offline - corrected to match it.'
-        } else if (currentPick) {
-          setSnapshot(prev => {
-            if (!prev) return prev
-            const updated = { ...prev, currentPlayerId: currentPick.playerId, currentBid: null }
-            saveOfflineSnapshot(updated)
-            return updated
-          })
         }
       }
 
@@ -373,6 +360,34 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
         }
         setSnapshot(updatedSnapshot)
         saveOfflineSnapshot(updatedSnapshot)
+      }
+
+      // Whatever the server says is current now, unconditionally - this
+      // page runs no live subscription of its own (by design: zero network
+      // calls except this one), so this response is the ONLY moment it
+      // ever learns the real answer. Without it, a sync that resolved the
+      // player it was showing left this console stuck on that same,
+      // now-dead player until a reload happened to pick up a fresher
+      // mirror written by some other tab.
+      if ('currentPlayer' in data) {
+        const freshCurrentId = data.currentPlayer?.id ?? null
+        setSnapshot(prev => {
+          if (!prev) return prev
+          const updated: OfflineAuctionSnapshot = {
+            ...prev,
+            currentPlayerId: freshCurrentId,
+            currentBid: null,
+            players: data.currentPlayer
+              ? prev.players.map(p =>
+                  p.id === data.currentPlayer.id
+                    ? { ...p, status: data.currentPlayer.status, isIcon: data.currentPlayer.isIcon, data: data.currentPlayer.data }
+                    : p
+                )
+              : prev.players
+          }
+          saveOfflineSnapshot(updated)
+          return updated
+        })
       }
 
       const stillPending = pending.filter(r => !resolvedIds.has(r.id))

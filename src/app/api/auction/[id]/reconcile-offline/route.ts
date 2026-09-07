@@ -230,7 +230,6 @@ export async function POST(
     // offline/page.tsx), so there's nothing for that logic to reconcile
     // against here anyway.
     let currentPickOutcome: 'applied' | 'skipped' | 'conflict' | undefined
-    let liveCurrentPlayer: Record<string, unknown> | null | undefined
     if (parsed.data.currentPick) {
       const { playerId: pickedPlayerId, expectedPreviousPlayerId } = parsed.data.currentPick
       const liveCurrentPlayerId = auction.currentPlayerId ?? null
@@ -258,18 +257,6 @@ export async function POST(
           triggerAuctionEvent(params.id, 'new-player', { player: pickedPlayer } as any).catch(() => {})
           currentPickOutcome = 'applied'
         }
-      }
-
-      if (currentPickOutcome === 'conflict') {
-        liveCurrentPlayer = liveCurrentPlayerId
-          ? await prisma.player.findUnique({
-              where: { id: liveCurrentPlayerId },
-              select: {
-                id: true, status: true, isIcon: true, data: true,
-                lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true
-              }
-            })
-          : null
       }
     }
 
@@ -349,10 +336,32 @@ export async function POST(
       }
     }
 
+    // Whatever the final currentPlayerId ended up being after everything
+    // above (an accepted/conflicted currentPick, the fallback auto-advance,
+    // or simply untouched) - always tell the client. The offline console
+    // runs no live subscription of its own (by design, it makes zero
+    // network calls except this one), so without this its view of "who's
+    // current" only ever updates on a page reload, and only then if some
+    // OTHER tab happened to have already re-mirrored the fresher value.
+    const freshAuction = await prisma.auction.findUnique({
+      where: { id: params.id },
+      select: { currentPlayerId: true }
+    })
+    const currentPlayer = freshAuction?.currentPlayerId
+      ? await prisma.player.findUnique({
+          where: { id: freshAuction.currentPlayerId },
+          select: {
+            id: true, status: true, isIcon: true, data: true,
+            lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true
+          }
+        })
+      : null
+
     return NextResponse.json({
       success: true,
       outcomes,
-      ...(currentPickOutcome ? { currentPickOutcome, liveCurrentPlayer } : {})
+      currentPlayer,
+      ...(currentPickOutcome ? { currentPickOutcome } : {})
     })
   } catch (error) {
     console.error('Error reconciling offline results:', error)
