@@ -610,6 +610,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // must never be able to break the live console if storage is unavailable
   // (private browsing, quota), which is why the store helper swallows its
   // own errors rather than throwing here.
+  //
+  // Includes currentPlayerId/currentBid (whoever was actually on the block
+  // and winning, right now) and rules (the bidding constraints) - without
+  // these, an outage mid-sale would strand that in-progress player and the
+  // offline console would have no way to enforce the same purse/team-size
+  // rules the live server does.
   useEffect(() => {
     saveOfflineSnapshot({
       auctionId: auction.id,
@@ -629,9 +635,19 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         teamName: b.teamName ?? null,
         name: b.user?.name ?? null,
         remainingPurse: b.remainingPurse
-      }))
+      })),
+      currentPlayerId: currentPlayer?.id ?? null,
+      currentBid: currentBid
+        ? {
+            bidderId: currentBid.bidderId,
+            amount: currentBid.amount,
+            bidderName: currentBid.bidderName,
+            teamName: currentBid.teamName ?? null
+          }
+        : null,
+      rules: (auction.rules as Record<string, unknown>) ?? null
     })
-  }, [auction.id, auction.name, players, bidders])
+  }, [auction.id, auction.name, auction.rules, players, bidders, currentPlayer, currentBid])
 
   // Detect when auction goes live and show banner
   useEffect(() => {

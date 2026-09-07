@@ -20,7 +20,9 @@ import {
   savePendingResults,
   loadCurrentOfflinePlayer,
   saveCurrentOfflinePlayer,
-  pickRandomPlayer
+  pickRandomPlayer,
+  extractOfflineRules,
+  validateOfflineSale
 } from '@/lib/offline-auction-store'
 import { useConnectivityBeacon } from '@/hooks/use-connectivity-beacon'
 
@@ -72,9 +74,28 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    setSnapshot(loadOfflineSnapshot(auctionId))
+    const loadedSnapshot = loadOfflineSnapshot(auctionId)
+    setSnapshot(loadedSnapshot)
     setPending(loadPendingResults(auctionId))
-    setCurrentPlayerId(loadCurrentOfflinePlayer(auctionId))
+
+    // Resume a player already being recorded offline (a persisted pick
+    // survives a refresh of this tab). Otherwise, continue whatever was
+    // actually live on the block at the moment the snapshot was taken -
+    // that player may already have bids on it, so this is the one case
+    // where the console must NOT draw a fresh random pick.
+    const persistedPlayerId = loadCurrentOfflinePlayer(auctionId)
+    const resumedPlayerId = persistedPlayerId ?? loadedSnapshot?.currentPlayerId ?? null
+    setCurrentPlayerId(resumedPlayerId)
+    if (!persistedPlayerId && resumedPlayerId) {
+      saveCurrentOfflinePlayer(auctionId, resumedPlayerId)
+      // Only meaningful when we're continuing that same live player -
+      // prefill what was already bid so nothing typed live has to be
+      // re-entered or remembered from memory.
+      if (loadedSnapshot?.currentBid) {
+        setSelectedBidderId(loadedSnapshot.currentBid.bidderId)
+        setAmountInput(String(loadedSnapshot.currentBid.amount))
+      }
+    }
   }, [auctionId])
 
   const persistPending = (next: OfflineResult[]) => {
@@ -95,6 +116,35 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     })
     return map
   }, [snapshot, pending])
+
+  // How many players each bidder has already locked in - snapshot (from
+  // before the outage) plus whatever's been recorded here since. Feeds the
+  // same team-size/reserve checks mark-sold/route.ts runs online, so a
+  // bidder can't end up over the cap just because their last few purchases
+  // happened offline.
+  const playersBoughtByBidder = useMemo(() => {
+    const map = new Map<string, number>()
+    snapshot?.players.forEach(p => {
+      if (p.status === 'SOLD' && p.soldTo) map.set(p.soldTo, (map.get(p.soldTo) ?? 0) + 1)
+    })
+    pending.forEach(r => {
+      if (r.status === 'SOLD' && r.bidderId) map.set(r.bidderId, (map.get(r.bidderId) ?? 0) + 1)
+    })
+    return map
+  }, [snapshot, pending])
+
+  const rules = useMemo(() => extractOfflineRules(snapshot?.rules), [snapshot])
+
+  const saleError = useMemo(() => {
+    if (!selectedBidderId || !amountInput) return null
+    const bidderId = selectedBidderId
+    return validateOfflineSale({
+      amount: parseInt(amountInput, 10),
+      bidderRemainingPurse: purseByBidder.get(bidderId) ?? 0,
+      playersBoughtByBidder: playersBoughtByBidder.get(bidderId) ?? 0,
+      rules
+    })
+  }, [selectedBidderId, amountInput, purseByBidder, playersBoughtByBidder, rules])
 
   const resolvedPlayerIds = useMemo(() => new Set(pending.map(r => r.playerId)), [pending])
 
@@ -159,6 +209,10 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     if (!currentPlayer || !selectedBidder) return
     const amount = parseInt(amountInput.replace(/[^0-9]/g, ''), 10)
     if (!amount || amount <= 0) return
+    // Re-check even though the button is disabled on the same condition -
+    // this is the last gate before a sale becomes an irreversible pending
+    // entry, so it must never rely solely on the UI having stayed in sync.
+    if (saleError) return
     const entry: OfflineResult = {
       id: crypto.randomUUID(),
       playerId: currentPlayer.id,
@@ -302,28 +356,42 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
               <div key={group.letter}>
                 <div className="text-[9px] font-black text-teal-400/80 uppercase tracking-widest mb-1">{group.letter}</div>
                 <div className="grid grid-cols-2 gap-1.5 mb-2">
-                  {group.bidders.map(b => (
-                    <button
-                      key={b.id}
-                      onClick={() => setSelectedBidderId(b.id)}
-                      className={`text-left p-1.5 rounded-lg border min-w-0 ${
-                        selectedBidderId === b.id ? 'bg-teal-500/15 border-teal-500' : 'bg-white/[0.03] border-white/10'
-                      }`}
-                    >
-                      <div className="text-[10px] font-bold truncate">{b.name || b.username}</div>
-                      <div className="text-[9px] text-gray-500 truncate">
-                        {b.teamName} &middot; ₹{(purseByBidder.get(b.id) ?? b.remainingPurse).toLocaleString('en-IN')} left
-                      </div>
-                    </button>
-                  ))}
+                  {group.bidders.map(b => {
+                    const teamFull = Boolean(rules.maxTeamSize && (playersBoughtByBidder.get(b.id) ?? 0) >= rules.maxTeamSize - 1)
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={() => !teamFull && setSelectedBidderId(b.id)}
+                        disabled={teamFull}
+                        className={`text-left p-1.5 rounded-lg border min-w-0 ${
+                          teamFull
+                            ? 'bg-white/[0.02] border-white/5 opacity-40 cursor-not-allowed'
+                            : selectedBidderId === b.id ? 'bg-teal-500/15 border-teal-500' : 'bg-white/[0.03] border-white/10'
+                        }`}
+                      >
+                        <div className="text-[10px] font-bold truncate">{b.name || b.username}</div>
+                        <div className="text-[9px] text-gray-500 truncate">
+                          {teamFull ? 'Team full' : (
+                            <>{b.teamName} &middot; ₹{(purseByBidder.get(b.id) ?? b.remainingPurse).toLocaleString('en-IN')} left</>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             ))}
 
+            {saleError && (
+              <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                {saleError}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={recordSale}
-                disabled={!selectedBidderId || !amountInput}
+                disabled={!selectedBidderId || !amountInput || !!saleError}
                 className="h-12 rounded-lg bg-teal-500 disabled:bg-white/10 disabled:text-gray-600 text-gray-950 font-bold"
               >
                 Confirm Sale
