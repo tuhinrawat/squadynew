@@ -445,7 +445,7 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto p-4 space-y-4">
+      <div className="max-w-3xl lg:max-w-[1400px] mx-auto p-4 space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="font-black uppercase text-lg">{snapshot.auctionName}</div>
@@ -461,71 +461,84 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
         )}
 
         {currentPlayer && (
-          <div className="space-y-3">
-            <PlayerCard
-              name={extractName(currentPlayer.data)}
-              imageUrl={extractImageUrl(currentPlayer.data)}
-              basePrice={Number(currentPlayer.data?.['Base Price'] ?? currentPlayer.data?.['base price'] ?? 1000)}
-              fields={extractFields(currentPlayer.data)}
-              tags={currentPlayer.isIcon ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
-            />
+          // Large player card on the left (matches the presenter/public
+          // stage's scale, not the cramped single-column card this used to
+          // be) with the sale-recording controls in their own column,
+          // pinned to the bottom - stretch (the grid default) makes that
+          // column match the card's full height, so lg:mt-auto on the
+          // inner wrapper lands the controls at the bottom-right rather
+          // than floating under the card's midpoint.
+          <div className="lg:grid lg:grid-cols-[1fr_420px] lg:gap-10">
+            <div>
+              <PlayerCard
+                name={extractName(currentPlayer.data)}
+                imageUrl={extractImageUrl(currentPlayer.data)}
+                basePrice={Number(currentPlayer.data?.['Base Price'] ?? currentPlayer.data?.['base price'] ?? 1000)}
+                fields={extractFields(currentPlayer.data)}
+                tags={currentPlayer.isIcon ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
+              />
+            </div>
 
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Final sale amount"
-              value={amountInput}
-              onChange={e => setAmountInput(e.target.value.replace(/[^0-9]/g, ''))}
-              className="w-full bg-white/5 border border-white/15 rounded-md px-3 py-2 text-white placeholder:text-gray-500"
-            />
-            <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Buyer</div>
-            <select
-              value={selectedBidderId ?? ''}
-              onChange={e => setSelectedBidderId(e.target.value || null)}
-              className="w-full h-14 bg-white/5 border border-white/15 rounded-md px-3 text-base font-bold text-white"
-            >
-              <option value="" disabled>Select the buyer…</option>
-              {sortedBidders.map(b => {
-                const teamFull = Boolean(rules.maxTeamSize && (playersBoughtByBidder.get(b.id) ?? 0) >= rules.maxTeamSize - 1)
-                const purseLeft = (purseByBidder.get(b.id) ?? b.remainingPurse).toLocaleString('en-IN')
-                return (
-                  <option key={b.id} value={b.id} disabled={teamFull}>
-                    {b.name || b.username} — {b.teamName || 'No Team'} — {teamFull ? 'Team Full' : `₹${purseLeft} left`}
-                  </option>
-                )
-              })}
-            </select>
-            {selectedBidder && (
-              <div className="text-xs text-gray-400">
-                {selectedBidder.teamName || 'No Team'} &middot; ₹{(purseByBidder.get(selectedBidder.id) ?? selectedBidder.remainingPurse).toLocaleString('en-IN')} remaining
+            <div className="mt-4 lg:mt-0 lg:flex lg:flex-col">
+              <div className="lg:mt-auto space-y-3">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Final sale amount"
+                  value={amountInput}
+                  onChange={e => setAmountInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="w-full h-14 bg-white/5 border border-white/15 rounded-md px-4 text-lg font-bold text-white placeholder:text-gray-500 placeholder:font-normal"
+                />
+                <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">Buyer</div>
+                <select
+                  value={selectedBidderId ?? ''}
+                  onChange={e => setSelectedBidderId(e.target.value || null)}
+                  className="w-full h-14 bg-white/5 border border-white/15 rounded-md px-3 text-base font-bold text-white"
+                >
+                  <option value="" disabled>Select the buyer…</option>
+                  {sortedBidders.map(b => {
+                    const teamFull = Boolean(rules.maxTeamSize && (playersBoughtByBidder.get(b.id) ?? 0) >= rules.maxTeamSize - 1)
+                    const purseLeft = (purseByBidder.get(b.id) ?? b.remainingPurse).toLocaleString('en-IN')
+                    return (
+                      <option key={b.id} value={b.id} disabled={teamFull}>
+                        {b.name || b.username} — {b.teamName || 'No Team'} — {teamFull ? 'Team Full' : `₹${purseLeft} left`}
+                      </option>
+                    )
+                  })}
+                </select>
+                {selectedBidder && (
+                  <div className="text-xs text-gray-400">
+                    {selectedBidder.teamName || 'No Team'} &middot; ₹{(purseByBidder.get(selectedBidder.id) ?? selectedBidder.remainingPurse).toLocaleString('en-IN')} remaining
+                  </div>
+                )}
+
+                {saleError && (
+                  <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                    {saleError}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={recordSale}
+                    disabled={!selectedBidderId || !amountInput || !!saleError}
+                    className="h-14 rounded-lg bg-teal-500 disabled:bg-white/10 disabled:text-gray-600 text-gray-950 font-bold text-base"
+                  >
+                    Confirm Sale
+                  </button>
+                  <button
+                    onClick={recordUnsold}
+                    className="h-14 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold text-base"
+                  >
+                    Mark Unsold
+                  </button>
+                </div>
               </div>
-            )}
-
-            {saleError && (
-              <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                {saleError}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={recordSale}
-                disabled={!selectedBidderId || !amountInput || !!saleError}
-                className="h-12 rounded-lg bg-teal-500 disabled:bg-white/10 disabled:text-gray-600 text-gray-950 font-bold"
-              >
-                Confirm Sale
-              </button>
-              <button
-                onClick={recordUnsold}
-                className="h-12 rounded-lg bg-white/10 hover:bg-white/15 text-white font-bold"
-              >
-                Mark Unsold
-              </button>
             </div>
           </div>
         )}
 
-        <div className="pt-4 border-t border-white/10">
+        <div className="pt-4 border-t border-white/10 lg:max-w-3xl">
           <div className="text-[11px] font-black uppercase tracking-widest text-gray-400 mb-2">
             Recorded Offline &middot; {pending.length}
           </div>
