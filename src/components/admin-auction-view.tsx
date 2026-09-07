@@ -1311,7 +1311,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // originally opened.
   const { isOnline } = useConnectivityBeacon(auction.id)
 
-
+  // Warm Next's client router cache for the offline console route while
+  // still reachable, not only once the red banner below appears offering
+  // it - by then the network is already down, so there's nothing left to
+  // fetch. This is the difference between "Switch to Offline Console"
+  // navigating instantly within this already-open tab during a real
+  // outage, and it silently trying (and failing) to fetch a page from a
+  // server this device can no longer reach. It does NOT help opening the
+  // console fresh in a brand new tab or after a hard refresh - that still
+  // needs the tab to have been loaded at least once before the outage,
+  // same as the console's own operational guidance already says.
+  useEffect(() => {
+    if (viewMode === 'admin') {
+      router.prefetch(`/auction/${auction.id}/offline`)
+    }
+  }, [viewMode, auction.id, router])
 
   const handleStartAuction = async () => {
     await fetch(`/api/auction/${auction.id}/start`, { method: 'POST' })
