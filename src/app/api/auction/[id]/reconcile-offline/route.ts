@@ -26,8 +26,24 @@ const resultSchema = z.object({
   amount: z.coerce.number().positive().optional(),
 })
 
+// Sent only when the offline console has nothing else to sync but is
+// still showing a player it drew on its own while genuinely offline (no
+// sold/unsold ever recorded for them) - see the auto-pick effect in
+// offline/page.tsx. expectedPreviousPlayerId is whatever the offline
+// console believed the live currentPlayerId was right before it started
+// guessing; if the live value has since moved on to something else (a
+// human resolved it some other way while this console was dark), this is
+// rejected as a conflict rather than blindly overwritten.
+const currentPickSchema = z.object({
+  playerId: z.string().trim().min(1).nullable(),
+  expectedPreviousPlayerId: z.string().trim().min(1).nullable(),
+})
+
 const requestSchema = z.object({
-  results: z.array(resultSchema).min(1).max(200),
+  results: z.array(resultSchema).max(200),
+  currentPick: currentPickSchema.optional(),
+}).refine(data => data.results.length > 0 || data.currentPick !== undefined, {
+  message: 'Provide at least one result or a current-player update'
 })
 
 type Outcome = 'applied' | 'applied_with_warning' | 'skipped' | 'conflict' | 'error'
@@ -205,6 +221,58 @@ export async function POST(
       } as any).catch(() => {})
     }
 
+    // Explicit request: the offline console is telling us exactly who it's
+    // been showing, rather than leaving it to the fallback below to
+    // independently re-roll (which could land on a different player than
+    // whichever one the room has actually been looking at this whole
+    // time). Handled first, and precludes the fallback entirely - a
+    // request never carries both non-empty results and a currentPick (see
+    // offline/page.tsx), so there's nothing for that logic to reconcile
+    // against here anyway.
+    let currentPickOutcome: 'applied' | 'skipped' | 'conflict' | undefined
+    let liveCurrentPlayer: Record<string, unknown> | null | undefined
+    if (parsed.data.currentPick) {
+      const { playerId: pickedPlayerId, expectedPreviousPlayerId } = parsed.data.currentPick
+      const liveCurrentPlayerId = auction.currentPlayerId ?? null
+
+      if (liveCurrentPlayerId !== (expectedPreviousPlayerId ?? null)) {
+        currentPickOutcome = 'conflict'
+      } else if (liveCurrentPlayerId === pickedPlayerId) {
+        currentPickOutcome = 'skipped'
+      } else if (pickedPlayerId === null) {
+        await prisma.auction.update({ where: { id: params.id }, data: { currentPlayerId: null } })
+        triggerAuctionEvent(params.id, 'auction-pool-exhausted', {}).catch(() => {})
+        currentPickOutcome = 'applied'
+      } else {
+        const pickedPlayer = await prisma.player.findUnique({
+          where: { id: pickedPlayerId },
+          select: {
+            id: true, status: true, auctionId: true, isIcon: true, data: true,
+            lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true
+          }
+        })
+        if (!pickedPlayer || pickedPlayer.auctionId !== params.id || pickedPlayer.status !== 'AVAILABLE') {
+          currentPickOutcome = 'conflict'
+        } else {
+          await prisma.auction.update({ where: { id: params.id }, data: { currentPlayerId: pickedPlayerId } })
+          triggerAuctionEvent(params.id, 'new-player', { player: pickedPlayer } as any).catch(() => {})
+          currentPickOutcome = 'applied'
+        }
+      }
+
+      if (currentPickOutcome === 'conflict') {
+        liveCurrentPlayer = liveCurrentPlayerId
+          ? await prisma.player.findUnique({
+              where: { id: liveCurrentPlayerId },
+              select: {
+                id: true, status: true, isIcon: true, data: true,
+                lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true
+              }
+            })
+          : null
+      }
+    }
+
     // The live auction's currentPlayerId is untouched by everything above -
     // this endpoint applies FINAL results, it never runs the "pick the next
     // player" step mark-sold/route.ts does after every sale. If the player
@@ -214,10 +282,11 @@ export async function POST(
     // console that comes back online just sits frozen on it. Catch that up
     // now, mirroring mark-sold's own selection exactly (icon players first,
     // recycle UNSOLD back to AVAILABLE once none remain, then regular
-    // players) - but only when the current pick is actually dead; a
-    // still-AVAILABLE current player (the outage ended before it got
-    // resolved) is correctly left alone.
-    if (auction.currentPlayerId) {
+    // players) - but only when the current pick is actually dead, and only
+    // as a fallback when the client hasn't already told us exactly who it's
+    // showing (above); a still-AVAILABLE current player (the outage ended
+    // before it got resolved) is correctly left alone either way.
+    if (!parsed.data.currentPick && auction.currentPlayerId) {
       const stuckPlayer = await prisma.player.findUnique({
         where: { id: auction.currentPlayerId },
         select: { status: true }
@@ -280,7 +349,11 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ success: true, outcomes })
+    return NextResponse.json({
+      success: true,
+      outcomes,
+      ...(currentPickOutcome ? { currentPickOutcome, liveCurrentPlayer } : {})
+    })
   } catch (error) {
     console.error('Error reconciling offline results:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

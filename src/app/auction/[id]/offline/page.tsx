@@ -75,6 +75,20 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
   const [syncing, setSyncing] = useState(false)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
 
+  // Proactive connectivity check, independent of whatever the admin is
+  // doing here - the same beacon the live console uses. Declared up top
+  // because the auto-pick effect below needs it: this console must never
+  // guess who's on the block while it can actually reach the server.
+  const { isOnline } = useConnectivityBeacon(auctionId)
+
+  // Set only the first time this console draws its OWN player pick while
+  // genuinely offline (never while reachable - see the auto-pick effect).
+  // Remembers what the live auction's currentPlayerId was right before
+  // this console started guessing, so a later sync can tell whether
+  // anything else changed it in the meantime instead of blindly
+  // overwriting real progress.
+  const selfDrawnPickRef = useRef<{ playerId: string | null; expectedPreviousPlayerId: string | null } | null>(null)
+
   useEffect(() => {
     const loadedSnapshot = loadOfflineSnapshot(auctionId)
     const loadedPending = loadPendingResults(auctionId)
@@ -174,31 +188,56 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
   const currentPlayer = snapshot?.players.find(p => p.id === currentPlayerId) || null
   const selectedBidder = snapshot?.bidders.find(b => b.id === selectedBidderId) || null
 
-  // The auction picks who's on the block, not the admin (mirrors the live
-  // server's icon-first random rule - see pickRandomPlayer). Whenever the
-  // current pick is missing or has just been resolved (sold/unsold, so it
-  // fell out of availablePlayers), draw the next one and persist it so a
-  // refreshed/reopened tab resumes on the same player instead of drawing
-  // again.
+  // Whoever's on the block is decided by whichever source of truth is
+  // actually trustworthy right now:
+  //
+  // - Reachable: mirror the live snapshot's currentPlayerId directly,
+  //   always. This console must NEVER independently guess while it can
+  //   still reach the server - guessing is exactly how it ended up
+  //   showing a different player than the live admin console with
+  //   nothing actually wrong: this console drew its own random pick
+  //   (because its locally-cached snapshot happened to have no valid
+  //   currentPlayerId yet) while genuinely still online, and then never
+  //   revisited that guess since nothing here re-reads the snapshot after
+  //   the first load.
+  // - Unreachable: fall back to the icon-first random draw (mirrors the
+  //   live server's own rule - see pickRandomPlayer) whenever the current
+  //   pick is missing or has just been resolved offline, since there's no
+  //   live authority left to consult.
   useEffect(() => {
     if (!snapshot) return
+
+    if (isOnline) {
+      // A self-drawn pick still waiting to sync takes priority over the
+      // (possibly now-outdated) live snapshot for one more render - the
+      // auto-sync effect below fires on this same isOnline transition and
+      // will resolve it properly (confirmed, or corrected on conflict).
+      // Without this, this effect would flip the display back to the
+      // stale pre-outage player for a moment and then flip again once
+      // sync responds.
+      if (selfDrawnPickRef.current) return
+      const livePlayerId = snapshot.currentPlayerId ?? null
+      if (currentPlayerId !== livePlayerId) {
+        setCurrentPlayerId(livePlayerId)
+        saveCurrentOfflinePlayer(auctionId, livePlayerId)
+      }
+      return
+    }
+
     const stillOnTheBlock = currentPlayerId && availablePlayers.some(p => p.id === currentPlayerId)
     if (stillOnTheBlock) return
+
+    if (pending.length === 0 && !selfDrawnPickRef.current) {
+      selfDrawnPickRef.current = { playerId: null, expectedPreviousPlayerId: currentPlayerId }
+    }
     const next = pickRandomPlayer(availablePlayers)
     const nextId = next?.id ?? null
     setCurrentPlayerId(nextId)
     saveCurrentOfflinePlayer(auctionId, nextId)
-    // Keep the snapshot's own currentPlayerId (and currentBid, now stale -
-    // this is a fresh pick with no known live bid) in lockstep with the
-    // pick above. Without this, a reload once everything's synced (nothing
-    // pending, so the initial-load effect above trusts the snapshot
-    // directly) would read back whatever pre-outage player the last LIVE
-    // mirror happened to freeze on, not this console's own current pick.
-    setSnapshot(prev => (prev ? { ...prev, currentPlayerId: nextId, currentBid: null } : prev))
-    if (snapshot.currentPlayerId !== nextId || snapshot.currentBid) {
-      saveOfflineSnapshot({ ...snapshot, currentPlayerId: nextId, currentBid: null })
+    if (pending.length === 0 && selfDrawnPickRef.current) {
+      selfDrawnPickRef.current = { ...selfDrawnPickRef.current, playerId: nextId }
     }
-  }, [snapshot, availablePlayers, currentPlayerId, auctionId])
+  }, [snapshot, availablePlayers, currentPlayerId, auctionId, isOnline, pending.length])
 
   const resetSaleForm = () => {
     setSelectedBidderId(null)
@@ -245,7 +284,13 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
   }
 
   const syncNow = async () => {
-    if (pending.length === 0) return
+    // A self-drawn pick only gets pushed when there's nothing else pending -
+    // if a result IS pending, the existing sold/unsold sync path below
+    // already advances the live currentPlayerId once that result applies,
+    // so pushing a separate, possibly-stale guess on top would just be a
+    // second, competing claim about who's next.
+    const currentPick = pending.length === 0 ? selfDrawnPickRef.current : null
+    if (pending.length === 0 && !currentPick) return
     setSyncing(true)
     setSyncMessage(null)
     try {
@@ -259,7 +304,8 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
             status: r.status,
             bidderId: r.bidderId,
             amount: r.amount
-          }))
+          })),
+          ...(currentPick ? { currentPick } : {})
         })
       })
       if (!response.ok) {
@@ -271,6 +317,32 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
       const resolvedIds = new Set(
         outcomes.filter(o => o.outcome === 'applied' || o.outcome === 'applied_with_warning' || o.outcome === 'skipped').map(o => o.id)
       )
+
+      // The pick was either accepted, already matched, or conflicted with
+      // something that changed the live auction in the meantime - either
+      // way, this console shouldn't keep asserting it, and its own view of
+      // "current" needs to reflect whichever value actually won.
+      let currentPickMessage: string | null = null
+      if (data.currentPickOutcome) {
+        selfDrawnPickRef.current = null
+        if (data.currentPickOutcome === 'conflict') {
+          const liveId = data.liveCurrentPlayer?.id ?? null
+          setSnapshot(prev => {
+            if (!prev) return prev
+            const updated = { ...prev, currentPlayerId: liveId, currentBid: null }
+            saveOfflineSnapshot(updated)
+            return updated
+          })
+          currentPickMessage = 'The live auction had already moved on to a different player while this console was offline - corrected to match it.'
+        } else if (currentPick) {
+          setSnapshot(prev => {
+            if (!prev) return prev
+            const updated = { ...prev, currentPlayerId: currentPick.playerId, currentBid: null }
+            saveOfflineSnapshot(updated)
+            return updated
+          })
+        }
+      }
 
       // A synced result stops being excluded via "pending" the moment it's
       // removed below - without folding it into the snapshot itself first,
@@ -306,11 +378,12 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
       const stillPending = pending.filter(r => !resolvedIds.has(r.id))
       persistPending(stillPending)
       const needsReview = outcomes.filter(o => o.outcome === 'conflict' || o.outcome === 'error')
-      setSyncMessage(
-        stillPending.length === 0
+      const resultsMessage = outcomes.length === 0
+        ? null
+        : stillPending.length === 0
           ? `Synced. All ${outcomes.length} results applied.`
           : `Synced ${resolvedIds.size} of ${outcomes.length}. ${needsReview.length} need manual review (kept below) - check: ${needsReview.map(o => o.message).join(' ')}`
-      )
+      setSyncMessage([resultsMessage, currentPickMessage].filter(Boolean).join(' ') || null)
     } catch {
       setSyncMessage('Still unreachable - keep recording offline, then try again.')
     } finally {
@@ -318,19 +391,17 @@ export default function OfflineAuctionPage({ params }: { params: { id: string } 
     }
   }
 
-  // Proactive connectivity check, independent of whatever the admin is
-  // doing here - the same beacon the live console uses. The moment it says
-  // we're back online and there's something waiting, push it automatically
-  // instead of relying on the admin to remember to tap Sync. Safe to retry
-  // on its own: reconcile-offline/route.ts is idempotent (a result already
-  // applied comes back "skipped," never re-applied) and never silently
-  // overwrites a conflicting outcome.
-  const { isOnline } = useConnectivityBeacon(auctionId)
+  // The moment the beacon says we're back online, push automatically -
+  // pending results, or a self-drawn pick still waiting to become official
+  // - instead of relying on the admin to remember to tap Sync. Safe to
+  // retry on its own: reconcile-offline/route.ts is idempotent (a result
+  // already applied comes back "skipped," never re-applied) and never
+  // silently overwrites a conflicting outcome.
   const syncNowRef = useRef(syncNow)
   syncNowRef.current = syncNow
 
   useEffect(() => {
-    if (isOnline && pending.length > 0 && !syncing) {
+    if (isOnline && !syncing && (pending.length > 0 || selfDrawnPickRef.current)) {
       syncNowRef.current()
     }
   }, [isOnline, pending.length, syncing])
