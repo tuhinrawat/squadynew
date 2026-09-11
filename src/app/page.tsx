@@ -36,7 +36,7 @@ export default function Home() {
                   Tutorial
                 </Button>
               </Link>
-              <Link href="/fairness" className="hidden md:block">
+              <Link href="/fairness">
                 <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
                   Fairness
                 </Button>
