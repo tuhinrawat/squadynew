@@ -114,8 +114,12 @@ function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: stri
 // row and the stage above it shrinks to fit, no positioning math needed.
 function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; variant?: 'floating' | 'inline' }) {
   if (sales.length === 0) return null
+  // bottom-0, not bottom-8 - this sits flush at the true bottom of the
+  // screen, with the branding footer positioned just above it (bottom-8 in
+  // page.tsx). Both at bottom-8 previously left the actual bottom-most 32px
+  // of the viewport uncovered by either, showing scrolled content through it.
   const positionClasses = variant === 'floating'
-    ? 'fixed bottom-8 left-0 right-0 z-30 sm:static sm:z-auto'
+    ? 'fixed bottom-0 left-0 right-0 z-30 sm:static sm:z-auto'
     : 'flex-shrink-0'
   return (
     <div className={`${positionClasses} bg-[#05070a] border-t border-amber-500/30 overflow-hidden h-8 sm:h-9 flex items-center`}>
