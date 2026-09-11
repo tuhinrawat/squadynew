@@ -130,8 +130,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       })
     }
 
+    // max-age=0, must-revalidate: forces a visitor's own browser cache to
+    // always check back in rather than silently reusing an old copy of this
+    // URL - s-maxage/stale-while-revalidate below are the ones actually
+    // meant to govern freshness, but they only speak to Vercel's shared
+    // edge cache, not a private browser cache, which was previously left
+    // free to cache this for far longer than intended (the incident this
+    // fixes: viewers stuck on a stale bid/player even through a manual
+    // refresh, because the refresh still consulted that same stale
+    // browser-cached response instead of hitting the network at all).
     return NextResponse.json(body, {
-      headers: { 'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5' },
+      headers: { 'Cache-Control': 'public, max-age=0, must-revalidate, s-maxage=2, stale-while-revalidate=5' },
     })
   } catch (error) {
     console.error('Error building auction snapshot:', error)

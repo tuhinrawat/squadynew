@@ -354,7 +354,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   const fetchSnapshot = useCallback(async () => {
     try {
-      const response = await fetch(`/api/auction/${auction.id}/snapshot`)
+      // no-store: without this, some browsers will silently keep reusing
+      // their own cached copy of this URL well past the server's intended
+      // 2s freshness window (s-maxage only governs Vercel's shared edge
+      // cache, not a visitor's own browser cache) - leaving the screen
+      // stuck on stale data through every subsequent poll, and even a
+      // manual refresh, since that still consults the browser's own cache
+      // for this same URL. This forces every poll to actually reach
+      // Vercel's edge, which is where the real freshness policy lives.
+      const response = await fetch(`/api/auction/${auction.id}/snapshot`, { cache: 'no-store' })
       if (!response.ok) throw new Error(`Snapshot poll failed: HTTP ${response.status}`)
       const data = await response.json()
       applySnapshot({
@@ -399,7 +407,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     if (!isPresenter) return
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/auction/${auction.id}/snapshot`)
+        // no-store: without this, some browsers will silently keep reusing
+      // their own cached copy of this URL well past the server's intended
+      // 2s freshness window (s-maxage only governs Vercel's shared edge
+      // cache, not a visitor's own browser cache) - leaving the screen
+      // stuck on stale data through every subsequent poll, and even a
+      // manual refresh, since that still consults the browser's own cache
+      // for this same URL. This forces every poll to actually reach
+      // Vercel's edge, which is where the real freshness policy lives.
+      const response = await fetch(`/api/auction/${auction.id}/snapshot`, { cache: 'no-store' })
         if (!response.ok) return
         const data = await response.json()
         applySnapshot({
