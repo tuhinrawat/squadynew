@@ -118,7 +118,7 @@ function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; vari
     ? 'fixed bottom-8 left-0 right-0 z-30 sm:static sm:z-auto'
     : 'flex-shrink-0'
   return (
-    <div className={`${positionClasses} bg-black/90 border-t border-amber-500/30 overflow-hidden h-8 sm:h-9 flex items-center`}>
+    <div className={`${positionClasses} bg-[#05070a] border-t border-amber-500/30 overflow-hidden h-8 sm:h-9 flex items-center`}>
       {/* Content rendered twice so the loop from -50% back to 0% is
           invisible - see .animate-ticker-scroll in globals.css. */}
       <div className="flex whitespace-nowrap animate-ticker-scroll">
