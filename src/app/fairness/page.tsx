@@ -9,6 +9,19 @@ export const metadata = {
   description: 'The exact rule Squady uses to choose who comes up next in a live auction.',
 }
 
+function CodeBlock({ filename, code }: { filename: string; code: string }) {
+  return (
+    <div className="mt-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="px-4 py-2 bg-gray-100 dark:bg-gray-900 text-xs font-mono text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+        {filename}
+      </div>
+      <pre className="bg-gray-950 text-gray-100 text-xs sm:text-sm p-4 overflow-x-auto leading-relaxed">
+        <code>{code}</code>
+      </pre>
+    </div>
+  )
+}
+
 export default function FairnessPage() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-teal-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -60,6 +73,20 @@ export default function FairnessPage() {
               even one Icon player hasn&apos;t been sold or marked unsold yet, the system will
               only draw from that group — it never looks at a regular player until every single
               Icon player has had their turn.
+              <CodeBlock
+                filename="src/app/api/auction/[id]/next-player/route.ts"
+                code={`// ICON PLAYERS MUST BE AUCTIONED FIRST
+// Only show regular players after ALL icon players have been auctioned
+const iconPlayersAvailable = availablePlayers.filter(p => p.isIcon)
+
+if (iconPlayersAvailable.length > 0) {
+  // Regular players cannot be shown until all icon players are processed
+  randomPlayer = iconPlayersAvailable[Math.floor(Math.random() * iconPlayersAvailable.length)]
+} else {
+  const regularPlayersAvailable = availablePlayers.filter(p => !p.isIcon)
+  randomPlayer = regularPlayersAvailable[Math.floor(Math.random() * regularPlayersAvailable.length)]
+}`}
+              />
             </CardContent>
           </Card>
 
@@ -78,6 +105,20 @@ export default function FairnessPage() {
               a deck: every player still available in that group has an equal chance. There&apos;s
               no weighting by price, stats, team need, or anything else, and the admin running the
               auction doesn&apos;t choose who&apos;s next any more than the bidders do.
+              <CodeBlock
+                filename="src/lib/offline-auction-store.ts"
+                code={`export function pickRandomPlayer<T extends { isIcon: boolean }>(available: T[]): T | null {
+  if (available.length === 0) return null
+  const iconPlayers = available.filter(p => p.isIcon)
+  const pool = iconPlayers.length > 0 ? iconPlayers : available.filter(p => !p.isIcon)
+  if (pool.length === 0) return null
+  return pool[Math.floor(Math.random() * pool.length)]
+}`}
+              />
+              <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                This is the same function the offline backup console calls — see &ldquo;It&apos;s the
+                same rule everywhere&rdquo; below.
+              </p>
             </CardContent>
           </Card>
 
@@ -95,6 +136,26 @@ export default function FairnessPage() {
               still marked unsold is automatically put back into the draw pool — like reshuffling
               a discard pile back into the deck — and the random draw continues from there. A
               player going unsold once doesn&apos;t mean they&apos;re done for the day.
+              <CodeBlock
+                filename="src/app/api/auction/[id]/next-player/route.ts"
+                code={`// If no available players, automatically recycle UNSOLD players back to AVAILABLE
+// IMPORTANT: Only recycle UNSOLD players, NEVER recycle SOLD players
+if (availablePlayers.length === 0) {
+  const unsoldPlayers = auction.players.filter(p => p.status === 'UNSOLD')
+
+  if (unsoldPlayers.length > 0) {
+    // Convert only UNSOLD players back to AVAILABLE (never SOLD players)
+    await prisma.player.updateMany({
+      where: {
+        id: { in: unsoldPlayers.map(p => p.id) },
+        auctionId: params.id,
+        status: 'UNSOLD' // Explicit status check ensures SOLD players are never updated
+      },
+      data: { status: 'AVAILABLE', soldTo: null, soldPrice: null }
+    })
+  }
+}`}
+              />
             </CardContent>
           </Card>
 
