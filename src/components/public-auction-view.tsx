@@ -320,13 +320,19 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Deliberately direct (no reveal animation, no diffing) - that flourish is
   // presenter/Pusher-specific eye candy; a background poller just needs the
   // screen to catch up to the real state.
-  const applySnapshot = useCallback((snapshot: AuctionSnapshot) => {
+  const applySnapshot = useCallback((snapshot: AuctionSnapshot, options?: { skipTurnState?: boolean }) => {
     setPlayers(snapshot.players)
     setBiddersState(prev => prev.map(b => {
       const update = snapshot.bidders.find(u => u.id === b.id)
       return update ? { ...b, remainingPurse: update.remainingPurse } : b
     }))
     setPoolExhausted(snapshot.poolExhausted)
+    // Skipped while the presenter's reveal animation is playing (see the
+    // presenter safety-net poll below) - applying this mid-animation would
+    // cut the reveal short instead of catching up on a genuinely missed
+    // event, since setCurrentPlayer here is the same commit that
+    // handleRevealComplete normally makes once the animation finishes.
+    if (options?.skipTurnState) return
     setCurrentPlayer(snapshot.currentPlayer)
     const { sortedHistory, currentBid: derivedBid, highestBidderId: derivedHighest } =
       deriveCurrentBidForPlayer(snapshot.bidHistory, snapshot.currentPlayer?.id)
@@ -378,6 +384,37 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const interval = setInterval(fetchSnapshot, 6000)
     return () => clearInterval(interval)
   }, [isPresenter, fetchSnapshot])
+
+  // Presenter safety net. Pusher delivers updates instantly when it works,
+  // but a single dropped message (a brief network blip on the venue's
+  // projector connection, which Pusher's client can recover from without
+  // any visible reconnect) previously left this screen frozen on stale
+  // data indefinitely - unlike every other viewer, who self-corrects via
+  // the poll above within ~6s. This runs the same kind of poll, but only
+  // acts on it while no reveal animation is in flight (skipTurnState),
+  // so it never fights the cinematic transition on a normal update - it
+  // only steps in exactly when a missed "new player" event would have
+  // otherwise left nothing animating at all.
+  useEffect(() => {
+    if (!isPresenter) return
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/auction/${auction.id}/snapshot`)
+        if (!response.ok) return
+        const data = await response.json()
+        applySnapshot({
+          currentPlayer: data.currentPlayer,
+          players: data.players,
+          bidders: data.bidders,
+          bidHistory: data.bidHistory,
+          poolExhausted: data.poolExhausted,
+        }, { skipTurnState: showPlayerReveal || !!pendingPlayer })
+      } catch (error) {
+        logger.error('Presenter safety-net poll failed:', error)
+      }
+    }, 6000)
+    return () => clearInterval(interval)
+  }, [isPresenter, auction.id, applySnapshot, showPlayerReveal, pendingPlayer])
 
   // Real-time subscriptions. Only the presenter link actually subscribes to
   // Pusher (see the `enabled` argument) - every other viewer relies on the
