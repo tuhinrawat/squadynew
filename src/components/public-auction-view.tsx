@@ -57,6 +57,7 @@ interface PublicAuctionViewProps {
   bidHistory: BidHistoryEntry[]
   bidders: Bidder[]
   onOpenBidHistoryRef?: React.MutableRefObject<(() => void) | null> // Ref to expose modal opener
+  onRefreshRef?: React.MutableRefObject<(() => void) | null> // Ref to expose a manual force-refresh
   // The presenter link (?presenter=1) - see public-auction-wrapper.tsx. True
   // keeps a real Pusher connection (the anchor's screen needs instant
   // updates); false (the default, every other viewer) drops Pusher entirely
@@ -97,7 +98,7 @@ function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: stri
   return { sortedHistory, currentBid: null, highestBidderId: null }
 }
 
-export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, isPresenter = false }: PublicAuctionViewProps) {
+export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, onRefreshRef, isPresenter = false }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
   // to recycle) - without this, spectators have no way to tell "waiting for
@@ -380,6 +381,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       if (pollFailureStreakRef.current >= 2) setPollHealthy(false)
     }
   }, [auction.id, applySnapshot])
+
+  // Expose a manual refresh trigger via ref - same pattern as
+  // onOpenBidHistoryRef above. This is what the header's big Refresh button
+  // calls: it just forces the same fetchSnapshot the 6s poll already runs,
+  // rather than a full page reload.
+  useEffect(() => {
+    if (onRefreshRef) {
+      onRefreshRef.current = () => { fetchSnapshot() }
+    }
+  }, [onRefreshRef, fetchSnapshot])
 
   // Non-presenter viewers (the default) never subscribe to Pusher at all -
   // see the `enabled` argument on usePusher below - so this poll is their
