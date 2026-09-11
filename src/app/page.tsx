@@ -36,6 +36,11 @@ export default function Home() {
                   Tutorial
                 </Button>
               </Link>
+              <Link href="/fairness" className="hidden md:block">
+                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
+                  Fairness
+                </Button>
+              </Link>
               <Link href="/register">
                 <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
                   <span className="hidden sm:inline">Live Auctions</span>
@@ -265,7 +270,7 @@ export default function Home() {
               <ul className="space-y-2 text-gray-400">
                 <li><Link href="#" className="hover:text-white transition-colors">Features</Link></li>
                 <li><Link href="#" className="hover:text-white transition-colors">Pricing</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">API</Link></li>
+                <li><Link href="/fairness" className="hover:text-white transition-colors">How Player Order Works</Link></li>
               </ul>
             </div>
             <div>
