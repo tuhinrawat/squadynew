@@ -81,7 +81,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             },
           })
         : Promise.resolve(null),
-      // Feeds the public view's sold ticker. Bounded to 10 rows regardless of
+      // Feeds the public view's sold ticker. Bounded to 5 rows regardless of
       // roster size, unlike the bulk `players` query above - fetching each
       // one's full `data` blob here is fine at this fixed, small count (same
       // order of magnitude as the single current-player fetch above), where
@@ -89,13 +89,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // a several-MB response. soldAt is null for anything sold before this
       // field existed - explicit `nulls: 'last'` pushes those to the end of
       // the list instead of excluding them (they'd otherwise vanish from
-      // the ticker entirely until 10 new real sales pushed them out) or
+      // the ticker entirely until 5 new real sales pushed them out) or
       // leaving them first (Postgres's actual default for DESC on a
       // nullable column - the opposite of what "most recent" should show).
       prisma.player.findMany({
         where: { auctionId: auction.id, status: 'SOLD' },
         orderBy: { soldAt: { sort: 'desc', nulls: 'last' } },
-        take: 10,
+        take: 5,
         select: { id: true, data: true, soldTo: true, soldPrice: true },
       }),
     ])

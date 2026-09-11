@@ -164,7 +164,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [recentSales, setRecentSales] = useState<RecentSale[]>(() => {
     return auction.players
       .filter(p => p.status === 'SOLD' && p.soldTo)
-      .slice(-10)
+      .slice(-5)
       .reverse()
       .map(p => {
         const data = p.data as Record<string, unknown> | null
@@ -1321,7 +1321,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         <div className="text-gray-600 text-[10px] font-black uppercase tracking-widest px-1 pb-1">
                           Recently Sold
                         </div>
-                        {recentSales.slice(0, 5).map(sale => (
+                        {recentSales.map(sale => (
                           <div key={sale.id} className="pl-3 border-l-[3px] border-white/10">
                             <div className="font-black uppercase truncate text-gray-300 text-sm">
                               {sale.name}
