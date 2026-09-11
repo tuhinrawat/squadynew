@@ -157,22 +157,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // rather than derived from this component's own `players` state, since
   // that state only ever carries status/isIcon after the first poll - it
   // would silently go stale (wrong name, wrong price) for any sale that
-  // happened after the initial page load otherwise. Seeded once from the
-  // SSR-loaded props so the ticker isn't empty before the first poll
-  // completes; every poll after that (and the presenter's own safety-net
-  // poll) overwrites it with the real thing.
-  const [recentSales, setRecentSales] = useState<RecentSale[]>(() => {
-    return auction.players
-      .filter(p => p.status === 'SOLD' && p.soldTo)
-      .slice(-5)
-      .reverse()
-      .map(p => {
-        const data = p.data as Record<string, unknown> | null
-        const name = String(data?.name || data?.Name || data?.player_name || 'Unknown Player')
-        const buyer = bidders.find(b => b.id === p.soldTo)
-        return { id: p.id, name, price: p.soldPrice ?? 0, buyer: buyer?.teamName || buyer?.username || 'Unknown' }
-      })
-  })
+  // happened after the initial page load otherwise. Starts empty rather
+  // than seeded from initial props - the props carry no soldAt, so a seed
+  // built from them can't tell a genuinely recent sale apart from an old
+  // one, and would flash the wrong entries for the brief moment before the
+  // first poll (which fires immediately on mount) corrects it.
+  const [recentSales, setRecentSales] = useState<RecentSale[]>([])
   
   // Track live viewer count
   const viewerCount = useViewerCount(auction.id, true)

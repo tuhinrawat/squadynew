@@ -87,14 +87,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // order of magnitude as the single current-player fetch above), where
       // doing it for the whole roster on every poll was the actual cause of
       // a several-MB response. soldAt is null for anything sold before this
-      // field existed - explicit `nulls: 'last'` pushes those to the end of
-      // the list instead of excluding them (they'd otherwise vanish from
-      // the ticker entirely until 5 new real sales pushed them out) or
-      // leaving them first (Postgres's actual default for DESC on a
-      // nullable column - the opposite of what "most recent" should show).
+      // field existed - excluded rather than padding the list with them,
+      // since mixing in unrelated old sales just to fill 5 slots was more
+      // confusing than a ticker with fewer than 5 (even zero) real recent
+      // sales until enough real ones accumulate after this deploy.
       prisma.player.findMany({
-        where: { auctionId: auction.id, status: 'SOLD' },
-        orderBy: { soldAt: { sort: 'desc', nulls: 'last' } },
+        where: { auctionId: auction.id, status: 'SOLD', soldAt: { not: null } },
+        orderBy: { soldAt: 'desc' },
         take: 5,
         select: { id: true, data: true, soldTo: true, soldPrice: true },
       }),
