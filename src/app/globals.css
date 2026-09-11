@@ -238,3 +238,27 @@ body {
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* Bottom sold-ticker (public auction view). The track renders its content
+   twice back-to-back; animating to exactly -50% is what makes the loop
+   seamless - at that point the second copy is sitting exactly where the
+   first one started, so the jump back to 0% is invisible. Speed is set by
+   duration alone (not distance), so it stays constant regardless of how
+   many sales are in the list - pause on hover/tap so it can actually be
+   read on a device with a pointer, not just glanced at as it scrolls by. */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-ticker-scroll {
+  animation: ticker-scroll 30s linear infinite;
+}
+
+.animate-ticker-scroll:hover {
+  animation-play-state: paused;
+}

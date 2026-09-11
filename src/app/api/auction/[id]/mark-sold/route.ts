@@ -400,7 +400,8 @@ export async function POST(
           data: {
             status: 'SOLD',
             soldTo: winningBidder.id,
-            soldPrice: highestBid.amount
+            soldPrice: highestBid.amount,
+            soldAt: new Date()
           }
         })
         if (saleResult.count === 0) {

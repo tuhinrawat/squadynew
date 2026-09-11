@@ -108,14 +108,21 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 			<div className="relative p-3 sm:p-6 lg:p-8">
 				{/* Current Bid Banner - always the first thing visible, no scrolling required */}
 				{currentBid !== undefined && (
-					<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-teal-500/10 border border-teal-500/30 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 mb-3 sm:mb-5">
-						<span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-teal-300/80">Current Bid</span>
+					// Amber, not teal - teal is now the site's general accent
+					// (Batting/Bowling headers, Refresh button, etc.), so the one
+					// number people are actually here to watch needs its own
+					// distinct color to stand out from the rest of the card.
+					// Pulses only while there's an actual bid to draw the eye to a
+					// change - an empty "No bids yet" state has nothing urgent to
+					// signal, so it stays still.
+					<div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 mb-3 sm:mb-5 ${currentBid ? 'animate-pulse' : ''}`}>
+						<span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-amber-300/80">Current Bid</span>
 						{currentBid ? (
 							<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-end">
-								<span className="text-base sm:text-2xl font-black text-teal-400 tabular-nums">₹{currentBid.amount.toLocaleString('en-IN')}</span>
+								<span className="text-base sm:text-2xl font-black text-amber-400 tabular-nums">₹{currentBid.amount.toLocaleString('en-IN')}</span>
 								<span className="text-[10px] sm:text-sm font-bold text-white">{currentBid.bidderName}</span>
 								{currentBid.teamName && (
-									<span className="text-[9px] sm:text-[10px] font-bold text-teal-300 bg-teal-500/15 px-2 py-0.5 rounded-full">{currentBid.teamName}</span>
+									<span className="text-[9px] sm:text-[10px] font-bold text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-full">{currentBid.teamName}</span>
 								)}
 							</div>
 						) : (

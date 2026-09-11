@@ -130,6 +130,11 @@ model Player {
   isIcon    Boolean      @default(false)
   soldTo    String?
   soldPrice Float?
+  // Set once, when a player is actually marked SOLD (mark-sold and the
+  // offline-console reconcile route both set this) - createdAt is import
+  // time, not sale time, so without this there was no way to order "most
+  // recently sold" at all, which the public-view sold ticker needs.
+  soldAt    DateTime?
   createdAt DateTime     @default(now())
 
   // Snapshot of this player's most recent sale in a linked previous auction
@@ -147,6 +152,7 @@ model Player {
   @@index([auctionId])
   @@index([auctionId, status])
   @@index([auctionId, status, soldPrice])
+  @@index([auctionId, status, soldAt])
   @@map("players")
 }
 

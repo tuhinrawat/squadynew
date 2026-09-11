@@ -77,6 +77,14 @@ interface AuctionSnapshot {
   bidders: Array<{ id: string; remainingPurse: number }>
   bidHistory: BidHistoryEntry[]
   poolExhausted: boolean
+  recentSales: RecentSale[]
+}
+
+interface RecentSale {
+  id: string
+  name: string
+  price: number
+  buyer: string
 }
 
 function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: string | undefined) {
@@ -98,6 +106,35 @@ function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: stri
   return { sortedHistory, currentBid: null, highestBidderId: null }
 }
 
+// Bottom scrolling ticker of recent sales. 'floating' (the default, used by
+// regular public viewers) is fixed above the page's branding footer on
+// mobile and drops to normal document flow on desktop, right before that
+// same footer. 'inline' (presenter only) is always normal flow - the
+// presenter screen is a fixed-height flex column, so it just takes its own
+// row and the stage above it shrinks to fit, no positioning math needed.
+function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; variant?: 'floating' | 'inline' }) {
+  if (sales.length === 0) return null
+  const positionClasses = variant === 'floating'
+    ? 'fixed bottom-8 left-0 right-0 z-30 sm:static sm:z-auto'
+    : 'flex-shrink-0'
+  return (
+    <div className={`${positionClasses} bg-black/90 border-t border-amber-500/30 overflow-hidden h-8 sm:h-9 flex items-center`}>
+      {/* Content rendered twice so the loop from -50% back to 0% is
+          invisible - see .animate-ticker-scroll in globals.css. */}
+      <div className="flex whitespace-nowrap animate-ticker-scroll">
+        {[...sales, ...sales].map((sale, i) => (
+          <span key={`${sale.id}-${i}`} className="inline-flex items-center gap-2 px-6 text-xs sm:text-sm font-bold flex-shrink-0">
+            <span className="text-white uppercase">{sale.name}</span>
+            <span className="text-gray-600">&rarr;</span>
+            <span className="text-amber-400">{sale.buyer}</span>
+            <span className="text-emerald-400 tabular-nums">₹{sale.price.toLocaleString('en-IN')}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, onRefreshRef, isPresenter = false }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
@@ -115,6 +152,27 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [isClient, setIsClient] = useState(false)
   const [showAllPlayerDetails, setShowAllPlayerDetails] = useState(false)
   const [isImageLoading, setIsImageLoading] = useState(false)
+  // Feeds both the sold ticker and the Play-by-Play panel's "Recently Sold"
+  // fallback. Server-authoritative (see recentSales in the snapshot route)
+  // rather than derived from this component's own `players` state, since
+  // that state only ever carries status/isIcon after the first poll - it
+  // would silently go stale (wrong name, wrong price) for any sale that
+  // happened after the initial page load otherwise. Seeded once from the
+  // SSR-loaded props so the ticker isn't empty before the first poll
+  // completes; every poll after that (and the presenter's own safety-net
+  // poll) overwrites it with the real thing.
+  const [recentSales, setRecentSales] = useState<RecentSale[]>(() => {
+    return auction.players
+      .filter(p => p.status === 'SOLD' && p.soldTo)
+      .slice(-10)
+      .reverse()
+      .map(p => {
+        const data = p.data as Record<string, unknown> | null
+        const name = String(data?.name || data?.Name || data?.player_name || 'Unknown Player')
+        const buyer = bidders.find(b => b.id === p.soldTo)
+        return { id: p.id, name, price: p.soldPrice ?? 0, buyer: buyer?.teamName || buyer?.username || 'Unknown' }
+      })
+  })
   
   // Track live viewer count
   const viewerCount = useViewerCount(auction.id, true)
@@ -328,6 +386,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       return update ? { ...b, remainingPurse: update.remainingPurse } : b
     }))
     setPoolExhausted(snapshot.poolExhausted)
+    setRecentSales(snapshot.recentSales)
     // Skipped while the presenter's reveal animation is playing (see the
     // presenter safety-net poll below) - applying this mid-animation would
     // cut the reveal short instead of catching up on a genuinely missed
@@ -372,6 +431,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         bidders: data.bidders,
         bidHistory: data.bidHistory,
         poolExhausted: data.poolExhausted,
+        recentSales: data.recentSales ?? [],
       })
       pollFailureStreakRef.current = 0
       setPollHealthy(true)
@@ -435,6 +495,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           bidders: data.bidders,
           bidHistory: data.bidHistory,
           poolExhausted: data.poolExhausted,
+          recentSales: data.recentSales ?? [],
         }, { skipTurnState: showPlayerReveal || !!pendingPlayer })
       } catch (error) {
         logger.error('Presenter safety-net poll failed:', error)
@@ -731,31 +792,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return data?.name || data?.Name || data?.player_name || 'Unknown Player'
   }, [pendingPlayer])
 
-  const getPlayerName = useCallback((player: Player): string => {
-    const data = player.data as any
-    return data?.name || data?.Name || data?.player_name || 'Unknown Player'
-  }, [])
-
-  // Real sales, most recent first - fills the Play-by-Play panel with
-  // actual content between bids instead of empty space under "No bids
-  // yet", using data the page already has (players already carry
-  // soldTo/soldPrice once sold).
-  const recentlySold = useMemo(() => {
-    return players
-      .filter(p => p.status === 'SOLD' && p.soldTo)
-      .slice(-5)
-      .reverse()
-      .map(p => {
-        const bidder = biddersState.find(b => b.id === p.soldTo)
-        return {
-          id: p.id,
-          name: getPlayerName(p),
-          price: p.soldPrice ?? 0,
-          buyer: bidder?.teamName || bidder?.username || 'Unknown'
-        }
-      })
-  }, [players, biddersState, getPlayerName])
-
   const getProfilePhotoUrl = useCallback((playerData: any): string | undefined => {
     const possibleKeys = [
       'Profile Photo',
@@ -1002,6 +1038,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 </>
               )}
             </div>
+            <SoldTicker sales={recentSales} variant="inline" />
           </div>
         )}
       </>
@@ -1018,7 +1055,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-    <div className="pb-40 sm:pb-3 bg-[#05070a]">
+    /* pb-48 (was pb-40): the extra room is for the sold ticker's own h-8
+       bar, which now sits fixed below the branding footer on mobile - see
+       SoldTicker below and the footer's bottom-8 offset in page.tsx. */
+    <div className="pb-48 sm:pb-3 bg-[#05070a]">
       <div className="max-w-7xl mx-auto">
         {/* Stage - a fixed-composition "broadcast" surface: every row below
             is sized off real content (not viewport units), specifically so
@@ -1276,12 +1316,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     <div className="text-gray-500 text-xs font-semibold px-1 pb-3 mb-1 border-b border-white/10">
                       No bids yet on this lot
                     </div>
-                    {recentlySold.length > 0 ? (
+                    {recentSales.length > 0 ? (
                       <>
                         <div className="text-gray-600 text-[10px] font-black uppercase tracking-widest px-1 pb-1">
                           Recently Sold
                         </div>
-                        {recentlySold.map(sale => (
+                        {recentSales.slice(0, 5).map(sale => (
                           <div key={sale.id} className="pl-3 border-l-[3px] border-white/10">
                             <div className="font-black uppercase truncate text-gray-300 text-sm">
                               {sale.name}
@@ -1540,6 +1580,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           </div>
         </DialogContent>
       </Dialog>
+      <SoldTicker sales={recentSales} />
     </div>
       )}
     </>

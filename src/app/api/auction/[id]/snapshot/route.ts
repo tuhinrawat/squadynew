@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // actual driver of this endpoint's payload size (confirmed via load
     // testing - a several-MB response per poll, independent of audience
     // size), not the audience size itself.
-    const [players, bidders, currentPlayerFull] = await Promise.all([
+    const [players, bidders, currentPlayerFull, recentSoldPlayers] = await Promise.all([
       prisma.player.findMany({
         where: { auctionId: auction.id },
         select: { id: true, status: true, isIcon: true },
@@ -81,6 +81,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             },
           })
         : Promise.resolve(null),
+      // Feeds the public view's sold ticker. Bounded to 10 rows regardless of
+      // roster size, unlike the bulk `players` query above - fetching each
+      // one's full `data` blob here is fine at this fixed, small count (same
+      // order of magnitude as the single current-player fetch above), where
+      // doing it for the whole roster on every poll was the actual cause of
+      // a several-MB response. soldAt can be null for anything sold before
+      // this field existed - excluded rather than guessing a sale time.
+      prisma.player.findMany({
+        where: { auctionId: auction.id, status: 'SOLD', soldAt: { not: null } },
+        orderBy: { soldAt: 'desc' },
+        take: 10,
+        select: { id: true, data: true, soldTo: true, soldPrice: true },
+      }),
     ])
 
     // Defensive, read-only mirror of the same check the SSR page makes: a
@@ -98,6 +111,27 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // auction's entire history instead of just the current lot.
     const bidHistory = filterBidHistoryForCurrentPlayer(parseBidHistory(auction.bidHistory), currentPlayer?.id)
 
+    // Same name-extraction fallback keys the client already uses for every
+    // other player display - kept server-side here since only the name is
+    // needed, not the rest of the uploaded data blob.
+    const extractPlayerName = (data: unknown): string => {
+      const record = data as Record<string, unknown> | null | undefined
+      return String(record?.name || record?.Name || record?.player_name || 'Unknown Player')
+    }
+    const buyerIds = [...new Set(recentSoldPlayers.map(p => p.soldTo).filter((id): id is string => !!id))]
+    const buyers = buyerIds.length > 0
+      ? await prisma.bidder.findMany({ where: { id: { in: buyerIds } }, select: { id: true, teamName: true, username: true } })
+      : []
+    const recentSales = recentSoldPlayers.map(p => {
+      const buyer = buyers.find(b => b.id === p.soldTo)
+      return {
+        id: p.id,
+        name: extractPlayerName(p.data),
+        price: p.soldPrice ?? 0,
+        buyer: buyer?.teamName || buyer?.username || 'Unknown',
+      }
+    })
+
     const body = {
       auctionId: auction.id,
       auctionStatus: auction.status,
@@ -106,6 +140,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       bidders,
       bidHistory,
       poolExhausted,
+      recentSales,
     }
 
     // The one signal that would have caught today's incident before a real

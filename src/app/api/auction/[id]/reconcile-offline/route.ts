@@ -168,7 +168,7 @@ export async function POST(
       await prisma.$transaction([
         prisma.player.update({
           where: { id: result.playerId },
-          data: { status: 'SOLD', soldTo: bidder.id, soldPrice: result.amount }
+          data: { status: 'SOLD', soldTo: bidder.id, soldPrice: result.amount, soldAt: new Date() }
         }),
         prisma.bidder.update({
           where: { id: bidder.id },
