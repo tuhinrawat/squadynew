@@ -33,7 +33,7 @@
 
 import http from 'k6/http'
 import { check, sleep } from 'k6'
-import { Trend, Rate } from 'k6/metrics'
+import { Trend, Rate, Counter } from 'k6/metrics'
 
 const BASE_URL = __ENV.BASE_URL
 const AUCTION_ID = __ENV.AUCTION_ID
@@ -52,6 +52,37 @@ if (!BASE_URL || !AUCTION_ID) {
 
 const responseBytes = new Trend('snapshot_response_bytes')
 const cacheHitRate = new Rate('vercel_cache_hit_rate')
+
+// A status-0 response is a connection that never completed (dial/timeout/
+// reset) - the request never reached Vercel, so nothing about it shows up
+// in Vercel's own dashboards. These counters exist to tell that apart from
+// a real app/edge problem, and to show WHEN in the test it happens -
+// steady failures throughout the hold phase point at something sustaining
+// ~this many simultaneous connections (e.g. a router's NAT/session-table
+// ceiling), while a spike only at ramp-up points at connection-churn
+// instead. Reported as separate named counters (rather than one tagged
+// metric) so they show up individually in k6's default end-of-run summary
+// with no extra handleSummary() code needed.
+function parseDurationToSeconds(value) {
+  const match = String(value).match(/^(\d+(?:\.\d+)?)(ms|s|m|h)$/)
+  if (!match) return 0
+  const amount = parseFloat(match[1])
+  const unit = match[2]
+  if (unit === 'ms') return amount / 1000
+  if (unit === 's') return amount
+  if (unit === 'm') return amount * 60
+  return amount * 3600
+}
+const rampUpSeconds = parseDurationToSeconds(RAMP_UP)
+const holdSeconds = parseDurationToSeconds(HOLD)
+
+const failuresDialTcp = new Counter('failures_dial_tcp')
+const failuresTimeout = new Counter('failures_timeout')
+const failuresReset = new Counter('failures_reset')
+const failuresOther = new Counter('failures_other')
+const failuresDuringRampUp = new Counter('failures_during_ramp_up')
+const failuresDuringHold = new Counter('failures_during_hold')
+const failuresDuringRampDown = new Counter('failures_during_ramp_down')
 
 export const options = {
   scenarios: {
@@ -82,7 +113,7 @@ export function setup() {
   return { startedAt: Date.now() }
 }
 
-export default function viewerPollLoop() {
+export default function viewerPollLoop(data) {
   sleep(Math.random() * POLL_INTERVAL_S)
 
   const res = http.get(`${BASE_URL}/api/auction/${AUCTION_ID}/snapshot`, {
@@ -99,6 +130,31 @@ export default function viewerPollLoop() {
       }
     },
   })
+
+  // status 0 = the connection itself never completed (dial/timeout/reset) -
+  // there is no HTTP response to grade, so this is handled separately from
+  // the checks above.
+  if (res.status === 0) {
+    const errorText = (res.error || '').toLowerCase()
+    if (errorText.includes('timeout')) {
+      failuresTimeout.add(1)
+    } else if (errorText.includes('reset')) {
+      failuresReset.add(1)
+    } else if (errorText.includes('dial tcp') || errorText.includes('connectex') || errorText.includes('connection refused')) {
+      failuresDialTcp.add(1)
+    } else {
+      failuresOther.add(1)
+    }
+
+    const elapsedSeconds = (Date.now() - data.startedAt) / 1000
+    if (elapsedSeconds < rampUpSeconds) {
+      failuresDuringRampUp.add(1)
+    } else if (elapsedSeconds < rampUpSeconds + holdSeconds) {
+      failuresDuringHold.add(1)
+    } else {
+      failuresDuringRampDown.add(1)
+    }
+  }
 
   responseBytes.add(res.body ? res.body.length : 0)
 
