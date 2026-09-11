@@ -84,6 +84,24 @@ const failuresDuringRampUp = new Counter('failures_during_ramp_up')
 const failuresDuringHold = new Counter('failures_during_hold')
 const failuresDuringRampDown = new Counter('failures_during_ramp_down')
 
+// Where in the hold phase each failure landed, as a 0-1 fraction (0 = right
+// as the hold phase started, 1 = right at the end). Reported as a Trend so
+// k6's own summary gives us the distribution (avg/median/percentiles) for
+// free - a flat spread across 0-1 means a steady ceiling throughout a long
+// run; a distribution skewed toward 1 would mean something gets WORSE the
+// longer the connections stay open (a slow leak somewhere), which a short
+// test has no way to reveal but a multi-hour one would.
+const failurePositionInHold = new Trend('failure_position_in_hold_fraction')
+
+// The categorization below is a best-effort guess at what's in res.error -
+// last run, every single failure landed in "other" despite the raw WARN
+// logs clearly showing "dial tcp ... connectex", meaning res.error isn't
+// populated the way assumed here for this k6/OS combination. Rather than
+// guess again blindly on a 3-hour run, this also prints the actual raw
+// res.error/res.error_code for the first few failures so there's real
+// ground truth to check the categorization against, not just another guess.
+let sampleFailuresLogged = 0
+
 export const options = {
   scenarios: {
     viewers: {
@@ -135,7 +153,12 @@ export default function viewerPollLoop(data) {
   // there is no HTTP response to grade, so this is handled separately from
   // the checks above.
   if (res.status === 0) {
-    const errorText = (res.error || '').toLowerCase()
+    if (sampleFailuresLogged < 5) {
+      sampleFailuresLogged++
+      console.log(`[sample failure ${sampleFailuresLogged}/5] error_code=${res.error_code} error=${JSON.stringify(res.error)}`)
+    }
+
+    const errorText = `${res.error || ''} ${res.error_code || ''}`.toLowerCase()
     if (errorText.includes('timeout')) {
       failuresTimeout.add(1)
     } else if (errorText.includes('reset')) {
@@ -151,6 +174,7 @@ export default function viewerPollLoop(data) {
       failuresDuringRampUp.add(1)
     } else if (elapsedSeconds < rampUpSeconds + holdSeconds) {
       failuresDuringHold.add(1)
+      failurePositionInHold.add((elapsedSeconds - rampUpSeconds) / holdSeconds)
     } else {
       failuresDuringRampDown.add(1)
     }
