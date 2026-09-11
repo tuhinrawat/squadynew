@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Montserrat } from 'next/font/google';
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import Providers from "@/components/providers";
 import { JsonLd } from "@/components/json-ld";
@@ -73,6 +74,7 @@ export default function RootLayout({
             {children}
           </div>
         </Providers>
+        <Analytics />
       </body>
     </html>
   );
