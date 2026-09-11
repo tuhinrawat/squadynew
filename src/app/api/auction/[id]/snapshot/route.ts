@@ -86,11 +86,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       // one's full `data` blob here is fine at this fixed, small count (same
       // order of magnitude as the single current-player fetch above), where
       // doing it for the whole roster on every poll was the actual cause of
-      // a several-MB response. soldAt can be null for anything sold before
-      // this field existed - excluded rather than guessing a sale time.
+      // a several-MB response. soldAt is null for anything sold before this
+      // field existed - explicit `nulls: 'last'` pushes those to the end of
+      // the list instead of excluding them (they'd otherwise vanish from
+      // the ticker entirely until 10 new real sales pushed them out) or
+      // leaving them first (Postgres's actual default for DESC on a
+      // nullable column - the opposite of what "most recent" should show).
       prisma.player.findMany({
-        where: { auctionId: auction.id, status: 'SOLD', soldAt: { not: null } },
-        orderBy: { soldAt: 'desc' },
+        where: { auctionId: auction.id, status: 'SOLD' },
+        orderBy: { soldAt: { sort: 'desc', nulls: 'last' } },
         take: 10,
         select: { id: true, data: true, soldTo: true, soldPrice: true },
       }),
