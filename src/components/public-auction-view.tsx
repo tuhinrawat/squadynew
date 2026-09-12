@@ -121,13 +121,19 @@ function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; vari
   const positionClasses = variant === 'floating'
     ? 'fixed bottom-0 left-0 right-0 z-30 sm:static sm:z-auto'
     : 'flex-shrink-0'
+  // Presenter gets a much bigger banner than regular viewers - it's read
+  // from across a room on a projector, not held in a hand a foot from the
+  // eyes, so it needs a size closer to the rest of the presenter stage's
+  // own scale (which already runs text-3xl+ for the player name).
+  const containerSizeClasses = variant === 'inline' ? 'h-16 border-t-2' : 'h-8 sm:h-9 border-t'
+  const itemSizeClasses = variant === 'inline' ? 'gap-3 px-10 text-xl' : 'gap-2 px-6 text-xs sm:text-sm'
   return (
-    <div className={`${positionClasses} bg-[#05070a] border-t border-amber-500/30 overflow-hidden h-8 sm:h-9 flex items-center`}>
+    <div className={`${positionClasses} ${containerSizeClasses} bg-[#05070a] border-amber-500/30 overflow-hidden flex items-center`}>
       {/* Content rendered twice so the loop from -50% back to 0% is
           invisible - see .animate-ticker-scroll in globals.css. */}
       <div className="flex whitespace-nowrap animate-ticker-scroll">
         {[...sales, ...sales].map((sale, i) => (
-          <span key={`${sale.id}-${i}`} className="inline-flex items-center gap-2 px-6 text-xs sm:text-sm font-bold flex-shrink-0">
+          <span key={`${sale.id}-${i}`} className={`inline-flex items-center flex-shrink-0 font-bold ${itemSizeClasses}`}>
             <span className="text-white uppercase">{sale.name}</span>
             <span className="text-gray-600">&rarr;</span>
             <span className="text-amber-400">{sale.buyer}</span>
