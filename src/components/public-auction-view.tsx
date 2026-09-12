@@ -127,19 +127,26 @@ function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; vari
   // own scale (which already runs text-3xl+ for the player name).
   const containerSizeClasses = variant === 'inline' ? 'h-16 border-t-2' : 'h-8 sm:h-9 border-t'
   const itemSizeClasses = variant === 'inline' ? 'gap-3 px-10 text-xl' : 'gap-2 px-6 text-xs sm:text-sm'
+  const labelSizeClasses = variant === 'inline' ? 'px-8 text-base' : 'px-3 sm:px-4 text-[9px] sm:text-[11px]'
   return (
-    <div className={`${positionClasses} ${containerSizeClasses} bg-[#05070a] border-amber-500/30 overflow-hidden flex items-center`}>
-      {/* Content rendered twice so the loop from -50% back to 0% is
-          invisible - see .animate-ticker-scroll in globals.css. */}
-      <div className="flex whitespace-nowrap animate-ticker-scroll">
-        {[...sales, ...sales].map((sale, i) => (
-          <span key={`${sale.id}-${i}`} className={`inline-flex items-center flex-shrink-0 font-bold ${itemSizeClasses}`}>
-            <span className="text-white uppercase">{sale.name}</span>
-            <span className="text-gray-600">&rarr;</span>
-            <span className="text-amber-400">{sale.buyer}</span>
-            <span className="text-emerald-400 tabular-nums">₹{sale.price.toLocaleString('en-IN')}</span>
-          </span>
-        ))}
+    <div className={`${positionClasses} ${containerSizeClasses} bg-[#05070a] border-amber-500/30 flex items-center`}>
+      {/* Fixed label, never scrolls - only the sales list to its right does. */}
+      <div className={`flex-shrink-0 h-full flex items-center bg-amber-500/10 border-r border-amber-500/30 font-black uppercase tracking-widest text-amber-400 whitespace-nowrap ${labelSizeClasses}`}>
+        Last 5 Sales
+      </div>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        {/* Content rendered twice so the loop from -50% back to 0% is
+            invisible - see .animate-ticker-scroll in globals.css. */}
+        <div className="flex whitespace-nowrap animate-ticker-scroll">
+          {[...sales, ...sales].map((sale, i) => (
+            <span key={`${sale.id}-${i}`} className={`inline-flex items-center flex-shrink-0 font-bold ${itemSizeClasses}`}>
+              <span className="text-white uppercase">{sale.name}</span>
+              <span className="text-gray-600">&rarr;</span>
+              <span className="text-amber-400">{sale.buyer}</span>
+              <span className="text-emerald-400 tabular-nums">₹{sale.price.toLocaleString('en-IN')}</span>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )
