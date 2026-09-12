@@ -1,3 +1,23 @@
+import { config as loadEnv } from 'dotenv'
+import { existsSync } from 'fs'
+import { resolve } from 'path'
+
+// tsx does not auto-load .env the way Next.js does - load it explicitly
+// the same way the repo's other standalone scripts do (see wipe-db.ts),
+// preferring .env.local if present.
+;(() => {
+  const root = process.cwd()
+  const envLocal = resolve(root, '.env.local')
+  const envFile = resolve(root, '.env')
+  if (existsSync(envLocal)) {
+    loadEnv({ path: envLocal })
+  } else if (existsSync(envFile)) {
+    loadEnv({ path: envFile })
+  } else {
+    loadEnv()
+  }
+})()
+
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
