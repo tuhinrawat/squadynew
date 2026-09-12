@@ -140,7 +140,7 @@ export async function POST(
           where: { id: result.playerId },
           data: { status: 'UNSOLD', soldTo: null, soldPrice: null }
         })
-        bidHistory = [{ type: 'unsold', playerId: result.playerId, playerName, timestamp: result.id }, ...bidHistory]
+        bidHistory = [{ type: 'unsold', playerId: result.playerId, playerName, timestamp: new Date().toISOString() }, ...bidHistory]
         changedPlayers.push({ id: result.playerId, status: 'UNSOLD', soldTo: null, soldPrice: null })
         outcomes.push({ id: result.id, playerId: result.playerId, outcome: 'applied' })
         continue
@@ -185,7 +185,7 @@ export async function POST(
         bidderName: bidder.user?.name || bidder.username,
         teamName: bidder.teamName,
         amount: result.amount,
-        timestamp: result.id
+        timestamp: new Date().toISOString()
       }, ...bidHistory]
       changedPlayers.push({ id: result.playerId, status: 'SOLD', soldTo: bidder.id, soldPrice: result.amount })
       // Last write wins if this bidder appears in more than one result in

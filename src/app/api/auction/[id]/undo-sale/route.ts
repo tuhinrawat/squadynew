@@ -51,12 +51,24 @@ export async function POST(
       return NextResponse.json({ error: 'No sold players to undo' }, { status: 400 })
     }
 
-    // Sort by timestamp (most recent first) - timestamps are ISO strings or Date objects
-    soldEvents.sort((a: any, b: any) => {
-      const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : (a.timestamp?.getTime?.() || 0)
-      const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : (b.timestamp?.getTime?.() || 0)
-      return timeB - timeA // Most recent first
-    })
+    // Sort by timestamp (most recent first) - timestamps are ISO strings or
+    // Date objects. parseTime falls back to 0 (oldest possible) for
+    // anything that isn't a valid date, rather than NaN - a NaN result from
+    // this comparator is undefined behavior for Array.sort and can corrupt
+    // the ordering unpredictably (this is exactly what a non-date value
+    // written into a "timestamp" field elsewhere - now fixed - used to
+    // trigger). Falling back to "oldest" is the safe direction: it can
+    // never be picked as "most recent" ahead of a genuinely-timestamped
+    // entry.
+    const parseTime = (value: unknown): number => {
+      if (typeof value === 'string') {
+        const parsed = new Date(value).getTime()
+        return Number.isNaN(parsed) ? 0 : parsed
+      }
+      const parsed = (value as { getTime?: () => number })?.getTime?.()
+      return typeof parsed === 'number' && !Number.isNaN(parsed) ? parsed : 0
+    }
+    soldEvents.sort((a: any, b: any) => parseTime(b.timestamp) - parseTime(a.timestamp))
 
     const mostRecentSale = soldEvents[0]
     const lastSoldPlayerId = mostRecentSale.playerId
