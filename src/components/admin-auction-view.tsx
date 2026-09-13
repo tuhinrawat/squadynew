@@ -96,6 +96,7 @@ interface PusherSaleUndoData {
   refundedAmount?: number
   bidderRemainingPurse?: number
   updatedBidders?: Array<{ id: string; remainingPurse: number }>
+  undoneType?: 'sold' | 'unsold'
 }
 
 interface PusherPlayerData {
@@ -982,27 +983,33 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         })
       }
       
-      // Update bidder balance
-      if (data.bidderRemainingPurse !== undefined && data.bidderId) {
-        setBidders(prev => prev.map(b => 
-          b.id === data.bidderId 
-            ? { ...b, remainingPurse: data.bidderRemainingPurse! }
-            : b
-        ))
-      } else if (data.updatedBidders) {
-        // Batch update multiple bidders
-        setBidders(prev => prev.map(b => {
-          const update = data.updatedBidders!.find(ub => ub.id === b.id)
-          return update ? { ...b, remainingPurse: update.remainingPurse } : b
-        }))
+      const isUnsoldUndo = data.undoneType === 'unsold'
+
+      // An unsold-undo never involved a bidder or purse - only a sold-undo
+      // needs this.
+      if (!isUnsoldUndo) {
+        if (data.bidderRemainingPurse !== undefined && data.bidderId) {
+          setBidders(prev => prev.map(b =>
+            b.id === data.bidderId
+              ? { ...b, remainingPurse: data.bidderRemainingPurse! }
+              : b
+          ))
+        } else if (data.updatedBidders) {
+          // Batch update multiple bidders
+          setBidders(prev => prev.map(b => {
+            const update = data.updatedBidders!.find(ub => ub.id === b.id)
+            return update ? { ...b, remainingPurse: update.remainingPurse } : b
+          }))
+        }
       }
-      
+
       // Reset current bid and highest bidder since the player is back to being available
       setCurrentBid(null)
       setHighestBidderId(null)
-      
-      // Remove only the "sold" entry for this player (keep all bids)
-      // Bids should only be removed via "undo bid" action
+
+      // Remove only the reverted event (sold or unsold) for this player -
+      // keep all bids, which should only be removed via "undo bid".
+      const revertedType = isUnsoldUndo ? 'unsold' : 'sold'
       const playerData = data.player?.data as any
       const playerName = playerData?.Name || playerData?.name || 'Player'
       const undoEvent: BidHistoryEntry = {
@@ -1010,30 +1017,32 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         playerId: data.playerId,
         playerName: playerName,
         timestamp: new Date(),
-        refundedAmount: data.refundedAmount
+        refundedAmount: isUnsoldUndo ? undefined : data.refundedAmount
       }
       setFullBidHistory(prev => {
-        // Remove only "sold" events for this player
-        // Keep all bids - bids should only be removed via "undo bid"
-        const filtered = prev.filter(entry => 
-          !(entry.playerId === data.player.id && entry.type === 'sold')
+        const filtered = prev.filter(entry =>
+          !(entry.playerId === data.player.id && entry.type === revertedType)
         )
         // Add the undo event at the beginning
         return [undoEvent, ...filtered]
       })
-      
+
       // Update bid history to show remaining bids for this player
       // Filter to only show bids for current player (excluding sold/unsold events)
       setBidHistory(prev => {
-        return prev.filter(entry => 
-          entry.playerId === data.player.id && 
-          entry.type !== 'sold' && 
+        return prev.filter(entry =>
+          entry.playerId === data.player.id &&
+          entry.type !== 'sold' &&
           entry.type !== 'unsold'
         )
       })
-      
+
       // Show success toast
-      toast.success(`Sale undone! Player restored and ₹${data.refundedAmount?.toLocaleString('en-IN') || 'amount'} refunded`)
+      if (isUnsoldUndo) {
+        toast.success(`Unsold undone! ${playerName} is back on the block.`)
+      } else {
+        toast.success(`Sale undone! Player restored and ₹${data.refundedAmount?.toLocaleString('en-IN') || 'amount'} refunded`)
+      }
   }, [])
 
   const handlePlayerSold = useCallback((data: PusherSoldData) => {
@@ -1540,33 +1549,38 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         setUndoSaleDialogOpen(false)
         // Real-time updates will come via Pusher event (handleSaleUndo)
         // But we can also update optimistically from API response
-        if (data.player && data.bidder) {
+        const isUnsoldUndo = data.undoneType === 'unsold'
+        if (data.player && (isUnsoldUndo || data.bidder)) {
           console.log('🔄 Updating state from API response (optimistic)')
-          
-          // Calculate refund amount from bidder balance change
-          const oldBidder = bidders.find(b => b.id === data.bidder.id)
+
+          // Calculate refund amount from bidder balance change - only
+          // meaningful for a sold-undo, which is the only case with a bidder.
+          const oldBidder = !isUnsoldUndo ? bidders.find(b => b.id === data.bidder.id) : undefined
           const refundAmount = oldBidder ? data.bidder.remainingPurse - oldBidder.remainingPurse : 0
-          
-          setPlayers(prev => prev.map(p => 
+
+          setPlayers(prev => prev.map(p =>
             p.id === data.player.id ? data.player : p
           ))
-          setBidders(prev => prev.map(b => 
-            b.id === data.bidder.id ? data.bidder : b
-          ))
+          if (!isUnsoldUndo) {
+            setBidders(prev => prev.map(b =>
+              b.id === data.bidder.id ? data.bidder : b
+            ))
+          }
           // Set the undone player as current player (API sets it as currentPlayerId)
           setCurrentPlayer(data.player)
-          
+
           // Reset bid state
           setCurrentBid(null)
           setHighestBidderId(null)
-          
-          // Remove the "sold" entry and all bids for this player from activity log
+
+          // Remove the reverted entry (and, for a sold-undo, all bids too) for
+          // this player from the activity log.
+          const revertedType = isUnsoldUndo ? 'unsold' : 'sold'
           const playerData = data.player.data as any
           const playerName = playerData?.Name || playerData?.name || 'Player'
           setFullBidHistory(prev => {
-            // Remove the "sold" entry and all bid entries for this player
-            const filtered = prev.filter(entry => 
-              !(entry.playerId === data.player.id && (entry.type === 'sold' || entry.type === 'bid'))
+            const filtered = prev.filter(entry =>
+              !(entry.playerId === data.player.id && (entry.type === revertedType || (!isUnsoldUndo && entry.type === 'bid')))
             )
             // Add undo event at the beginning
             const undoEvent: BidHistoryEntry = {
@@ -1574,11 +1588,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               playerId: data.player.id,
               playerName: playerName,
               timestamp: new Date(),
-              refundedAmount: refundAmount
+              refundedAmount: isUnsoldUndo ? undefined : refundAmount
             }
             return [undoEvent, ...filtered]
           })
-          
+
           // Clear bid history for this player to start fresh
           setBidHistory([])
         }
@@ -1661,9 +1675,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     return null
   }, [currentPlayer, players])
 
-  // Check if there are any sold players (for showing Undo Last Sale button)
-  const hasSoldPlayers = useMemo(() => {
-    return players.some(p => p.status === 'SOLD')
+  // Check if there's any sold or unsold player to revert (for showing the
+  // Undo Last Action button) - it now undoes whichever happened more
+  // recently between the two, not just a sale.
+  const hasUndoableAction = useMemo(() => {
+    return players.some(p => p.status === 'SOLD' || p.status === 'UNSOLD')
   }, [players])
 
   // Preload images when player or bidders change
@@ -2142,7 +2158,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   <ActionButtons
                     onMarkSold={handleMarkSold}
                     onMarkUnsold={handleMarkUnsold}
-                    onUndoSale={hasSoldPlayers ? () => setUndoSaleDialogOpen(true) : undefined}
+                    onUndoSale={hasUndoableAction ? () => setUndoSaleDialogOpen(true) : undefined}
                     isMarkingSold={isMarkingSold}
                     isMarkingUnsold={isMarkingUnsold}
                     hasBids={bidHistory.length > 0 || currentBid !== null}
@@ -3232,15 +3248,15 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     <AlertDialog open={undoSaleDialogOpen} onOpenChange={setUndoSaleDialogOpen}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Undo Last Sale?</AlertDialogTitle>
+          <AlertDialogTitle>Undo Last Action?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will restore the last sold player back to the auction and refund the bidder. This action cannot be undone.
+            This will revert whichever happened most recently - a sale (restoring the player and refunding the bidder) or marking a player unsold (putting them back on the block). This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={handleUndoSaleConfirm} className="bg-red-600 hover:bg-red-700 text-white">
-            Undo Sale
+            Undo Action
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -162,6 +162,10 @@ export interface AuctionEventData {
     refundedAmount?: number
     bidderRemainingPurse?: number
     updatedBidders?: Array<{ id: string; remainingPurse: number }>
+    // Which kind of action was reverted - 'sold' (the original case, with a
+    // refund) or 'unsold' (just puts the player back on the block, no
+    // bidder/purse involved). Absent on older payloads - treat as 'sold'.
+    undoneType?: 'sold' | 'unsold'
   }
   'new-player': {
     player: any

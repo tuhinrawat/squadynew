@@ -302,8 +302,8 @@ const tutorialSteps: TutorialStep[] = [
                 <span className="text-sm">Undo last bid</span>
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">↶ Undo Sale</Button>
-                <span className="text-sm">Undo last sale</span>
+                <Button size="sm" className="bg-gray-700 hover:bg-gray-800 text-white">↶ Undo Action</Button>
+                <span className="text-sm">Undo the last sale or unsold, whichever was most recent</span>
               </div>
             </div>
           </div>

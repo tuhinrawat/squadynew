@@ -45,10 +45,14 @@ export async function POST(
       }
     }
 
-    // Find the most recent 'sold' event in bid history
-    const soldEvents = bidHistory.filter((bid: any) => bid.type === 'sold' && bid.playerId)
-    if (soldEvents.length === 0) {
-      return NextResponse.json({ error: 'No sold players to undo' }, { status: 400 })
+    // Find the most recent resolving event - either a 'sold' or an 'unsold'
+    // - in bid history. Undo needs to revert whichever genuinely happened
+    // last, not just the last sale: an admin can just as easily mark a
+    // player unsold by mistake as sell one by mistake, and before this
+    // there was no way to undo the former at all.
+    const actionableEvents = bidHistory.filter((bid: any) => (bid.type === 'sold' || bid.type === 'unsold') && bid.playerId)
+    if (actionableEvents.length === 0) {
+      return NextResponse.json({ error: 'No recent sale or unsold action to undo' }, { status: 400 })
     }
 
     // Sort by timestamp (most recent first) - timestamps are ISO strings or
@@ -68,10 +72,61 @@ export async function POST(
       const parsed = (value as { getTime?: () => number })?.getTime?.()
       return typeof parsed === 'number' && !Number.isNaN(parsed) ? parsed : 0
     }
-    soldEvents.sort((a: any, b: any) => parseTime(b.timestamp) - parseTime(a.timestamp))
+    actionableEvents.sort((a: any, b: any) => parseTime(b.timestamp) - parseTime(a.timestamp))
 
-    const mostRecentSale = soldEvents[0]
-    const lastSoldPlayerId = mostRecentSale.playerId
+    const mostRecentAction = actionableEvents[0]
+
+    // Undoing an 'unsold' is much simpler than undoing a 'sold': no bidder
+    // or purse was ever involved, so there's nothing to refund - just put
+    // the player back on the block.
+    if (mostRecentAction.type === 'unsold') {
+      const playerId = mostRecentAction.playerId
+      const player = await prisma.player.findUnique({ where: { id: playerId } })
+
+      if (!player || player.status !== 'UNSOLD') {
+        return NextResponse.json({ error: 'Player not found or not unsold' }, { status: 404 })
+      }
+
+      // Only remove this player's 'unsold' event(s) - keep everything else
+      const clearedBidHistory = bidHistory.filter((bid: any) => {
+        if (bid.playerId !== player.id) return true
+        if (bid.type !== 'unsold') return true
+        return false
+      })
+
+      await prisma.$transaction([
+        prisma.player.update({
+          where: { id: player.id },
+          data: { status: 'AVAILABLE' }
+        }),
+        prisma.auction.update({
+          where: { id: params.id },
+          data: {
+            currentPlayerId: player.id,
+            bidHistory: clearedBidHistory as any
+          }
+        })
+      ])
+
+      const updatedPlayer = await prisma.player.findUnique({ where: { id: player.id } })
+      if (!updatedPlayer) {
+        return NextResponse.json({ error: 'Player not found after undo' }, { status: 404 })
+      }
+
+      await triggerAuctionEvent(params.id, 'sale-undo', {
+        playerId: player.id,
+        player: updatedPlayer,
+        undoneType: 'unsold'
+      }).catch(err => console.error('Pusher error (non-critical):', err))
+
+      return NextResponse.json({
+        success: true,
+        player: updatedPlayer,
+        undoneType: 'unsold'
+      })
+    }
+
+    const lastSoldPlayerId = mostRecentAction.playerId
 
     // Get the last sold player
     let lastSoldPlayer = await prisma.player.findUnique({
@@ -208,13 +263,15 @@ export async function POST(
       bidderId: bidder.id,
       refundedAmount: refundAmount,
       bidderRemainingPurse: updatedBidder.remainingPurse,
-      updatedBidders: [{ id: bidder.id, remainingPurse: updatedBidder.remainingPurse }]
+      updatedBidders: [{ id: bidder.id, remainingPurse: updatedBidder.remainingPurse }],
+      undoneType: 'sold'
     }).catch(err => console.error('Pusher error (non-critical):', err))
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       player: updatedPlayer,
-      bidder: updatedBidder
+      bidder: updatedBidder,
+      undoneType: 'sold'
     })
   } catch (error) {
     console.error('Error undoing sale:', error)

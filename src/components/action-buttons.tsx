@@ -41,7 +41,7 @@ export default function ActionButtons({ onMarkSold, onMarkUnsold, onUndoSale, is
 					disabled={isDisabled || isMarkingSold || isMarkingUnsold} 
 					className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold text-base sm:text-lg rounded-lg h-16 sm:h-20 min-h-[64px] sm:min-h-[80px]"
 				>
-					Undo Last Sale
+					Undo Last Action
 				</Button>
 			)}
 		</div>
