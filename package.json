@@ -16,7 +16,8 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:add-scheduled-date": "tsx scripts/add-scheduled-start-date.ts",
-    "db:backfill-sold-at": "tsx scripts/backfill-sold-at.ts"
+    "db:backfill-sold-at": "tsx scripts/backfill-sold-at.ts",
+    "db:backfill-bids": "tsx scripts/backfill-bids.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
