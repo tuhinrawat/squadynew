@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { invalidatePlayers } from '@/lib/cache'
 
 const markUnsoldSchema = z.object({
   playerId: z.string().trim().min(1),
@@ -277,6 +278,11 @@ export async function POST(
       }
       throw error
     }
+
+    // Roster changed in Postgres (this player -> UNSOLD, plus any recycled
+    // UNSOLD -> AVAILABLE). Drop the cached status list so the next poll is
+    // fresh. Purses are untouched on an unsold, so the bidder cache stays.
+    await invalidatePlayers(params.id)
 
     // Broadcast new player if exists - the DB already moved on above, so a
     // Pusher hiccup here must never turn that success into a 500.

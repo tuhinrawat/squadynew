@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { invalidatePlayers, invalidateBidders } from '@/lib/cache'
 
 const markSoldSchema = z.object({
   playerId: z.string().trim().min(1),
@@ -433,6 +434,13 @@ export async function POST(
       }
       throw error
     }
+
+    // The authoritative sale just committed to Postgres - drop the cached
+    // roster and purses so the next snapshot poll repopulates from truth
+    // (a player flipped to SOLD, the winner's purse dropped, and any UNSOLD
+    // players recycled to AVAILABLE above). TTL is only the backstop; this
+    // is the fast path that keeps viewers within one poll of the DB.
+    await Promise.all([invalidatePlayers(params.id), invalidateBidders(params.id)])
 
     // Broadcast new player if exists - the sale already succeeded in the DB
     // above, so a Pusher hiccup here (a rejected trigger, an exceeded daily

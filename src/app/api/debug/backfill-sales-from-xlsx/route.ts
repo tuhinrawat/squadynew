@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { invalidateAuction } from '@/lib/cache'
 import path from 'path'
 import fs from 'fs'
 import * as XLSX from 'xlsx'
@@ -213,6 +214,10 @@ export async function POST(request: NextRequest) {
     skipped: results.filter(r => r.status === 'skipped').length,
     errors: results.filter(r => r.status === 'error').length
   }
+
+  // Player statuses and bidder purses were rewritten - clear all cached
+  // facets for this auction.
+  await invalidateAuction(auction.id, auction.slug)
 
   return NextResponse.json({
     success: true,

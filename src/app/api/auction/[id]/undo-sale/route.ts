@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { invalidatePlayers, invalidateBidders } from '@/lib/cache'
 
 export async function POST(
   request: NextRequest,
@@ -169,6 +170,10 @@ export async function POST(
         }
       })
     ])
+
+    // Sale reverted in Postgres (player back to AVAILABLE, purse refunded) -
+    // drop the cached roster and purses so the next poll reflects truth.
+    await Promise.all([invalidatePlayers(params.id), invalidateBidders(params.id)])
 
     // Get updated player and bidder data after undo
     const updatedPlayer = await prisma.player.findUnique({

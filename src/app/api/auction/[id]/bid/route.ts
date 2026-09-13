@@ -20,6 +20,12 @@ const bidSchema = z.object({
 // broadcast on every request.
 const bidRateLimiter = new RateLimiter(5000, 15) // 15 bid attempts per 5 seconds per bidder
 
+// Thrown inside the bid persistence transaction when a competing bid, seen
+// only once the auction row is locked, invalidates this one (it's no longer
+// above the minimum, or this bidder is already top). Carries the exact
+// user-facing message so the catch can reuse the normal bid-error response.
+class BidRejectedError extends Error {}
+
 // Helper function to notify the admin console of a bid error and return the
 // error response. Admin-only (not the shared auction channel) - the person
 // who attempted the bid already gets this in the HTTP response; the only
@@ -323,15 +329,81 @@ export async function POST(
     
     logger.log('New bid created with playerId', newBid.playerId)
 
-    bidHistory.unshift(newBid)
-
-    // Calculate new remaining purse (optimistic - will be confirmed by DB)
-    const newRemainingPurse = bidder.remainingPurse - amount
-
     const countdownSeconds = rules?.countdownSeconds || 30
 
-    // Broadcast new bid event IMMEDIATELY (before DB write) for instant real-time updates
-    // Fire-and-forget: clients get the update while DB write happens in parallel
+    // Persist atomically. Locking the auction row (SELECT ... FOR UPDATE)
+    // inside the transaction serializes concurrent bids on the same auction,
+    // so two bids landing together can no longer both read the same history
+    // and overwrite each other - the lost-update race the JSON-blob
+    // read-modify-write had. We re-derive the current highest bid from the
+    // freshly-locked history and re-run ONLY the two race-sensitive
+    // validations ("already highest" and minimum increment); every other
+    // validation above is unaffected by a competing bid. Same rules, same
+    // messages - they can now additionally fire when a competing bid slipped
+    // in between the initial read and this write, instead of that bid being
+    // silently lost.
+    //
+    // The bidHistory JSON stays the exact source of truth every reader
+    // already uses (no read path changes); the Bid row is a dual-write for
+    // durability/indexing only and is not read by anything yet.
+    try {
+      await prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ bidHistory: unknown }>>`
+          SELECT "bidHistory" FROM "auctions" WHERE "id" = ${params.id} FOR UPDATE
+        `
+        const freshRaw = locked[0]?.bidHistory
+        const freshHistory: any[] = Array.isArray(freshRaw) ? freshRaw : []
+
+        const freshCurrentPlayerBids = currentPlayer?.id
+          ? freshHistory.filter(bid =>
+              bid.playerId === currentPlayer.id &&
+              bid.type !== 'sold' &&
+              bid.type !== 'unsold' &&
+              bid.type !== 'bid-undo'
+            )
+          : []
+        const freshCurrentBid = freshCurrentPlayerBids.length > 0 ? (freshCurrentPlayerBids[0].amount || 0) : 0
+
+        // Same two checks as above, re-evaluated against the locked history.
+        if (freshCurrentPlayerBids.length > 0 && freshCurrentPlayerBids[0].bidderId === bidderId) {
+          throw new BidRejectedError('You are already the highest bidder')
+        }
+        if (amount <= freshCurrentBid + minIncrement - 1) {
+          throw new BidRejectedError(`Minimum bid: ₹${(freshCurrentBid + minIncrement).toLocaleString('en-IN')}`)
+        }
+
+        // Append to the freshly-locked history (not the stale pre-lock copy).
+        const newHistory = [newBid, ...freshHistory]
+
+        await tx.auction.update({
+          where: { id: params.id },
+          data: { bidHistory: newHistory as any },
+        })
+
+        // Dual-write the durable per-bid row in the same transaction.
+        if (currentPlayer?.id) {
+          await tx.bid.create({
+            data: {
+              auctionId: params.id,
+              playerId: currentPlayer.id,
+              bidderId,
+              amount,
+              type: 'bid',
+            },
+          })
+        }
+      })
+    } catch (error) {
+      if (error instanceof BidRejectedError) {
+        return broadcastBidError(params.id, error.message, bidder.user?.name || bidder.username, bidder.id)
+      }
+      throw error
+    }
+
+    // Broadcast the CONFIRMED bid after the write commits (same event name and
+    // payload as before). Moving this after the write means viewers only ever
+    // see bids that actually persisted - a rejected or raced attempt no longer
+    // briefly appears and then vanishes.
     triggerAuctionEvent(params.id, 'new-bid', {
       bidderId,
       amount,
@@ -341,16 +413,8 @@ export async function POST(
       countdownSeconds
     } as any).catch(err => console.error('Pusher error (non-critical):', err))
 
-    // Persist bid history; do NOT mutate purse here. Purse is deducted on sale.
-    await prisma.auction.update({
-      where: { id: params.id },
-      data: {
-        bidHistory: bidHistory as any
-      }
-    })
-
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       bid: newBid,
       // Purse is unchanged at bid time
     })

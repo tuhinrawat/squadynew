@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { isLiveStatus } from '@/lib/auction-status'
 import bcrypt from 'bcryptjs'
+import { invalidateBidders } from '@/lib/cache'
 
 // GET /api/auctions/[id]/bidders/[bidderId] - Get a specific bidder
 export async function GET(
@@ -169,6 +170,9 @@ export async function PUT(
       }
     })
 
+    // Bidder fields (team/purse) may have changed - clear the cached purses.
+    await invalidateBidders(params.id)
+
     return NextResponse.json({
       message: 'Bidder updated successfully',
       bidder: updatedBidder
@@ -224,6 +228,9 @@ export async function DELETE(
     await prisma.bidder.delete({
       where: { id: params.bidderId }
     })
+
+    // Roster shrank - clear the cached purse list.
+    await invalidateBidders(params.id)
 
     return NextResponse.json({ message: 'Bidder deleted successfully' })
   } catch (error) {

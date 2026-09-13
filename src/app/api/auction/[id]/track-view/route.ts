@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createHash } from 'crypto'
+import { recordView } from '@/lib/view-tracking'
 
 export async function POST(
   req: NextRequest,
@@ -41,7 +42,8 @@ export async function POST(
 
     const isNewVisitor = !existingView
 
-    // Record the view
+    // Record the view (durable per-view row - unchanged; this is the source
+    // of truth for uniqueness above and for analytics that count view rows).
     await prisma.auctionView.create({
       data: {
         auctionId,
@@ -52,7 +54,23 @@ export async function POST(
       }
     })
 
-    // Update auction analytics
+    // Increment the running counters in Redis instead of taking a write lock
+    // on the hot `auctions` row on every view (see lib/view-tracking.ts).
+    // Redis is seeded from the current Postgres values, so the numbers
+    // continue rather than reset, and are flushed back to Postgres
+    // periodically. If Redis is unavailable, recordView returns null and we
+    // fall back to the original Postgres increment so counts still move.
+    const counters = await recordView(auctionId, isNewVisitor)
+
+    if (counters) {
+      return NextResponse.json({
+        success: true,
+        totalViews: counters.totalViews,
+        uniqueVisitors: counters.uniqueVisitors
+      })
+    }
+
+    // Fallback: Redis unavailable - preserve the original behaviour exactly.
     await prisma.auction.update({
       where: { id: auctionId },
       data: {

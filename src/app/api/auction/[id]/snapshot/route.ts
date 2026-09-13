@@ -4,6 +4,7 @@ import { isCuid } from '@/lib/slug'
 import { isLiveStatus } from '@/lib/auction-status'
 import { parseBidHistory, filterBidHistoryForCurrentPlayer } from '@/lib/auction-view-data'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { getCachedBidderPurses, getCachedPlayerStatuses } from '@/lib/cache'
 
 // Read-only "current truth" snapshot for viewers who aren't on a live Pusher
 // connection - the polling fallback for the public auction view's
@@ -58,20 +59,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // testing - a several-MB response per poll, independent of audience
     // size), not the audience size itself.
     const [players, bidders, currentPlayerFull, recentSoldPlayers] = await Promise.all([
-      prisma.player.findMany({
-        where: { auctionId: auction.id },
-        select: { id: true, status: true, isIcon: true },
-      }),
+      // Cache-aside (Redis -> Postgres): the {id,status,isIcon} roster changes
+      // only on a player-status write (sale/unsold/advance/reset/roster edit),
+      // each of which invalidates this key - so on a steady poll the vast
+      // majority of reads are served from Redis instead of scanning every
+      // player row in Postgres. Postgres stays the source of truth.
+      getCachedPlayerStatuses(auction.id),
       // Team name/username/logo never change during a live auction and are
       // already on the client from the initial page load (confirmed via load
       // testing - team logos alone were 99%+ of this endpoint's payload).
       // Only the remaining purse actually needs to travel on every poll; the
       // client merges this into its existing bidder records instead of
       // replacing them - see applySnapshot in public-auction-view.tsx.
-      prisma.bidder.findMany({
-        where: { auctionId: auction.id },
-        select: { id: true, remainingPurse: true },
-      }),
+      // Cached the same way; invalidated whenever a purse changes (sale /
+      // undo-sale / reset / roster edit).
+      getCachedBidderPurses(auction.id),
       auction.currentPlayerId
         ? prisma.player.findUnique({
             where: { id: auction.currentPlayerId },

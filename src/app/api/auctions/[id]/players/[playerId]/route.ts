@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import bcrypt from 'bcryptjs'
+import { invalidateAuction, invalidatePlayers } from '@/lib/cache'
 
 // GET /api/auctions/[id]/players/[playerId] - Get specific player
 export async function GET(
@@ -220,6 +221,10 @@ export async function PUT(
       })
     }
 
+    // Player row changed (status/data, and possibly a retired-player bidder
+    // added/removed) - clear cached roster and purses.
+    await invalidateAuction(params.id)
+
     return NextResponse.json({
       message: 'Player updated successfully',
       player
@@ -272,6 +277,9 @@ export async function DELETE(
         id: params.playerId
       }
     })
+
+    // Roster shrank - clear the cached status list.
+    await invalidatePlayers(params.id)
 
     return NextResponse.json({ message: 'Player deleted successfully' })
   } catch (error) {
