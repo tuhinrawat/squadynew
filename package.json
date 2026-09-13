@@ -16,7 +16,8 @@
     "db:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:add-scheduled-date": "tsx scripts/add-scheduled-start-date.ts",
-    "db:backfill-sold-at": "tsx scripts/backfill-sold-at.ts"
+    "db:backfill-sold-at": "tsx scripts/backfill-sold-at.ts",
+    "db:backfill-bids": "tsx scripts/backfill-bids.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -31,6 +32,8 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.13",
     "@types/bcryptjs": "^2.4.6",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.4",
     "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "^3.9.5",
     "bcryptjs": "^3.0.2",

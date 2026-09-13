@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { cleanCricheroesLinksInPlayerData } from '@/lib/cricheroes'
+import { invalidateAuction } from '@/lib/cache'
 
 // POST /api/auctions/[id]/players/upload - Upload multiple players from Excel/CSV
 export async function POST(
@@ -131,6 +132,10 @@ export async function POST(
         status: 'AVAILABLE'
       }))
     })
+
+    // New roster + possibly new column config on the auction row - clear the
+    // cached roster and metadata for this auction.
+    await invalidateAuction(params.id)
 
     return NextResponse.json({
       message: `${createdPlayers.count} players uploaded successfully${duplicateCount > 0 ? ` (${duplicateCount} duplicates skipped)` : ''}`,

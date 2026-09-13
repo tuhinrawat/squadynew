@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { invalidateAuction } from '@/lib/cache'
 
 // POST /api/auctions/[id]/players/batch-update - Batch update players
 export async function POST(
@@ -240,6 +241,10 @@ export async function POST(
         }
       })
     }
+
+    // Player statuses (and possibly retired-player bidder rows) changed in
+    // bulk - clear the cached roster and purses for this auction.
+    await invalidateAuction(params.id)
 
     return NextResponse.json({
       success: true,

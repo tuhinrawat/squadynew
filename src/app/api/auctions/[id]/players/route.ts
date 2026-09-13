@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import { invalidatePlayers } from '@/lib/cache'
 
 // GET /api/auctions/[id]/players - Fetch all players for auction
 export async function GET(
@@ -77,9 +78,12 @@ export async function POST(
       }
     })
 
-    return NextResponse.json({ 
-      message: 'Player created successfully', 
-      player 
+    // New player added - clear the cached roster so counts reflect it.
+    await invalidatePlayers(params.id)
+
+    return NextResponse.json({
+      message: 'Player created successfully',
+      player
     })
   } catch (error) {
     console.error('Error creating player:', error)

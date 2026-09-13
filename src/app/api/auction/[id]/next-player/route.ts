@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { isLiveStatus } from '@/lib/auction-status'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { invalidatePlayers } from '@/lib/cache'
 
 export async function POST(
   request: NextRequest,
@@ -150,6 +151,11 @@ export async function POST(
         bidHistory: []
       }
     })
+
+    // The prior player may have flipped AVAILABLE -> UNSOLD and UNSOLD players
+    // may have recycled to AVAILABLE above - drop the cached status list so
+    // the next snapshot poll reflects Postgres.
+    await invalidatePlayers(params.id)
 
     // The selection above only carries id/status/isIcon - fetch the full
     // record (with `data`) for just this one chosen player, now that we

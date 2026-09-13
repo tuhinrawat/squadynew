@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { generateSlug, ensureUniqueSlug } from '@/lib/slug'
+import { invalidateAuctionMeta, invalidateAuction } from '@/lib/cache'
 
 // GET /api/auctions/[id] - Get auction details
 export async function GET(
@@ -189,6 +190,15 @@ export async function PUT(
       }
     }
 
+    // Cached metadata (name/slug/rules/publish flags/UI config) just changed.
+    // Clear the by-id key plus the slug->id pointer for both the old and new
+    // slug, since a rename repoints an existing slug to nothing and creates a
+    // new one.
+    await invalidateAuctionMeta(params.id, existingAuction.slug)
+    if (auction.slug && auction.slug !== existingAuction.slug) {
+      await invalidateAuctionMeta(params.id, auction.slug)
+    }
+
     return NextResponse.json({
       message: 'Auction updated successfully',
       auction
@@ -273,6 +283,10 @@ export async function DELETE(
         id: params.id
       }
     })
+
+    // Auction is gone - clear every cached facet (meta, bidders, players) and
+    // its slug pointer so nothing serves a phantom from Redis.
+    await invalidateAuction(params.id, existingAuction.slug)
 
     return NextResponse.json({
       message: 'Auction deleted successfully'

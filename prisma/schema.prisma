@@ -95,6 +95,7 @@ model Auction {
   fixtures          Fixture[] // Fixtures/matches for this auction
   linkedAuctions    AuctionLink[] @relation("AuctionLinksFrom") // Previous auctions THIS auction links to
   linkedByAuctions  AuctionLink[] @relation("AuctionLinksTo") // Later auctions that link to THIS one as a previous year
+  bids              Bid[] // Append-only per-bid rows (see Bid model)
 
   // Performance indexes
   @@index([createdById])
@@ -147,6 +148,7 @@ model Player {
 
   // Relations
   auction Auction @relation(fields: [auctionId], references: [id])
+  bids    Bid[]
 
   // Performance indexes
   @@index([auctionId])
@@ -173,6 +175,7 @@ model Bidder {
   auction         Auction   @relation(fields: [auctionId], references: [id])
   fixturesAsTeam1 Fixture[] @relation("Team1Fixtures")
   fixturesAsTeam2 Fixture[] @relation("Team2Fixtures")
+  bids            Bid[]
 
   @@unique([auctionId, username]) // Username unique per auction
   @@unique([auctionId, userId])    // User can only be bidder once per auction
@@ -261,4 +264,39 @@ model ObservabilityEvent {
   @@index([category, createdAt])
   @@index([auctionId, createdAt])
   @@map("observability_events")
+}
+
+// Append-only record of every individual bid, written in the same transaction
+// as the authoritative bidHistory JSON on the Auction row (dual-write). This
+// exists so bids are durable, indexable rows - the structural fix for the
+// bidHistory-blob write model - WITHOUT changing any read path: the app still
+// reads the bidHistory JSON everywhere it did before, so this table is
+// currently write-only from the app's perspective and safe to introduce with
+// zero behaviour change. Reads can migrate onto it later.
+//
+// Inserting a row can never "lose" a concurrent write the way the read-modify-
+// rewrite of the JSON blob could; the bid route now does both writes inside a
+// single transaction that locks the auction row, so concurrent bids serialize
+// correctly instead of clobbering each other.
+model Bid {
+  id        String   @id @default(cuid())
+  auctionId String
+  playerId  String
+  bidderId  String
+  amount    Float
+  // Mirrors the `type` used in the bidHistory JSON entries ('bid' for a live
+  // bid; 'sold'/'unsold' events stay in the JSON only for now).
+  type      String   @default("bid")
+  createdAt DateTime @default(now())
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  player  Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  bidder  Bidder  @relation(fields: [bidderId], references: [id], onDelete: Cascade)
+
+  // The read pattern a future migration would use: "highest / most recent bid
+  // for the current lot".
+  @@index([auctionId, playerId, createdAt])
+  @@index([auctionId, playerId, amount])
+  @@index([bidderId])
+  @@map("bids")
 }
