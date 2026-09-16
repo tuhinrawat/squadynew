@@ -50,7 +50,14 @@ export async function POST(
       }
     })
 
-    // Copy all players - preserve RETIRED status for retired players, reset others to AVAILABLE
+    // Copy all players - preserve RETIRED status for retired players, reset others to AVAILABLE.
+    // soldTo/soldPrice/soldAt are deliberately NOT copied - those are the
+    // result of actually running the source auction, and a duplicate exists
+    // to run a fresh one. Everything else is reference data uploaded/derived
+    // once (last-year price snapshot, the permanent plaque serial number),
+    // not tied to a specific run, so it carries over unchanged - the team's
+    // physical plaques are already numbered, and a duplicate shouldn't force
+    // re-carving them with a fresh random assignment.
     const playerMap = new Map<string, string>() // Map old player ID to new player ID
     for (const player of sourceAuction.players) {
       const newPlayer = await prisma.player.create({
@@ -58,7 +65,12 @@ export async function POST(
           auctionId: newAuction.id,
           data: player.data as any,
           status: player.status === 'RETIRED' ? 'RETIRED' : 'AVAILABLE', // Keep RETIRED status, reset others
-          isIcon: (player as any).isIcon || false
+          isIcon: (player as any).isIcon || false,
+          lastYearPrice: player.lastYearPrice,
+          lastYearTeamName: player.lastYearTeamName,
+          lastYearBidderName: player.lastYearBidderName,
+          lastYearAuctionName: player.lastYearAuctionName,
+          serialNumber: player.serialNumber
         }
       })
       playerMap.set(player.id, newPlayer.id)
