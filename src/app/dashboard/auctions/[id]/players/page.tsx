@@ -52,18 +52,24 @@ function LastYearPriceCell({ value, onSave }: { value: number | null; onSave: (n
 
   return (
     <Input
-      type="number"
-      min={0}
+      // A plain text input with numeric filtering, not type="number" - a
+      // controlled type="number" input is a known React footgun where the
+      // DOM's own value can drift out of sync with React's tracked state
+      // (e.g. around a leading "-", an in-progress decimal, or an empty
+      // string), leaving the field visually present but unresponsive to
+      // further keystrokes. inputMode="numeric" still gives mobile users
+      // the numeric keypad.
+      type="text"
+      inputMode="numeric"
       value={inputValue}
-      onChange={(e) => setInputValue(e.target.value)}
+      onChange={(e) => setInputValue(e.target.value.replace(/[^0-9]/g, ''))}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
       }}
-      onClick={(e) => e.stopPropagation()}
       disabled={saving}
       placeholder="—"
-      className="h-8 w-24 text-sm"
+      className="h-8 w-24 text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
     />
   )
 }

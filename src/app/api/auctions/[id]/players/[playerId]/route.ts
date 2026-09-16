@@ -223,8 +223,12 @@ export async function PUT(
       }
     }
 
-    // If un-retiring player, delete bidder record
-    if (status !== 'RETIRED' && existingPlayer.status === 'RETIRED') {
+    // If un-retiring player, delete bidder record. Only when this request
+    // actually specified a status - a partial update that only touches, say,
+    // lastYearPrice must not be read as "un-retiring" just because it left
+    // status out of the body (undefined !== 'RETIRED' would otherwise match
+    // here for every already-retired player on every unrelated edit).
+    if (status !== undefined && status !== 'RETIRED' && existingPlayer.status === 'RETIRED') {
       await prisma.bidder.deleteMany({
         where: {
           auctionId: params.id,
