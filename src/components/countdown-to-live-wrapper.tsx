@@ -47,19 +47,23 @@ interface CountdownToLiveWrapperProps {
 // and color - purely presentational, reusing the same substring checks the
 // filter buttons below already use, so a card's flag always agrees with
 // which filter bucket it falls into.
+// Backgrounds are translucent (rgba, not solid hex) - the ribbon sits
+// directly over the top of the player's photo, so a fully opaque fill was
+// blocking out the face beneath it. Text stays fully opaque so the label
+// itself doesn't lose legibility.
 function getRoleFlag(role?: string, specialty?: string): { label: string; background: string; color: string } | null {
   const text = `${role || ''} ${specialty || ''}`.toLowerCase()
   if (text.includes('wicket') || text.includes('keeper')) {
-    return { label: 'Wicketkeeper', background: 'rgba(255,255,255,0.92)', color: '#05070a' }
+    return { label: 'Wicketkeeper', background: 'rgba(255,255,255,0.72)', color: '#05070a' }
   }
   if (text.includes('all-rounder') || text.includes('allrounder') || text.includes('all rounder')) {
-    return { label: 'All-Rounder', background: 'linear-gradient(90deg,#a855f7,#ec4899)', color: '#ffffff' }
+    return { label: 'All-Rounder', background: 'linear-gradient(90deg,rgba(168,85,247,0.72),rgba(236,72,153,0.72))', color: '#ffffff' }
   }
   if (text.includes('bowler')) {
-    return { label: 'Bowler', background: '#14b8a6', color: '#04211d' }
+    return { label: 'Bowler', background: 'rgba(20,184,166,0.72)', color: '#04211d' }
   }
   if (text.includes('batsman') || text.includes('batter')) {
-    return { label: 'Batsman', background: '#fbbf24', color: '#1a1200' }
+    return { label: 'Batsman', background: 'rgba(251,191,36,0.72)', color: '#1a1200' }
   }
   return null
 }
@@ -784,7 +788,7 @@ export function CountdownToLiveWrapper({
                             the old plain role text line beneath the name */}
                         {roleFlag && (
                           <div
-                            className="absolute top-0 left-1/2 -translate-x-1/2 z-20 text-center"
+                            className="absolute top-0 left-1/2 -translate-x-1/2 z-20 text-center backdrop-blur-[2px]"
                             style={{ width: 132, padding: '6px 6px 9px 6px', background: roleFlag.background, clipPath: 'polygon(0% 0%,100% 0%,100% 66%,50% 100%,0% 66%)' }}
                           >
                             {/* whiteSpace: nowrap is load-bearing here - "All-Rounder"
