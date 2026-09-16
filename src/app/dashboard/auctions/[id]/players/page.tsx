@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, DataTableColumn } from '@/components/data-table'
 import { parseExcelFile, ParsedPlayerData, validatePlayerData, cleanPlayerData } from '@/lib/excel-parser'
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus, BarChart3, Hash } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus, BarChart3, Hash, Download } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -94,6 +94,8 @@ export default function PlayerManagement() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
   const [batchProcessing, setBatchProcessing] = useState(false)
   const [assigningSerialNumbers, setAssigningSerialNumbers] = useState(false)
+  const [exportingPlayers, setExportingPlayers] = useState(false)
+  const [auctionName, setAuctionName] = useState('')
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
   const [auctionStatus, setAuctionStatus] = useState<string>('DRAFT')
   const [isPublished, setIsPublished] = useState<boolean>(false)
@@ -135,6 +137,7 @@ export default function PlayerManagement() {
         // Store auction status and published state
         setAuctionStatus(data.auction.status)
         setIsPublished(data.auction.isPublished || false)
+        setAuctionName(data.auction.name || '')
         
         // Load saved column order if available
         if (data.auction.columnOrder && Array.isArray(data.auction.columnOrder)) {
@@ -842,6 +845,53 @@ export default function PlayerManagement() {
     return ['serialNumber', ...tableColumns.filter(c => c.key !== 'serialNumber').slice(0, 5).map(c => c.key)]
   }, [visibleColumns, tableColumns])
 
+  // Exports the full roster to .xlsx - a point-in-time snapshot the team
+  // can reference back to later, independent of whatever search/filter or
+  // column-visibility state the table happens to be in right now. Every
+  // column tableData carries goes into the file, not just the ones
+  // currently shown on screen, and it's available whatever the auction's
+  // status is (unlike editing, a read-only export is never unsafe).
+  const handleExportPlayers = async () => {
+    if (tableData.length === 0) {
+      setError('No players to export.')
+      return
+    }
+    try {
+      setExportingPlayers(true)
+      setError('')
+      // Loaded on demand, same as the upload path in excel-parser.ts - no
+      // reason to ship the full SheetJS bundle to every visitor of this
+      // page, only the ones who actually export.
+      const XLSX = await import('xlsx')
+
+      const rows = tableData.map(row => {
+        const rawRow = row as Record<string, any>
+        const exportRow: Record<string, string | number> = { '#': row.serialNumber ?? '' }
+        for (const col of columns) {
+          exportRow[col] = rawRow[col] ?? ''
+        }
+        exportRow['Last Year Price'] = row.lastYearPrice ?? ''
+        exportRow['Bidder Choice'] = row.isIcon ? 'Yes' : 'No'
+        exportRow['Status'] = row.status
+        exportRow['Added On'] = row.createdAt
+        return exportRow
+      })
+
+      const worksheet = XLSX.utils.json_to_sheet(rows)
+      const workbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Players')
+
+      const datePart = new Date().toISOString().slice(0, 10)
+      const safeName = (auctionName || 'Auction').replace(/[\\/:*?"<>|]/g, '').trim() || 'Auction'
+      XLSX.writeFile(workbook, `${safeName} - Players - ${datePart}.xlsx`)
+    } catch (error) {
+      setError('Failed to export players.')
+      logger.error('Error exporting players:', error)
+    } finally {
+      setExportingPlayers(false)
+    }
+  }
+
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
       {/* Header */}
@@ -852,9 +902,33 @@ export default function PlayerManagement() {
             Upload and manage players for this auction
           </p>
         </div>
-        <Button variant="outline" onClick={() => router.back()} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
-          Back to Auctions
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Read-only, so unlike editing this stays available whatever
+              the auction's status is - a snapshot to reference back to
+              can be pulled at any point, not just while editing is
+              allowed. */}
+          <Button
+            variant="outline"
+            onClick={handleExportPlayers}
+            disabled={exportingPlayers || tableData.length === 0}
+            className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+          >
+            {exportingPlayers ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Export to Excel
+              </>
+            )}
+          </Button>
+          <Button variant="outline" onClick={() => router.back()} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
+            Back to Auctions
+          </Button>
+        </div>
       </div>
 
       {/* Alerts */}
