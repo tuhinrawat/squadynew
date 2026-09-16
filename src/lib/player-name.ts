@@ -22,3 +22,10 @@ export function extractPlayerName(data: Record<string, unknown> | null | undefin
 
   return combined || undefined
 }
+
+// Lowercases, trims, and collapses internal whitespace so the same person's
+// name compares equal across two sheets that differ only in casing or extra
+// spaces (e.g. from copy-pasting into a spreadsheet cell).
+export function normalizeName(name: string | null | undefined): string {
+  return (name || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}

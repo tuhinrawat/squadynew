@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { extractCricheroesLink, normalizeCricheroesLink } from '@/lib/cricheroes'
+import { extractPlayerName, normalizeName } from '@/lib/player-name'
 
 interface LastYearMatch {
   price: number
@@ -16,9 +17,18 @@ interface LastYearMatch {
 // linked and re-deriving everything from scratch is simpler than tracking
 // what changed.
 //
-// Matching is Cricheroes-link only, by design: a player with no link on
-// either side just gets no match, rather than risking a false match on a
-// common name.
+// Matching tries a Cricheroes link first, then falls back to a normalized
+// full-name match (link OR name - either is enough). The link-first order
+// isn't just a preference: different years' sheets have used genuinely
+// incompatible link formats (a direct cricheroes.com/player-profile/<id>
+// link one year, an opaque chshare.link/player/<code> short-link the next),
+// so for many rosters a link match is simply never available and name is
+// the only path to a match at all. Within one linked auction, a name that
+// belongs to more than one player is treated as ambiguous and excluded
+// from the name lookup entirely - guessing between two different people
+// who share a name is worse than leaving both unmatched, especially since
+// the Manage Players page lets an admin fix any wrong or missing match by
+// hand afterward via the editable Last Year Price column.
 export async function computeLastYearMatches(
   auctionId: string,
   linkedAuctionIds: string[]
@@ -70,42 +80,74 @@ export async function computeLastYearMatches(
     return bTime - aTime
   })
 
+  // AMBIGUOUS marks a name lookup entry that collided with a second player
+  // in the same auction - excluded from matching rather than picking one
+  // of two same-named players arbitrarily.
+  const AMBIGUOUS = Symbol('ambiguous')
+
   const auctionLookups = orderedAuctions.map(auction => {
     const biddersById = new Map(auction.bidders.map(b => [b.id, b]))
-    const lookup = new Map<string, LastYearMatch>()
+    const linkLookup = new Map<string, LastYearMatch>()
+    const nameLookup = new Map<string, LastYearMatch | typeof AMBIGUOUS>()
     for (const player of auction.players) {
-      const link = normalizeCricheroesLink(extractCricheroesLink(player.data as Record<string, unknown>))
-      if (!link || player.soldPrice == null || !player.soldTo) continue
+      if (player.soldPrice == null || !player.soldTo) continue
       const bidder = biddersById.get(player.soldTo)
       if (!bidder) continue
+      const playerData = player.data as Record<string, unknown>
+      const match: LastYearMatch = {
+        price: player.soldPrice,
+        teamName: bidder.teamName,
+        bidderName: bidder.user?.name || bidder.username,
+        auctionName: auction.name,
+      }
+
+      const link = normalizeCricheroesLink(extractCricheroesLink(playerData))
       // First (most recently sold, given the players array's natural order)
       // wins on a duplicate link within one auction - shouldn't happen, but
       // stay defensive rather than overwrite silently.
-      if (!lookup.has(link)) {
-        lookup.set(link, {
-          price: player.soldPrice,
-          teamName: bidder.teamName,
-          bidderName: bidder.user?.name || bidder.username,
-          auctionName: auction.name,
-        })
+      if (link && !linkLookup.has(link)) {
+        linkLookup.set(link, match)
+      }
+
+      const name = normalizeName(extractPlayerName(playerData))
+      if (name) {
+        nameLookup.set(name, nameLookup.has(name) ? AMBIGUOUS : match)
       }
     }
-    return lookup
+    return { linkLookup, nameLookup }
   })
 
   let matchedCount = 0
   const rows = currentPlayers.map(player => {
-    const link = normalizeCricheroesLink(extractCricheroesLink(player.data as Record<string, unknown>))
+    const playerData = player.data as Record<string, unknown>
+    const link = normalizeCricheroesLink(extractCricheroesLink(playerData))
     let match: LastYearMatch | undefined
+
     if (link) {
-      for (const lookup of auctionLookups) {
-        const found = lookup.get(link)
+      for (const { linkLookup } of auctionLookups) {
+        const found = linkLookup.get(link)
         if (found) {
           match = found
           break
         }
       }
     }
+
+    // Falls back to a name match only when no link match was found - link
+    // is the more certain signal when both are available.
+    if (!match) {
+      const name = normalizeName(extractPlayerName(playerData))
+      if (name) {
+        for (const { nameLookup } of auctionLookups) {
+          const found = nameLookup.get(name)
+          if (found && found !== AMBIGUOUS) {
+            match = found
+            break
+          }
+        }
+      }
+    }
+
     if (match) matchedCount++
 
     return Prisma.sql`(${player.id}::text, ${match?.price ?? null}::double precision, ${match?.teamName ?? null}::text, ${match?.bidderName ?? null}::text, ${match?.auctionName ?? null}::text)`

@@ -63,7 +63,7 @@ export async function PUT(
       )
     }
 
-    const { data, name, status, isIcon } = await request.json()
+    const { data, name, status, isIcon, lastYearPrice } = await request.json()
 
     // Check if player exists and belongs to user's auction
     const existingPlayer = await prisma.player.findFirst({
@@ -117,7 +117,20 @@ export async function PUT(
       ...(data && { data: data as any }),
       ...(status && { status }),
     }
-    
+
+    // lastYearPrice is a manual correction for the auction-history matcher's
+    // guess (link/name matching can miss or mismatch) - null clears it back
+    // to "no match", any other value must be a valid non-negative number.
+    if (lastYearPrice !== undefined) {
+      if (lastYearPrice !== null && (typeof lastYearPrice !== 'number' || !Number.isFinite(lastYearPrice) || lastYearPrice < 0)) {
+        return NextResponse.json(
+          { error: 'lastYearPrice must be a non-negative number or null' },
+          { status: 400 }
+        )
+      }
+      updateData.lastYearPrice = lastYearPrice
+    }
+
     // Add isIcon if it's defined and the field exists in the database
     if (isIcon !== undefined) {
       try {

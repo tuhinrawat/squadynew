@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,53 @@ interface Player {
   data: Record<string, any>
   status: string
   createdAt: string
+  lastYearPrice?: number | null
+}
+
+// Inline-editable cell for a player's Last Year Price - a manual correction
+// for the auction-history matcher's guess (a Cricheroes-link or name match
+// can miss entirely, or land on the wrong same-named player), rather than a
+// full "Edit Player" round trip for a single number. Uncontrolled-ish local
+// state so typing doesn't fight the table's own re-renders; saves on blur
+// or Enter, and resets to the last-saved value on an invalid entry.
+// Callers key this component on `${item.id}-${value}` rather than syncing
+// value via a useEffect - a key change on an external update (a successful
+// save, or a fresh fetch) simply remounts the component with fresh initial
+// state, which is the pattern React itself recommends over an effect for
+// "reset this state when a prop changes".
+function LastYearPriceCell({ value, onSave }: { value: number | null; onSave: (newValue: number | null) => Promise<void> }) {
+  const [inputValue, setInputValue] = useState(value != null ? String(value) : '')
+  const [saving, setSaving] = useState(false)
+
+  const commit = async () => {
+    const trimmed = inputValue.trim()
+    const parsed = trimmed === '' ? null : Number(trimmed)
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) {
+      setInputValue(value != null ? String(value) : '')
+      return
+    }
+    if (parsed === value) return
+    setSaving(true)
+    await onSave(parsed)
+    setSaving(false)
+  }
+
+  return (
+    <Input
+      type="number"
+      min={0}
+      value={inputValue}
+      onChange={(e) => setInputValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+      onClick={(e) => e.stopPropagation()}
+      disabled={saving}
+      placeholder="—"
+      className="h-8 w-24 text-sm"
+    />
+  )
 }
 
 export default function PlayerManagement() {
@@ -434,6 +481,28 @@ export default function PlayerManagement() {
     }
   }
 
+  // Stable identity via useCallback so referencing it inside tableColumns'
+  // useMemo below doesn't force that memo to recompute (and re-sort/re-map
+  // the whole player list) on every render.
+  const handleLastYearPriceEdit = useCallback(async (playerId: string, newValue: number | null) => {
+    try {
+      const response = await fetch(`/api/auctions/${auctionId}/players/${playerId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lastYearPrice: newValue }),
+      })
+      const result = await response.json()
+      if (response.ok) {
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, lastYearPrice: result.player.lastYearPrice } : p))
+      } else {
+        setError(result.error || 'Failed to update Last Year Price')
+      }
+    } catch (error) {
+      setError('Network error while updating Last Year Price')
+      logger.error('Error updating lastYearPrice:', error)
+    }
+  }, [auctionId])
+
   const handleDeletePlayer = async (player: any) => {
     logger.log('Delete player clicked')
     if (!confirm('Are you sure you want to delete this player?')) return
@@ -611,7 +680,8 @@ export default function PlayerManagement() {
     id: player.id,
     status: player.status,
     isIcon: (player as any).isIcon || false,
-    createdAt: new Date(player.createdAt).toLocaleDateString()
+    createdAt: new Date(player.createdAt).toLocaleDateString(),
+    lastYearPrice: player.lastYearPrice ?? null
   })).sort((a, b) => {
     // Sort by isIcon (Bidder Choice first), then by createdAt
     if (a.isIcon !== b.isIcon) {
@@ -629,6 +699,19 @@ export default function PlayerManagement() {
       filterable: true,
       type: typeof (tableData[0] as any)?.[col] === 'number' ? 'number' as const : 'string' as const
     })),
+    {
+      key: 'lastYearPrice',
+      label: 'Last Year Price',
+      sortable: true,
+      type: 'number',
+      render: (value: number | null, item: Record<string, any>) => (
+        <LastYearPriceCell
+          key={`${item.id}-${value}`}
+          value={value ?? null}
+          onSave={(newValue) => handleLastYearPriceEdit(item.id, newValue)}
+        />
+      )
+    },
     {
       key: 'isIcon',
       label: 'Bidder Choice',
@@ -682,7 +765,7 @@ export default function PlayerManagement() {
       label: 'Added',
       sortable: true
     }
-  ], [columns, tableData])
+  ], [columns, tableData, handleLastYearPriceEdit])
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
