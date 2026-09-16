@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { FullScreenCountdown } from './full-screen-countdown'
 import { PublicAuctionView } from './public-auction-view'
-import { ProfessioPromoButton } from './professio-promo-button'
-import FloatingPromoChip from './floating-promo-chip'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -345,14 +343,13 @@ export function CountdownToLiveWrapper({
           <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-14 sm:h-16">
               <Link href="/" className="flex flex-col items-start justify-center flex-shrink-0">
-                <Image 
-                  src="/squady-logo.svg" 
-                  alt="Squady" 
-                  width={100} 
-                  height={33} 
+                <Image
+                  src="/squady-logo.svg"
+                  alt="Squady"
+                  width={100}
+                  height={33}
                   className="h-6 sm:h-7 w-auto brightness-0 invert"
                 />
-                <span className="text-[8px] sm:text-[9px] text-white/60 mt-0.5">Powered by Professio</span>
               </Link>
               <div className="flex items-center gap-0.5 sm:gap-3">
                 {/* Instagram Icon */}
@@ -364,16 +361,6 @@ export function CountdownToLiveWrapper({
                   aria-label="Follow us on Instagram"
                 >
                   <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
-                </a>
-                {/* Powered by Professio - Desktop only */}
-                <a 
-                  href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                  className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs border-white/50 bg-white/25 backdrop-blur-md text-white hover:bg-white/35 transition-colors shadow-sm whitespace-nowrap"
-                >
-                  <span className="hidden md:inline">Powered by</span>
-                  <span className="font-semibold">Professio AI</span>
                 </a>
                 <Link href="/tutorial">
                   <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-white hover:text-gray-100 hover:bg-white/20 h-7 sm:h-9 px-1.5 sm:px-3">
@@ -988,9 +975,6 @@ export function CountdownToLiveWrapper({
           </Card>
         </div>
 
-        {/* Professio AI Promo Button at Bottom */}
-        <ProfessioPromoButton />
-        
         {/* Full Screen Image Modal */}
         <Dialog open={!!fullScreenImage} onOpenChange={(o) => { if (!o) setFullScreenImage(null) }}>
           <DialogContent className="max-w-full w-full h-full p-0 bg-black/95">
@@ -1055,7 +1039,6 @@ export function CountdownToLiveWrapper({
                   height={33} 
                   className="h-6 sm:h-7 w-auto brightness-0 invert"
                 />
-                <span className="text-[8px] sm:text-[9px] text-white/60 mt-0.5">Powered by Professio</span>
               </Link>
               <div className="flex items-center gap-0.5 sm:gap-3">
                 {/* Instagram Icon */}
@@ -1067,16 +1050,6 @@ export function CountdownToLiveWrapper({
                   aria-label="Follow us on Instagram"
                 >
                   <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
-                </a>
-                {/* Powered by Professio - Desktop only */}
-                <a 
-                  href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs border-white/50 bg-white/25 backdrop-blur-md text-white hover:bg-white/35 transition-colors shadow-sm whitespace-nowrap"
-                >
-                  <span className="hidden md:inline">Powered by</span>
-                  <span className="font-semibold">Professio AI</span>
                 </a>
                 <Link href="/tutorial">
                   <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-white hover:text-gray-100 hover:bg-white/20 h-7 sm:h-9 px-1.5 sm:px-3">
@@ -1174,9 +1147,6 @@ export function CountdownToLiveWrapper({
             </div>
           </div>
         </div>
-        
-        {/* Floating Professio AI Button */}
-        <FloatingPromoChip variant="purple" sessionKey="timer_professio_promo" />
       </div>
     )
   }
@@ -1216,10 +1186,6 @@ export function CountdownToLiveWrapper({
               <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
             </Link>
             <div className="flex items-center gap-4">
-              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 animate-pulse">
-                <span className="hidden sm:inline">Powered by</span>
-                <span className="font-semibold">Professio AI</span>
-              </a>
               <Link href="/register">
                 <button className="text-sm px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
                   Register
@@ -1234,16 +1200,6 @@ export function CountdownToLiveWrapper({
           </div>
         </div>
       </header>
-      {/* Mobile promo banner */}
-      <div className="sm:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-2 flex justify-center">
-          <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm animate-pulse">
-            <span>Powered by</span>
-            <span className="font-semibold">Professio AI</span>
-          </a>
-        </div>
-      </div>
-      
       {/* Breadcrumbs - Hidden on mobile for public view */}
       <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
@@ -1266,9 +1222,6 @@ export function CountdownToLiveWrapper({
         bidHistory={bidHistory}
         bidders={bidders}
       />
-      
-      {/* Floating Professio AI Button */}
-      <FloatingPromoChip variant="purple" sessionKey="live_auction_professio_promo" />
     </div>
   )
 }

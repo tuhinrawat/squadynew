@@ -77,10 +77,6 @@ export default function ContactPage() {
               >
                 <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
               </a>
-              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 animate-pulse whitespace-nowrap">
-                <span className="hidden md:inline">Powered by</span>
-                <span className="font-semibold">Professio AI</span>
-              </a>
               <Link href="/tutorial">
                 <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 h-7 sm:h-9 px-1.5 sm:px-3">
                   Tutorial

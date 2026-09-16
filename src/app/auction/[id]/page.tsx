@@ -344,7 +344,7 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
                     <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">© 2025</span>
                   </div>
 
-                  {/* Right: Social & Powered By */}
+                  {/* Right: Social */}
                   <div className="flex items-center gap-2 sm:gap-3">
                     <a
                       href="https://www.instagram.com/squady.auction/"
@@ -358,19 +358,6 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
                       </svg>
                     </a>
 
-                    <div className="w-px h-3 bg-gray-700" />
-
-                    <a
-                      href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-[10px] sm:text-xs font-medium shadow-sm hover:shadow-md transition-all whitespace-nowrap"
-                    >
-                      <svg className="h-2.5 w-2.5 sm:h-3 sm:w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span className="font-semibold">Professio AI</span>
-                    </a>
                   </div>
                 </div>
               </div>
@@ -466,10 +453,6 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
               >
                 <Instagram className="h-5 w-5" />
               </a>
-              <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="hidden sm:inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 whitespace-nowrap">
-                <span>Powered by</span>
-                <span className="font-semibold">Professio AI</span>
-              </a>
               <div className="hidden lg:flex items-center gap-2 text-sm">
                 <span className="text-gray-700 dark:text-gray-300">Welcome,</span>
                 <span className="font-semibold text-gray-900 dark:text-gray-100">{session?.user?.name || 'User'}</span>
@@ -483,16 +466,6 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
           </div>
         </div>
       </header>
-      {/* Mobile promo banner */}
-      <div className="sm:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="px-4 py-2 flex justify-center">
-          <a href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-2 py-1 rounded-md border text-xs bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 shadow-sm">
-            <span>Powered by</span>
-            <span className="font-semibold">Professio AI</span>
-          </a>
-        </div>
-      </div>
-      
       {/* Breadcrumbs */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-full mx-auto px-4 sm:px-6 py-3">

@@ -131,19 +131,6 @@ export function PreAuctionBanner({ scheduledStartDate, auctionName, onAuctionSta
                 </motion.div>
               </div>
             </div>
-
-            {/* Right: Branding */}
-            <div className="flex items-center gap-3">
-              <a
-                href="https://professio.ai/?utm_source=squady&utm_medium=referral&utm_campaign=powered_by_badge"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-white/30 bg-white/10 backdrop-blur-sm text-white text-xs md:text-sm font-semibold hover:bg-white/20 transition-colors shadow-sm"
-              >
-                <span>Powered by</span>
-                <span className="font-bold">Professio AI</span>
-              </a>
-            </div>
           </div>
         </div>
       </motion.div>
