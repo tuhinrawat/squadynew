@@ -508,6 +508,7 @@ export function CountdownToLiveWrapper({
                 <div>
                   <CardTitle className="text-base sm:text-lg font-black uppercase tracking-tight text-white">Know Your Players</CardTitle>
                   <p className="text-xs sm:text-sm text-white/50 mt-1">Walk the tunnel before the gates open.</p>
+                  <p className="text-[9px] text-white/25 mt-0.5">Stats accurate as of 15 September 2026</p>
                 </div>
                 <Badge className="bg-amber-400/15 text-amber-400 border-amber-400/30 text-[10px] sm:text-xs">Player Pool</Badge>
               </div>

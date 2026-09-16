@@ -1001,6 +1001,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         )}
                       </div>
                     )}
+                    {(presenterBattingStats || presenterBowlingStats) && (
+                      <p className="text-[10px] text-white/30 -mt-4 mb-4">Stats accurate as of 15 September 2026</p>
+                    )}
 
                     <div className="flex items-center gap-2 flex-wrap">
                       {presenterIsBidderChoice && (
@@ -1223,6 +1226,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       return essentials
                     })()}
                   />
+                  {(battingStats || bowlingStats) && (
+                    <p className="text-[9px] text-gray-400 dark:text-gray-500 text-center -mt-1 mb-1">Stats accurate as of 15 September 2026</p>
+                  )}
 
                   {/* "All Players & Teams" already lives in the header
                       (always visible, not just here) - a second copy of the
