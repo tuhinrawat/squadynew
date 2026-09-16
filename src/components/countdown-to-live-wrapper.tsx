@@ -679,9 +679,15 @@ export function CountdownToLiveWrapper({
                         {roleFlag && (
                           <div
                             className="absolute top-0 left-1/2 -translate-x-1/2 z-20 text-center"
-                            style={{ width: 96, padding: '7px 0 15px 0', background: roleFlag.background, clipPath: 'polygon(0% 0%,100% 0%,100% 66%,50% 100%,0% 66%)' }}
+                            style={{ width: 132, padding: '6px 6px 9px 6px', background: roleFlag.background, clipPath: 'polygon(0% 0%,100% 0%,100% 66%,50% 100%,0% 66%)' }}
                           >
-                            <span className="text-[9px] font-black uppercase tracking-wide" style={{ color: roleFlag.color }}>{roleFlag.label}</span>
+                            {/* whiteSpace: nowrap is load-bearing here - "All-Rounder"
+                                has a hyphen, which browsers treat as a valid line-break
+                                point, so without this the label wraps to two lines and
+                                the ribbon (sized for one) doubles in height, hanging
+                                down over the player's face instead of sitting near the
+                                top edge. */}
+                            <span className="text-[9px] font-black uppercase tracking-wide" style={{ color: roleFlag.color, whiteSpace: 'nowrap' }}>{roleFlag.label}</span>
                           </div>
                         )}
 
