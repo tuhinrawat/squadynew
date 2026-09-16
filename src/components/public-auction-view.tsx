@@ -20,6 +20,7 @@ import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { GoingLiveBanner } from '@/components/going-live-banner'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
+import { extractProxyImageUrl } from '@/lib/player-photo'
 import { BatIcon, BallIcon, StatTile } from '@/components/cricket-stat-ui'
 // Memoized components for performance
 import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
@@ -800,40 +801,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   }, [pendingPlayer])
 
   const getProfilePhotoUrl = useCallback((playerData: any): string | undefined => {
-    const possibleKeys = [
-      'Profile Photo',
-      'profile photo',
-      'Profile photo',
-      'PROFILE PHOTO',
-      'profile_photo',
-      'ProfilePhoto'
-    ]
-
-    const rawValue = possibleKeys
-      .map(key => playerData?.[key])
-      .find(value => value !== undefined && value !== null && String(value).trim() !== '')
-
-    if (!rawValue) {
-      return undefined
-    }
-
-    const photoStr = String(rawValue).trim()
-
-    let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-    if (match && match[1]) {
-      return `/api/proxy-image?id=${match[1]}`
-    }
-
-    match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-    if (match && match[1]) {
-      return `/api/proxy-image?id=${match[1]}`
-    }
-
-    if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-      return photoStr
-    }
-
-    return undefined
+    return extractProxyImageUrl(playerData)
   }, [])
 
   // Presenter mode (?presenter=1) is a dedicated full-screen stage meant to
@@ -1229,27 +1197,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       auctionName: currentPlayer.lastYearAuctionName,
                     } : null}
                     name={playerName}
-                    imageUrl={(() => {
-                      const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-                      const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
-                      if (!value) {
-                        console.log('DEBUG - Player data fields:', Object.keys(playerData))
-                        return undefined
-                      }
-                      const photoStr = String(value).trim()
-                      let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-                      if (match && match[1]) {
-                        return `/api/proxy-image?id=${match[1]}`
-                      }
-                      match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-                      if (match && match[1]) {
-                        return `/api/proxy-image?id=${match[1]}`
-                      }
-                      if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-                        return photoStr
-                      }
-                      return undefined
-                    })()}
+                    imageUrl={extractProxyImageUrl(playerData)}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                     profileLink={cricherosLink}

@@ -27,6 +27,7 @@ import {
   validateOfflineSale
 } from '@/lib/offline-auction-store'
 import { useConnectivityBeacon } from '@/hooks/use-connectivity-beacon'
+import { extractProxyImageUrl } from '@/lib/player-photo'
 
 type PlayerData = Record<string, unknown> | null | undefined
 
@@ -35,16 +36,7 @@ function extractName(data: PlayerData): string {
 }
 
 function extractImageUrl(data: PlayerData): string | undefined {
-  const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-  const value = keys.map(key => data?.[key]).find(v => v && String(v).trim())
-  if (!value) return undefined
-  const photoStr = String(value).trim()
-  let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-  if (match?.[1]) return `/api/proxy-image?id=${match[1]}`
-  match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  if (match?.[1]) return `/api/proxy-image?id=${match[1]}`
-  if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) return photoStr
-  return undefined
+  return extractProxyImageUrl(data)
 }
 
 function extractFields(data: PlayerData) {

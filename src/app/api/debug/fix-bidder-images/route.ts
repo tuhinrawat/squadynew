@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
 
 /**
  * POST /api/debug/fix-bidder-images
@@ -148,8 +149,7 @@ export async function POST(request: NextRequest) {
 
         // Extract photo from player data
         const playerData = player.data as any
-        const photoKeys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-        const photoValue = photoKeys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+        const photoValue = extractProfilePhotoValue(playerData)
 
         if (!photoValue) {
           errorCount++
@@ -164,32 +164,10 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Convert to proxy URL - try multiple patterns
+        // Convert to proxy URL
         const photoStr = String(photoValue).trim()
-        let fileId: string | null = null
-        
-        // Try pattern 1: /d/FILE_ID
-        let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-        if (match && match[1]) {
-          fileId = match[1]
-        }
-        
-        // Try pattern 2: ?id=FILE_ID or &id=FILE_ID
-        if (!fileId) {
-          match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-          if (match && match[1]) {
-            fileId = match[1]
-          }
-        }
-        
-        // Try pattern 3: Direct Google Drive URL with file/d/FILE_ID
-        if (!fileId) {
-          match = photoStr.match(/file\/d\/([a-zA-Z0-9_-]+)/)
-          if (match && match[1]) {
-            fileId = match[1]
-          }
-        }
-        
+        const fileId = extractGoogleDriveFileId(photoStr)
+
         if (!fileId) {
           errorCount++
           results.push({

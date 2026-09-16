@@ -20,6 +20,7 @@ import { isLiveStatus } from '@/lib/auction-status'
 import { formatCurrency } from '@/lib/currency'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
+import { extractProxyImageUrl, extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
@@ -126,20 +127,11 @@ interface BidConsolePanelProps {
   onClose?: () => void
 }
 
-// Same extraction the player card itself uses (duplicated inline there too -
-// see the imageUrl IIFE below) - kept standalone here since the prefetch
-// effect needs it before any player is actually being rendered.
+// Kept standalone (rather than calling extractProxyImageUrl directly) since
+// the prefetch effect needs it before any player is actually being
+// rendered, under its own established name at that call site.
 function extractPlayerImageUrl(data: Record<string, unknown> | null | undefined): string | undefined {
-  const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-  const value = keys.map(key => data?.[key]).find(v => v && String(v).trim())
-  if (!value) return undefined
-  const photoStr = String(value).trim()
-  let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-  if (match?.[1]) return `/api/proxy-image?id=${match[1]}`
-  match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  if (match?.[1]) return `/api/proxy-image?id=${match[1]}`
-  if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) return photoStr
-  return undefined
+  return extractProxyImageUrl(data)
 }
 
 // A real, stable, module-scope component - NOT a useCallback/useMemo defined
@@ -2103,27 +2095,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   auctionName: currentPlayer.lastYearAuctionName,
                 } : null}
                 name={playerName}
-                imageUrl={(() => {
-                  const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-                  const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
-                  if (!value) {
-                    console.log('DEBUG - Player data fields:', Object.keys(playerData))
-                    return undefined
-                  }
-                  const photoStr = String(value).trim()
-                  let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-                  if (match && match[1]) {
-                    return `/api/proxy-image?id=${match[1]}`
-                  }
-                  match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-                  if (match && match[1]) {
-                    return `/api/proxy-image?id=${match[1]}`
-                  }
-                  if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-                    return photoStr
-                  }
-                  return undefined
-                })()}
+                imageUrl={extractProxyImageUrl(playerData)}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                 tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                 profileLink={cricherosLink}
@@ -2172,7 +2144,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           <CardHeader className="hidden">
                 <div className="flex flex-col items-center gap-3">
                   {(() => {
-                    const profilePhotoLink = playerData['Profile Photo'] || playerData['profile photo'] || playerData['Profile photo']
+                    const profilePhotoLink = extractProfilePhotoValue(playerData)
                     
                     // If no profile photo, show placeholder with player name
                     if (!profilePhotoLink) {
@@ -2196,14 +2168,8 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     }
                     
                     // Extract file ID from the Google Drive URL
-                    const fileId = profilePhotoLink.includes('/file/d/') 
-                      ? profilePhotoLink.match(/\/file\/d\/([a-zA-Z0-9-_]+)/)?.[1]
-                      : profilePhotoLink.includes('open?id=')
-                      ? profilePhotoLink.match(/open\?id=([a-zA-Z0-9-_]+)/)?.[1]
-                      : profilePhotoLink.includes('id=')
-                      ? profilePhotoLink.match(/id=([a-zA-Z0-9-_]+)/)?.[1]
-                      : null
-                      
+                    const fileId = extractGoogleDriveFileId(profilePhotoLink)
+
                     // Use proxy API to bypass CORB
                     const proxyImageUrl = fileId ? `/api/proxy-image?id=${fileId}` : null
                       

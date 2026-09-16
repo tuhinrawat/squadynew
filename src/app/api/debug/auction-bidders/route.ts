@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,13 +72,11 @@ export async function GET(request: NextRequest) {
       let photoFromPlayerData = null
       if (retiredPlayerMatch) {
         const playerData = retiredPlayerMatch.data as any
-        const photoKeys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-        const photoValue = photoKeys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+        const photoValue = extractProfilePhotoValue(playerData)
         if (photoValue) {
-          const photoStr = String(photoValue).trim()
-          const match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-          if (match && match[1]) {
-            photoFromPlayerData = `/api/proxy-image?id=${match[1]}`
+          const fileId = extractGoogleDriveFileId(photoValue)
+          if (fileId) {
+            photoFromPlayerData = `/api/proxy-image?id=${fileId}`
           }
         }
       }

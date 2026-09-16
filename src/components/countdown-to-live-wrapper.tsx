@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { isLiveStatus } from '@/lib/auction-status'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
+import { extractProxyImageUrl } from '@/lib/player-photo'
 import { BatIcon, BallIcon } from '@/components/cricket-stat-ui'
 import { PlayerStatsDialog } from '@/components/player-stats-dialog'
 import { AuctionStatus } from '@prisma/client'
@@ -101,24 +102,7 @@ export function CountdownToLiveWrapper({
   const knowYourPlayersCards = useMemo(() => {
     return auction.players.map(player => {
       const playerData = player.data as any
-      const imageUrl = (() => {
-        const keys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-        const value = keys.map(key => playerData?.[key]).find(v => v && String(v).trim())
-        if (!value) return undefined
-        const photoStr = String(value).trim()
-        let match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-        if (match && match[1]) {
-          return `/api/proxy-image?id=${match[1]}`
-        }
-        match = photoStr.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-        if (match && match[1]) {
-          return `/api/proxy-image?id=${match[1]}`
-        }
-        if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
-          return photoStr
-        }
-        return undefined
-      })()
+      const imageUrl = extractProxyImageUrl(playerData)
       const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
       const role = playerData?.Role || playerData?.role || ''
       const statsSummary = [

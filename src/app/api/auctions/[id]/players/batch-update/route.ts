@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
 
 // POST /api/auctions/[id]/players/batch-update - Batch update players
 export async function POST(
@@ -201,14 +202,12 @@ export async function POST(
             if (!userId) return null
 
             // Get profile photo URL for bidderPhotoUrl (NOT logoUrl - logoUrl is for team logo from form upload)
-            const photoKeys = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto']
-            const photoValue = photoKeys.map(key => playerData?.[key]).find(v => v && String(v).trim())
+            const photoValue = extractProfilePhotoValue(playerData)
             let bidderPhotoUrl: string | null = null
             if (photoValue) {
-              const photoStr = String(photoValue).trim()
-              const match = photoStr.match(/\/d\/([a-zA-Z0-9_-]+)/)
-              if (match && match[1]) {
-                bidderPhotoUrl = `/api/proxy-image?id=${match[1]}`
+              const fileId = extractGoogleDriveFileId(photoValue)
+              if (fileId) {
+                bidderPhotoUrl = `/api/proxy-image?id=${fileId}`
               }
             }
 

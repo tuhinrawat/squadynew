@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import * as XLSX from 'xlsx'
 import { Jimp } from 'jimp'
+import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
 
 // Builds the canonical "auction results" spreadsheet - the one format both
 // this route and the standalone Auction Control Room tool agree on, rather
@@ -16,9 +17,6 @@ export const maxDuration = 60
 
 const CRICHEROES_KEYS = ['Cricheroes Profile link', ' Cricheroes Profile link', 'cricheroes profile link', 'Cricheroes Profile Link']
 const NAME_KEYS = ['name', 'Name', 'player_name']
-// Same header variants the app already checks elsewhere (analytics-view.tsx,
-// team-squad-poster.tsx) when looking for a player's Drive photo link.
-const PHOTO_KEYS = ['Profile Photo', 'profile photo', 'Profile photo', 'PROFILE PHOTO', 'profile_photo', 'ProfilePhoto', 'Photo', 'Image', 'Drive Link']
 
 // Excel caps a single cell at 32,767 characters. A base64 data URI is ~4/3
 // the size of the underlying image bytes, so this is the ceiling on the
@@ -34,14 +32,6 @@ function extractField(data: Record<string, unknown>, keys: string[]): string {
   return ''
 }
 
-function extractDriveFileId(link: string): string {
-  let match = link.match(/\/d\/([a-zA-Z0-9_-]+)/)
-  if (match?.[1]) return match[1]
-  match = link.match(/[?&]id=([a-zA-Z0-9_-]+)/)
-  if (match?.[1]) return match[1]
-  return ''
-}
-
 // Fetches a player's Drive photo, downsizes it hard, and returns it as an
 // inline base64 data URI - the one image format Claude Artifacts' sandbox
 // can actually render, since it never issues a network request for it (a
@@ -51,7 +41,7 @@ function extractDriveFileId(link: string): string {
 // one bad photo never aborts the whole export.
 async function embedPhoto(rawLink: string): Promise<{ dataUri: string; status: string }> {
   if (!rawLink) return { dataUri: '', status: 'no link' }
-  const fileId = extractDriveFileId(rawLink)
+  const fileId = extractGoogleDriveFileId(rawLink)
   if (!fileId) return { dataUri: '', status: 'unrecognized link format' }
 
   const controller = new AbortController()
@@ -149,7 +139,7 @@ export async function GET(
     const bidderById = new Map(bidders.map(b => [b.id, b]))
 
     const photoResults = includePhotos
-      ? await mapWithConcurrency(players, 6, p => embedPhoto(extractField((p.data as Record<string, unknown>) || {}, PHOTO_KEYS)))
+      ? await mapWithConcurrency(players, 6, p => embedPhoto(extractProfilePhotoValue((p.data as Record<string, unknown>) || {}) || ''))
       : []
 
     const resultRows = players.map((p, i) => {
