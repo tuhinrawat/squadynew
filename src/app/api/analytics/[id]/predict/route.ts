@@ -4,6 +4,7 @@ import { calculatePlayerScoreFromData, ScoreResult, deriveSpecialityFromStats, g
 import { calculateAuctionState, analyzeTeamNeeds, calculateRemainingPoolImpact, getRemainingPoolSummary, AuctionState } from '@/lib/auctionState'
 import { isCuid } from '@/lib/slug'
 import { Prisma } from '@prisma/client'
+import { extractPlayerName } from '@/lib/player-name'
 
 // Lazy load OpenAI to avoid build-time errors
 function getOpenAI() {
@@ -206,8 +207,8 @@ export async function POST(
     const bidderPriorities = rules?.bidderPriorities || {}
     
     // Get player name for priority lookup (try multiple formats)
-    const playerName = playerData?.Name || playerData?.name || ''
-    
+    const playerName = extractPlayerName(playerData) || ''
+
     // Calculate player score using stats-based scoring
     const playerScore: ScoreResult = calculatePlayerScoreFromData(currentPlayer)
     
@@ -257,8 +258,8 @@ export async function POST(
     const upcomingPlayersAnalysis = upcomingPlayers.map(p => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = p.data as any
-      const name = data?.Name || data?.name || 'Unknown'
-      
+      const name = extractPlayerName(data) || 'Unknown'
+
       // Calculate stats-based score for upcoming player (CRITICAL for identifying high-value players)
       const upcomingPlayerScore = calculatePlayerScoreFromData(p)
       
@@ -435,7 +436,7 @@ export async function POST(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const data = p.data as any
           return {
-            name: data?.Name || data?.name || 'Unknown',
+            name: extractPlayerName(data) || 'Unknown',
             speciality: data?.Speciality || 'N/A',
             batting: data?.['Batting Type'] || 'N/A',
             bowling: data?.['Bowling Type'] || 'N/A',
@@ -1276,7 +1277,7 @@ function generateFallbackPredictions(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const playerData = player?.data as any
   // Get player name for priority lookup
-  const playerName = playerData?.Name || playerData?.name || ''
+  const playerName = extractPlayerName(playerData) || ''
   // Derive speciality from stats-based scoring
   const playerSpeciality = playerScore ? deriveSpecialityFromStats(playerScore) : (playerData?.Speciality || playerData?.speciality || '')
   const poolImpact = auctionState ? calculateRemainingPoolImpact(playerSpeciality, auctionState) : 'medium'

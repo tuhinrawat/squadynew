@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { extractPlayerName } from '@/lib/player-name'
 
 type BackfillRow = {
   bidderName: string
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
   const playerNameToId = new Map<string, string>()
   for (const p of players) {
     const pdata = (p.data as any) || {}
-    const name = normalizeName(pdata.name || pdata.Name || '')
+    const name = normalizeName(extractPlayerName(pdata) || '')
     if (name) playerNameToId.set(name, p.id)
   }
 

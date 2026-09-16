@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CheckCircle, XCircle, Eye, Download, ChevronUp, ChevronDown } from 'lucide-react'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface Player {
   id: string
@@ -38,8 +39,7 @@ function PlayersSoldTableComponent({ auction }: PlayersSoldTableProps) {
 
   const getPlayerName = (player: Player) => {
     if (!player.data) return 'Unknown'
-    const data = player.data as any
-    return data.name || data.Name || 'Unknown'
+    return extractPlayerName(player.data as any) || 'Unknown'
   }
 
   const getPlayerData = (player: Player, field: string) => {

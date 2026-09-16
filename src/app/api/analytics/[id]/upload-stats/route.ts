@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isCuid } from '@/lib/slug'
 import { Prisma } from '@prisma/client'
+import { extractPlayerName } from '@/lib/player-name'
 
 // POST /api/analytics/[id]/upload-stats - Upload player stats and match by name
 export async function POST(
@@ -78,7 +79,7 @@ export async function POST(
 
       for (const player of auction.players) {
         const playerData = player.data as any
-        const playerName = playerData?.Name || playerData?.name || ''
+        const playerName = extractPlayerName(playerData) || ''
         if (!playerName) continue
         
         const normalizedPlayerName = normalizeName(playerName)
@@ -185,7 +186,7 @@ export async function POST(
 
     // Process each uploaded player
     for (const uploadedPlayer of uploadedPlayers) {
-      const uploadedName = uploadedPlayer.Name || uploadedPlayer.name || ''
+      const uploadedName = extractPlayerName(uploadedPlayer) || ''
       
       if (!uploadedName) {
         results.unmatched.push({
@@ -249,7 +250,7 @@ export async function POST(
 
       results.matched.push({
         playerId: player.id,
-        playerName: playerData?.Name || playerData?.name || 'Unknown',
+        playerName: extractPlayerName(playerData) || 'Unknown',
         uploadedName,
         columnsUpdated,
         matchMethod: matchMethod || 'unknown'

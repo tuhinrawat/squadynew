@@ -19,6 +19,7 @@ import { isLiveStatus } from '@/lib/auction-status'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 import { BatIcon, BallIcon } from '@/components/cricket-stat-ui'
 import { PlayerStatsDialog } from '@/components/player-stats-dialog'
 import { AuctionStatus } from '@prisma/client'
@@ -128,7 +129,7 @@ export function CountdownToLiveWrapper({
 
       return {
         id: player.id,
-        name: playerData?.name || playerData?.Name || playerData?.player_name || 'Unknown Player',
+        name: extractPlayerName(playerData) || 'Unknown Player',
         imageUrl,
         specialty,
         role,

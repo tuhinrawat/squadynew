@@ -21,6 +21,7 @@ import { GoingLiveBanner } from '@/components/going-live-banner'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 import { BatIcon, BallIcon, StatTile } from '@/components/cricket-stat-ui'
 // Memoized components for performance
 import { StatsDisplay } from '@/components/public-auction-view/memoized-components'
@@ -712,7 +713,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // the derived stats below were previously recomputed from scratch on
   // every render regardless of whether the player on screen had changed.
   const playerData = useMemo(() => getPlayerData(currentPlayer), [currentPlayer])
-  const playerName = playerData.name || playerData.Name || 'No Player Selected'
+  const playerName = extractPlayerName(playerData) || 'No Player Selected'
   // extractBattingStats/extractBowlingStats each rebuild a normalized map of
   // every field on the player's raw uploaded data - real, avoidable work
   // when only the purse/bid amount changed, not the player.
@@ -787,7 +788,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const names = allPlayers
       .map(p => {
         const data = p.data as any
-        return data?.name || data?.Name || data?.player_name || null
+        return extractPlayerName(data) || null
       })
       .filter((name): name is string => name !== null && name !== undefined && name !== '')
     
@@ -797,7 +798,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const pendingPlayerName = useMemo(() => {
     if (!pendingPlayer) return ''
     const data = pendingPlayer.data as any
-    return data?.name || data?.Name || data?.player_name || 'Unknown Player'
+    return extractPlayerName(data) || 'Unknown Player'
   }, [pendingPlayer])
 
   const getProfilePhotoUrl = useCallback((playerData: any): string | undefined => {

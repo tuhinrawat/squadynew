@@ -28,11 +28,12 @@ import {
 } from '@/lib/offline-auction-store'
 import { useConnectivityBeacon } from '@/hooks/use-connectivity-beacon'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 
 type PlayerData = Record<string, unknown> | null | undefined
 
 function extractName(data: PlayerData): string {
-  return (data?.name as string) || (data?.Name as string) || (data?.player_name as string) || 'Unknown Player'
+  return extractPlayerName(data) || 'Unknown Player'
 }
 
 function extractImageUrl(data: PlayerData): string | undefined {

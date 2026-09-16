@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import bcrypt from 'bcryptjs'
 import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 
 // GET /api/auctions/[id]/players/[playerId] - Get specific player
 export async function GET(
@@ -137,7 +138,7 @@ export async function PUT(
     // If retiring player, create a bidder record for them
     if (status === 'RETIRED' && existingPlayer.status !== 'RETIRED') {
       const playerData = player.data as any
-      const playerName = playerData?.name || playerData?.Name || 'Retired Player'
+      const playerName = extractPlayerName(playerData) || 'Retired Player'
       const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
       
       // Check if bidder already exists

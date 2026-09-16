@@ -1,6 +1,8 @@
 // Player Stats Scoring Logic for APL 2026 Auction
 // Calculates overall rating and predicted prices based on player statistics
 
+import { extractPlayerName } from './player-name'
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface Player {
   name: string
@@ -45,7 +47,7 @@ export interface ScoreResult {
  */
 export function calculatePlayerScore(player: Player | any): ScoreResult {
   // Extract player data (handle both Player interface and raw data objects)
-  const name = player.name || player.Name || player.data?.Name || 'Unknown'
+  const name = extractPlayerName(player) || extractPlayerName(player.data) || 'Unknown'
   const speciality = player.speciality || player.Speciality || player.data?.Speciality || ''
   const isKeeper = player.isKeeper || player.data?.['Is Keeper'] || player.data?.['Wicket Keeper'] || 'No'
   const availability = player.availability || player.Availability || player.data?.Availability || ''
@@ -171,7 +173,7 @@ export function calculatePlayerScoreFromData(playerData: any): ScoreResult {
   const data = playerData.data || playerData
   
   const player: Player = {
-    name: data.Name || data.name || 'Unknown',
+    name: extractPlayerName(data) || 'Unknown',
     speciality: data.Speciality || data.speciality || '',
     battingType: data['Batting Type'] || data.battingType || data.batting || '',
     bowlingType: data['Bowling Type'] || data.bowlingType || data.bowling || '',

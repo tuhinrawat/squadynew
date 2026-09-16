@@ -10,6 +10,7 @@ import { BidAnalytics } from '@/components/analytics/bid-analytics'
 import { BidderPrioritiesUpload } from '@/components/analytics/bidder-priorities-upload'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface AnalyticsViewProps {
   auction: Auction & {
@@ -70,7 +71,7 @@ export function AnalyticsView({ auction, currentPlayer, bidHistory }: AnalyticsV
     }
     
     return {
-      name: data?.Name || data?.name || 'Unknown Player',
+      name: extractPlayerName(data) || 'Unknown Player',
       speciality: data?.Speciality || 'N/A',
       batting: data?.['Batting Type'] || data?.batting || 'N/A',
       bowling: data?.['Bowling Type'] || data?.bowling || 'N/A',

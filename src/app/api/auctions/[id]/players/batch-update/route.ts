@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 
 // POST /api/auctions/[id]/players/batch-update - Batch update players
 export async function POST(
@@ -146,7 +147,7 @@ export async function POST(
           .filter(p => !existingUserByEmail.has(`retired_${p.id}@retired.player`))
           .map(p => {
             const playerData = p.data as any
-            const playerName = playerData?.name || playerData?.Name || 'Retired Player'
+            const playerName = extractPlayerName(playerData) || 'Retired Player'
             return {
               email: `retired_${p.id}@retired.player`,
               name: playerName,
@@ -195,7 +196,7 @@ export async function POST(
         const bidderRows = playersNeedingBidder
           .map(p => {
             const playerData = p.data as any
-            const playerName = playerData?.name || playerData?.Name || 'Retired Player'
+            const playerName = extractPlayerName(playerData) || 'Retired Player'
             const teamName = playerData?.['Team Name'] || playerData?.['team name'] || playerData?.teamName || playerName
             const username = `retired_${p.id}`
             const userId = userIdByEmail.get(`${username}@retired.player`)

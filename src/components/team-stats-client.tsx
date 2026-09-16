@@ -16,6 +16,7 @@ import { initializePusher } from '@/lib/pusher-client'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 import { BatIcon, BallIcon } from '@/components/cricket-stat-ui'
 import { PlayerStatsDialog } from '@/components/player-stats-dialog'
 
@@ -161,7 +162,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   // Helper functions - must be defined before use
   const getPlayerName = (player: Player) => {
     const data = player.data as any
-    return data?.name || data?.Name || data?.player_name || 'Unknown Player'
+    return extractPlayerName(data) || 'Unknown Player'
   }
 
   function getProfilePhotoUrl(playerData: any): string | undefined {

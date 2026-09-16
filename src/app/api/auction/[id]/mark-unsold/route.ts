@@ -5,6 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { extractPlayerName } from '@/lib/player-name'
 
 const markUnsoldSchema = z.object({
   playerId: z.string().trim().min(1),
@@ -79,7 +80,7 @@ export async function POST(
       }, { status: 400 })
     }
 
-    const playerName = currentPlayer?.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
+    const playerName = extractPlayerName(currentPlayer?.data as any) || 'Player'
 
     // Broadcast unsold event IMMEDIATELY for instant real-time updates (before DB writes)
     triggerAuctionEvent(params.id, 'player-unsold', {

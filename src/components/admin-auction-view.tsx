@@ -21,6 +21,7 @@ import { formatCurrency } from '@/lib/currency'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl, extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import ActionButtons from '@/components/action-buttons'
@@ -554,7 +555,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         maxPlayersCanBuy: maxTeamSize - 1,
         isFull,
         usingMandatoryTeamSize: !rules?.maxTeamSize && !!rules?.mandatoryTeamSize,
-        currentPlayerName: currentPlayer ? ((currentPlayer.data as any)?.Name || (currentPlayer.data as any)?.name) : 'none',
+        currentPlayerName: currentPlayer ? extractPlayerName(currentPlayer.data as any) : 'none',
         allPlayers: players.length,
         soldPlayers: players.filter(p => p.status === 'SOLD').length
       })
@@ -1003,7 +1004,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       // keep all bids, which should only be removed via "undo bid".
       const revertedType = isUnsoldUndo ? 'unsold' : 'sold'
       const playerData = data.player?.data as any
-      const playerName = playerData?.Name || playerData?.name || 'Player'
+      const playerName = extractPlayerName(playerData) || 'Player'
       const undoEvent: BidHistoryEntry = {
         type: 'sale-undo' as const,
         playerId: data.playerId,
@@ -1087,7 +1088,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       console.log('🎬 NEW PLAYER EVENT RECEIVED - Starting reveal animation:', data.player)
       console.log('🎬 Player data:', {
         id: data.player?.id,
-        name: (data.player?.data as any)?.Name || (data.player?.data as any)?.name,
+        name: extractPlayerName(data.player?.data as any),
         status: data.player?.status
       })
       
@@ -1104,7 +1105,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       
       console.log('🎬 handleNewPlayer called (from Pusher):', {
         hasPlayer: !!data.player,
-        playerName: (data.player?.data as any)?.Name || (data.player?.data as any)?.name,
+        playerName: extractPlayerName(data.player?.data as any),
         showPlayerReveal: showPlayerRevealRef.current,
         hasPendingPlayer: !!pendingPlayerRef.current
       })
@@ -1151,7 +1152,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
       if (latestPendingPlayer) {
         console.log('✅ Setting current player from pending player:', latestPendingPlayer)
         console.log('✅ Player data:', latestPendingPlayer.data)
-        console.log('✅ Player name:', (latestPendingPlayer.data as any)?.Name || (latestPendingPlayer.data as any)?.name)
+        console.log('✅ Player name:', extractPlayerName(latestPendingPlayer.data as any))
         
         // Hide animation first
         setShowPlayerReveal(false)
@@ -1187,7 +1188,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   maxTeamSize,
                   maxPlayersCanBuy: maxTeamSize - 1,
                   isFull,
-                  newPlayerName: (latestPendingPlayer.data as any)?.Name || (latestPendingPlayer.data as any)?.name
+                  newPlayerName: extractPlayerName(latestPendingPlayer.data as any)
                 })
                 return currentPlayers // Return unchanged to not modify state
               })
@@ -1569,7 +1570,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
           // this player from the activity log.
           const revertedType = isUnsoldUndo ? 'unsold' : 'sold'
           const playerData = data.player.data as any
-          const playerName = playerData?.Name || playerData?.name || 'Player'
+          const playerName = extractPlayerName(playerData) || 'Player'
           setFullBidHistory(prev => {
             const filtered = prev.filter(entry =>
               !(entry.playerId === data.player.id && (entry.type === revertedType || (!isUnsoldUndo && entry.type === 'bid')))
@@ -1608,7 +1609,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   // Memoize player data extraction for performance
   const playerData = useMemo(() => getPlayerData(currentPlayer), [currentPlayer])
   const playerName = useMemo(() => {
-    return playerData.name || playerData.Name || 'No Player Selected'
+    return extractPlayerName(playerData) || 'No Player Selected'
   }, [playerData])
   // extractBattingStats/extractBowlingStats each rebuild a normalized map of
   // every field on the player's raw uploaded data - real work, previously
@@ -1730,7 +1731,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     const names = allPlayers
       .map(p => {
         const data = p.data as any
-        return data?.name || data?.Name || data?.player_name || null
+        return extractPlayerName(data) || null
       })
       .filter((name): name is string => name !== null && name !== undefined && name !== '')
     
@@ -1747,7 +1748,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const pendingPlayerName = useMemo(() => {
     if (!pendingPlayer) return ''
     const data = pendingPlayer.data as any
-    return data?.name || data?.Name || data?.player_name || 'Unknown Player'
+    return extractPlayerName(data) || 'Unknown Player'
   }, [pendingPlayer])
 
   // Cleanup fallback timeout on unmount

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { extractPlayerName } from '@/lib/player-name'
 
 const markSoldSchema = z.object({
   playerId: z.string().trim().min(1),
@@ -219,7 +220,7 @@ export async function POST(
     const newRemainingPurse = winningBidder.remainingPurse - highestBid.amount
 
     // Broadcast player sold event IMMEDIATELY for instant real-time updates (before DB writes)
-    const playerName = currentPlayer.data ? (currentPlayer.data as any).name || (currentPlayer.data as any).Name : 'Player'
+    const playerName = extractPlayerName(currentPlayer.data as any) || 'Player'
     triggerAuctionEvent(params.id, 'player-sold', {
       playerId: currentPlayer.id,
       bidderId: winningBidder.id,

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { XCircle, Image as ImageIcon } from 'lucide-react'
 import { TeamSquadPoster } from './team-squad-poster'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface ResultsViewProps {
   auction: any
@@ -66,7 +67,7 @@ export function ResultsView({ auction }: ResultsViewProps) {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {unsoldPlayers.map((player: any) => {
                   const data = player.data as Record<string, any>
-                  const playerName = data.name || data.Name || 'Unknown'
+                  const playerName = extractPlayerName(data) || 'Unknown'
                   return (
                     <div key={player.id} className="text-center p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                       <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{playerName}</p>

@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface PlayerData {
   [key: string]: unknown
@@ -58,7 +59,7 @@ function getProfilePhotoUrl(playerData: PlayerData): string | undefined {
  * Get player name from data
  */
 function getPlayerName(playerData: PlayerData): string {
-  return playerData?.name || playerData?.Name || playerData?.player_name || 'Unknown Player'
+  return extractPlayerName(playerData) || 'Unknown Player'
 }
 
 /**

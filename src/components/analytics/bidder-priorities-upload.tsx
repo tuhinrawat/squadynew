@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { CheckCircle, AlertCircle, Loader2, Table2, ArrowUp, ArrowDown, Save, Search } from 'lucide-react'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface BidderPrioritiesUploadProps {
   auctionId: string
@@ -44,7 +45,7 @@ export function BidderPrioritiesUpload({ auctionId, bidders, players }: BidderPr
       const names = players
         .map(p => {
           const data = p.data as any
-          return data?.Name || data?.name || 'Unknown'
+          return extractPlayerName(data) || 'Unknown'
         })
         .filter((name, index, self) => self.indexOf(name) === index) // Remove duplicates
         .sort()
@@ -115,7 +116,7 @@ export function BidderPrioritiesUpload({ auctionId, bidders, players }: BidderPr
   const allPlayers = players
     .map(p => {
       const data = p.data as any
-      const name = data?.Name || data?.name || 'Unknown'
+      const name = extractPlayerName(data) || 'Unknown'
       return {
         id: p.id,
         name: name

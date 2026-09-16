@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { extractCricheroesLink, normalizeCricheroesLink, cleanCricheroesLinksInPlayerData } from '@/lib/cricheroes'
 import { Player, Prisma } from '@prisma/client'
+import { extractPlayerName } from '@/lib/player-name'
 
 // POST /api/auctions/[id]/players/upload-stats - Import a separate stats
 // sheet (name, Cricheroes profile, Batting_*/Bowling_* columns) and merge it
@@ -81,7 +82,7 @@ export async function POST(
 
       for (const player of auction.players) {
         const playerData = player.data as Record<string, unknown>
-        const playerName = String(playerData?.Name || playerData?.name || '')
+        const playerName = extractPlayerName(playerData) || ''
         if (!playerName) continue
         const normalizedPlayerName = normalizeName(playerName)
         if (!normalizedPlayerName) continue
@@ -166,7 +167,7 @@ export async function POST(
     const systemFields = ['Name', 'name', 'status', 'id', 'playerId', 'soldPrice', 'soldTo']
 
     for (const uploadedPlayer of uploadedPlayers as Record<string, unknown>[]) {
-      const uploadedName = String(uploadedPlayer.Name || uploadedPlayer.name || '')
+      const uploadedName = extractPlayerName(uploadedPlayer) || ''
       const uploadedLink = normalizeCricheroesLink(extractCricheroesLink(uploadedPlayer))
 
       let player: Player | undefined = uploadedLink ? playersByLink.get(uploadedLink) : undefined
@@ -212,7 +213,7 @@ export async function POST(
       updates.push({ playerId: player.id, data: updatedData })
       results.matched.push({
         playerId: player.id,
-        playerName: String(playerData?.Name || playerData?.name || 'Unknown'),
+        playerName: extractPlayerName(playerData) || 'Unknown',
         uploadedName: uploadedName || '(matched by Cricheroes link)',
         columnsUpdated,
         matchMethod,

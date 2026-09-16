@@ -11,6 +11,7 @@ import { Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { parseExcelFile, ParsedPlayerData } from '@/lib/excel-parser'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface PlayerTableProps {
   players: Player[]
@@ -88,7 +89,7 @@ export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColum
     const search = searchTerm.toLowerCase()
     return players.filter(player => {
       const data = player.data as any
-      const name = (data?.Name || data?.name || '').toLowerCase()
+      const name = (extractPlayerName(data) || '').toLowerCase()
       const speciality = (data?.Speciality || '').toLowerCase()
       const status = player.status.toLowerCase()
       
@@ -101,7 +102,7 @@ export function PlayerTable({ players, auctionId, bidders, analyticsVisibleColum
     
     switch (column) {
       case 'name':
-        return data?.Name || data?.name || 'Unknown'
+        return extractPlayerName(data) || 'Unknown'
       case 'status':
         return player.status
       case 'speciality':

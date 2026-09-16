@@ -8,6 +8,7 @@ import { Loader2, Brain, TrendingUp, TrendingDown, AlertCircle, BarChart3, Star,
 import { Auction, Player, Bidder } from '@prisma/client'
 import { usePusher } from '@/lib/pusher-client'
 import { calculatePlayerScoreFromData } from '@/lib/playerStats'
+import { extractPlayerName } from '@/lib/player-name'
 
 interface BidAnalyticsProps {
   auction: Auction & {
@@ -921,7 +922,7 @@ export function BidAnalytics({ auction, selectedBidder, currentPlayer, bidHistor
                       }
                       
                       // Get priority for this bidder-player combination
-                      const currentPlayerName = (localCurrentPlayer?.data as any)?.Name || (localCurrentPlayer?.data as any)?.name || ''
+                      const currentPlayerName = extractPlayerName(localCurrentPlayer?.data as any) || ''
                       let playerPriority: number | null = null
                       if (currentPlayerName && Object.keys(bidderPriorities).length > 0) {
                         const bidderKey = Object.keys(bidderPriorities).find(key => {
