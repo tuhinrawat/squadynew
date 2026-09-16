@@ -36,9 +36,13 @@ export interface PlayerCardProps {
 	// scale bar/tile only renders when that specific field has a value.
 	battingStats?: BattingStats | null
 	bowlingStats?: BowlingStats | null
+	// The permanent auction number assigned via "Assign Serial Number" on
+	// Manage Players - the same number printed on the physical plaque the
+	// team hands the winning bidder, so it needs to read clearly at a glance.
+	serialNumber?: number | null
 }
 
-export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear, battingStats, bowlingStats }: PlayerCardProps) {
+export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear, battingStats, bowlingStats, serialNumber }: PlayerCardProps) {
 	// Extract field values
 	const speciality = fields.find(f => f.label === 'Speciality')?.value || ''
 	const battingStyle = fields.find(f => f.label === 'Batting')?.value || ''
@@ -69,6 +73,15 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 
 			{/* Photo zone - full-bleed, not circular */}
 			<div className="relative h-[220px] sm:h-[340px] lg:h-[400px] overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+				{/* Auction number plaque - the same number the team hands the
+				    winning bidder on a physical placard, so it has to read as
+				    the biggest, boldest thing on the card after the photo
+				    itself, not a quiet detail. */}
+				{serialNumber != null && (
+					<div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 flex items-center justify-center w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 border-2 sm:border-[3px] border-white/90 shadow-xl">
+						<span className="text-2xl sm:text-4xl font-black text-[#1a1200] tabular-nums leading-none">{serialNumber}</span>
+					</div>
+				)}
 				{imageUrl && !imageFailed ? (
 					<>
 						{/* Backdrop layer: same photo, blurred + scaled to fill the frame */}

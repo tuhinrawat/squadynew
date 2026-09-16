@@ -354,7 +354,8 @@ export async function POST(
             lastYearPrice: true,
             lastYearTeamName: true,
             lastYearBidderName: true,
-            lastYearAuctionName: true
+            lastYearAuctionName: true,
+            serialNumber: true
           }
         })
       }

@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { DataTable, DataTableColumn } from '@/components/data-table'
 import { parseExcelFile, ParsedPlayerData, validatePlayerData, cleanPlayerData } from '@/lib/excel-parser'
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus, BarChart3 } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Plus, BarChart3, Hash } from 'lucide-react'
 import { logger } from '@/lib/logger'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -20,6 +20,7 @@ interface Player {
   status: string
   createdAt: string
   lastYearPrice?: number | null
+  serialNumber?: number | null
 }
 
 // Inline-editable cell for a player's Last Year Price - a manual correction
@@ -92,6 +93,7 @@ export default function PlayerManagement() {
   const [auctionRules, setAuctionRules] = useState<any>(null)
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
   const [batchProcessing, setBatchProcessing] = useState(false)
+  const [assigningSerialNumbers, setAssigningSerialNumbers] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<string[]>([])
   const [auctionStatus, setAuctionStatus] = useState<string>('DRAFT')
   const [isPublished, setIsPublished] = useState<boolean>(false)
@@ -509,6 +511,44 @@ export default function PlayerManagement() {
     }
   }, [auctionId])
 
+  const handleAssignSerialNumbers = async () => {
+    const eligibleCount = players.filter(p => p.status !== 'RETIRED').length
+    if (eligibleCount === 0) {
+      setError('No non-retired players to assign numbers to.')
+      return
+    }
+    if (!confirm(
+      `Assign a random permanent number (1 to ${eligibleCount}) to every non-retired player? ` +
+      `Players that already have a number keep it - this only fills in the ones that don't.`
+    )) {
+      return
+    }
+
+    try {
+      setAssigningSerialNumbers(true)
+      setError('')
+      const response = await fetch(`/api/auctions/${auctionId}/players/assign-serial-numbers`, {
+        method: 'POST',
+      })
+      const result = await response.json()
+      if (response.ok) {
+        setSuccess(
+          result.assignedCount > 0
+            ? `Assigned numbers to ${result.assignedCount} player${result.assignedCount !== 1 ? 's' : ''}.`
+            : result.message || 'Every non-retired player already has a serial number.'
+        )
+        await fetchPlayers()
+      } else {
+        setError(result.error || 'Failed to assign serial numbers')
+      }
+    } catch (error) {
+      setError('Network error while assigning serial numbers')
+      logger.error('Error assigning serial numbers:', error)
+    } finally {
+      setAssigningSerialNumbers(false)
+    }
+  }
+
   const handleDeletePlayer = async (player: any) => {
     logger.log('Delete player clicked')
     if (!confirm('Are you sure you want to delete this player?')) return
@@ -687,7 +727,8 @@ export default function PlayerManagement() {
     status: player.status,
     isIcon: (player as any).isIcon || false,
     createdAt: new Date(player.createdAt).toLocaleDateString(),
-    lastYearPrice: player.lastYearPrice ?? null
+    lastYearPrice: player.lastYearPrice ?? null,
+    serialNumber: player.serialNumber ?? null
   })).sort((a, b) => {
     // Sort by isIcon (Bidder Choice first), then by createdAt
     if (a.isIcon !== b.isIcon) {
@@ -698,6 +739,21 @@ export default function PlayerManagement() {
 
   // Create DataTable columns
   const tableColumns: DataTableColumn[] = useMemo(() => [
+    {
+      key: 'serialNumber',
+      label: '#',
+      sortable: true,
+      type: 'number',
+      render: (value: number | null) => (
+        value != null ? (
+          <span className="inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-md bg-teal-600 text-white font-black text-sm tabular-nums">
+            {value}
+          </span>
+        ) : (
+          <span className="text-gray-400 dark:text-gray-600 text-sm">—</span>
+        )
+      )
+    },
     ...columns.map(col => ({
       key: col,
       label: col,
@@ -772,6 +828,19 @@ export default function PlayerManagement() {
       sortable: true
     }
   ], [columns, tableData, handleLastYearPriceEdit])
+
+  // The "#" (serial number) column is always shown by default, even for an
+  // auction whose visibleColumns was saved before this column existed -
+  // mirrors DataTable's own "first 6 columns" default when nothing is
+  // saved yet, just guaranteeing serialNumber is one of the six rather than
+  // getting silently pushed out of the default view like a brand new
+  // column otherwise would.
+  const effectiveVisibleColumns = useMemo(() => {
+    if (visibleColumns.length > 0) {
+      return visibleColumns.includes('serialNumber') ? visibleColumns : ['serialNumber', ...visibleColumns]
+    }
+    return ['serialNumber', ...tableColumns.filter(c => c.key !== 'serialNumber').slice(0, 5).map(c => c.key)]
+  }, [visibleColumns, tableColumns])
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-hidden">
@@ -930,6 +999,51 @@ export default function PlayerManagement() {
           </div>
           {statsUploadError && !statsDialogOpen && (
             <p className="text-sm text-red-600 dark:text-red-400 mt-2">{statsUploadError}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Assign Serial Number - a random permanent 1..N number for every
+          non-retired player (N = however many are non-retired right now).
+          This is the number printed on the physical plaque the team hands
+          the winning bidder, so it has to be assigned before the auction
+          runs and never change afterward - re-running this only fills in
+          players that still have none, never touches an already-numbered
+          one. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Hash className="h-5 w-5 mr-2" />
+            Assign Serial Number
+          </CardTitle>
+          <CardDescription>
+            Randomly assigns each non-retired player a permanent number from 1 to the number of non-retired
+            players. Already-numbered players are never changed - safe to re-run after uploading more players
+            or retiring a few more.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={handleAssignSerialNumbers}
+            disabled={assigningSerialNumbers || !isEditingAllowed}
+            className="bg-teal-600 hover:bg-teal-700 text-white dark:bg-teal-600 dark:hover:bg-teal-700 disabled:opacity-50"
+          >
+            {assigningSerialNumbers ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Assigning...
+              </>
+            ) : (
+              <>
+                <Hash className="h-4 w-4 mr-2" />
+                Assign Serial Number
+              </>
+            )}
+          </Button>
+          {!isEditingAllowed && (
+            <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
+              Cannot assign serial numbers while the auction is LIVE or in MOCK_RUN mode.
+            </p>
           )}
         </CardContent>
       </Card>
@@ -1254,7 +1368,7 @@ export default function PlayerManagement() {
                 enableSelection={true}
                 selectedItems={selectedPlayerIds}
                 onSelectionChange={setSelectedPlayerIds}
-                visibleColumnsInitial={visibleColumns}
+                visibleColumnsInitial={effectiveVisibleColumns}
                 onVisibleColumnsChange={handleVisibleColumnsChange}
                 title={
                   <div className="flex items-center gap-2">

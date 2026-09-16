@@ -2095,6 +2095,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   teamName: currentPlayer.lastYearTeamName,
                   auctionName: currentPlayer.lastYearAuctionName,
                 } : null}
+                serialNumber={currentPlayer?.serialNumber}
                 name={playerName}
                 imageUrl={extractProxyImageUrl(playerData)}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}

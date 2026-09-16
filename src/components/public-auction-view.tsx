@@ -888,6 +888,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   {/* Left: photo - dominant, not full-bleed */}
                   <div className="relative w-[58%] h-full overflow-hidden bg-gradient-to-br from-[#1c2b2a] via-[#10181b] to-[#05070a] flex-shrink-0">
                     <div className="absolute -top-[30%] left-[10%] w-24 h-[160%] bg-gradient-to-b from-amber-400/10 to-transparent blur-sm rotate-[-10deg] pointer-events-none" />
+                    {/* Auction number plaque - the same number the team hands
+                        the winning bidder on a physical placard. Presenter
+                        mode is projected for a whole room to read, so this
+                        gets the biggest treatment of anywhere it appears. */}
+                    {currentPlayer?.serialNumber != null && (
+                      <div className="absolute top-6 left-6 z-20 flex items-center justify-center w-24 h-24 lg:w-32 lg:h-32 rounded-3xl bg-gradient-to-br from-amber-400 to-amber-600 border-4 border-white/90 shadow-2xl">
+                        <span className="text-5xl lg:text-6xl font-black text-[#1a1200] tabular-nums leading-none">{currentPlayer.serialNumber}</span>
+                      </div>
+                    )}
                     {presenterPhotoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={presenterPhotoUrl} alt={playerName} className="w-full h-full object-contain" />
@@ -1200,6 +1209,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       teamName: currentPlayer.lastYearTeamName,
                       auctionName: currentPlayer.lastYearAuctionName,
                     } : null}
+                    serialNumber={currentPlayer?.serialNumber}
                     name={playerName}
                     imageUrl={extractProxyImageUrl(playerData)}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}

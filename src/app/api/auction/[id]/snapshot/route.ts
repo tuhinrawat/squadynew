@@ -79,6 +79,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             select: {
               id: true, auctionId: true, data: true, status: true, isIcon: true, soldTo: true, soldPrice: true,
               lastYearPrice: true, lastYearTeamName: true, lastYearBidderName: true, lastYearAuctionName: true,
+              serialNumber: true,
             },
           })
         : Promise.resolve(null),

@@ -145,6 +145,13 @@ model Player {
   lastYearBidderName  String?
   lastYearAuctionName String?
 
+  // Random 1..N number assigned once (via "Assign Serial Number" on the
+  // Manage Players page) across every non-retired player in the auction -
+  // the number printed on the physical plaque the team hands the winning
+  // bidder. Permanent once set: re-running the assignment never changes an
+  // already-numbered player, only fills in players that still have none.
+  serialNumber Int?
+
   // Relations
   auction Auction @relation(fields: [auctionId], references: [id])
 
@@ -153,6 +160,7 @@ model Player {
   @@index([auctionId, status])
   @@index([auctionId, status, soldPrice])
   @@index([auctionId, status, soldAt])
+  @@unique([auctionId, serialNumber])
   @@map("players")
 }
 

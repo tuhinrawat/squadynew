@@ -145,6 +145,7 @@ export function CountdownToLiveWrapper({
         cricherosLink,
         lastYearPrice: player.lastYearPrice as number | null | undefined,
         lastYearTeamName: player.lastYearTeamName as string | null | undefined,
+        serialNumber: player.serialNumber as number | null | undefined,
         battingStats: extractBattingStats(playerData),
         bowlingStats: extractBowlingStats(playerData),
       }
@@ -685,6 +686,7 @@ export function CountdownToLiveWrapper({
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="bg-white/[0.04] text-white/50 text-[9px] sm:text-[10px] uppercase tracking-wider">
+                        <th className="text-center px-3 py-2 font-bold w-12">#</th>
                         <th className="text-left px-3 py-2 font-bold">Player</th>
                         <th className="text-right px-3 py-2 font-bold whitespace-nowrap">Last Year Price</th>
                         <th className="text-center px-3 py-2 font-bold">Batting</th>
@@ -694,6 +696,15 @@ export function CountdownToLiveWrapper({
                     <tbody>
                       {visibleKnowYourPlayersCards.map(card => (
                         <tr key={card.id} className="border-t border-white/10 hover:bg-white/[0.03]">
+                          <td className="px-3 py-2 text-center">
+                            {card.serialNumber != null ? (
+                              <span className="inline-flex items-center justify-center min-w-[1.75rem] h-7 px-1.5 rounded-md bg-gradient-to-br from-amber-400 to-amber-600 text-[#1a1200] font-black text-xs tabular-nums">
+                                {card.serialNumber}
+                              </span>
+                            ) : (
+                              <span className="text-white/20 text-xs">—</span>
+                            )}
+                          </td>
                           <td className="px-3 py-2 max-w-[160px] sm:max-w-none">
                             <div className="flex items-center gap-2 min-w-0">
                               {card.imageUrl ? (
@@ -792,6 +803,18 @@ export function CountdownToLiveWrapper({
                           style={{ background: 'radial-gradient(circle at 50% 22%, #1b1f27, #05070a 75%)' }}
                           onClick={() => card.imageUrl && setFullScreenImage(card.imageUrl)}
                         >
+                          {/* Auction number plaque - the permanent number
+                              printed on the physical placard the team hands
+                              the winning bidder, so it needs to read big and
+                              bold here too. Top-left of the photo box is the
+                              one corner not already used by the discipline
+                              ribbon (top-center) or the bidder-choice/status
+                              badges (bottom corners). */}
+                          {card.serialNumber != null && (
+                            <div className="absolute top-2 left-2 z-20 flex items-center justify-center w-9 h-9 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 border-2 border-white/90 shadow-lg">
+                              <span className="text-sm sm:text-lg font-black text-[#1a1200] tabular-nums leading-none">{card.serialNumber}</span>
+                            </div>
+                          )}
                           {card.imageUrl ? (
                             <>
                               <img
