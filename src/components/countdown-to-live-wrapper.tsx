@@ -8,7 +8,7 @@ import FloatingPromoChip from './floating-promo-chip'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown, Calendar, ArrowUpDown } from 'lucide-react'
+import { Eye, ExternalLink, Instagram, LogIn, Search, ChevronDown, Calendar, ArrowUpDown, LayoutGrid, Table as TableIcon } from 'lucide-react'
 import { AddToCalendar } from './add-to-calendar'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -81,6 +81,10 @@ export function CountdownToLiveWrapper({
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null)
   const [playerFilter, setPlayerFilter] = useState<'all' | 'batsmen' | 'bowlers' | 'all-rounders' | 'bidders' | 'bidder-choice'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  // Photo-card grid (the default) vs. a dense table for scanning many
+  // players' name/last-year-price/stats at once without scrolling through
+  // a full card per player.
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   // Sorts by lastYearPrice (see auction-history.ts) - the price this player
   // actually went for in a linked previous auction, not this auction's
   // current/base price. Players with no match sort to the end regardless
@@ -524,6 +528,34 @@ export function CountdownToLiveWrapper({
             <CardContent className="pt-0">
               {/* Search and Filter Section */}
               <div className="mb-4 sm:mb-6 space-y-3">
+                {/* View toggle - photo-card grid vs. a dense scannable table */}
+                <div className="flex justify-end">
+                  <div className="inline-flex rounded-lg border border-white/15 bg-white/[0.06] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('grid')}
+                      aria-pressed={viewMode === 'grid'}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] sm:text-xs font-bold transition-colors ${
+                        viewMode === 'grid' ? 'bg-amber-400 text-[#1a1200]' : 'text-white/50 hover:text-white'
+                      }`}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5" />
+                      Cards
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('table')}
+                      aria-pressed={viewMode === 'table'}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] sm:text-xs font-bold transition-colors ${
+                        viewMode === 'table' ? 'bg-amber-400 text-[#1a1200]' : 'text-white/50 hover:text-white'
+                      }`}
+                    >
+                      <TableIcon className="h-3.5 w-3.5" />
+                      Table
+                    </button>
+                  </div>
+                </div>
+
                 {/* Search Input */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/35" />
@@ -660,8 +692,83 @@ export function CountdownToLiveWrapper({
                     ? 'Player list not available yet. Check back soon!'
                     : `No players found${playerFilter !== 'all' ? ` for ${playerFilter}` : ''}.`}
                 </div>
+              ) : viewMode === 'table' ? (
+                <div className="overflow-x-auto rounded-xl border border-white/10">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-white/[0.04] text-white/50 text-[9px] sm:text-[10px] uppercase tracking-wider">
+                        <th className="text-left px-3 py-2 font-bold">Player</th>
+                        <th className="text-right px-3 py-2 font-bold whitespace-nowrap">Last Year Price</th>
+                        <th className="text-center px-3 py-2 font-bold">Batting</th>
+                        <th className="text-center px-3 py-2 font-bold">Bowling</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleKnowYourPlayersCards.map(card => (
+                        <tr key={card.id} className="border-t border-white/10 hover:bg-white/[0.03]">
+                          <td className="px-3 py-2 max-w-[160px] sm:max-w-none">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {card.imageUrl ? (
+                                <img
+                                  src={card.imageUrl}
+                                  alt={card.name}
+                                  className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                  loading="lazy"
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-white/[0.08] flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-bold text-white">{card.name.charAt(0).toUpperCase()}</span>
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-white font-bold text-xs sm:text-sm truncate">{card.name}</p>
+                                {(card.statsSummary || card.specialty) && (
+                                  <p className="text-white/40 text-[9px] sm:text-[10px] truncate">{card.statsSummary || card.specialty}</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-right whitespace-nowrap">
+                            {card.lastYearPrice != null ? (
+                              <span className="text-amber-300 font-bold text-xs sm:text-sm">₹{card.lastYearPrice.toLocaleString('en-IN')}</span>
+                            ) : (
+                              <span className="text-white/25 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {card.battingStats ? (
+                              <button
+                                type="button"
+                                onClick={() => setStatsDialogTarget({ id: card.id, discipline: 'batting' })}
+                                className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wide text-teal-300"
+                              >
+                                View More
+                              </button>
+                            ) : (
+                              <span className="text-white/20 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {card.bowlingStats ? (
+                              <button
+                                type="button"
+                                onClick={() => setStatsDialogTarget({ id: card.id, discipline: 'bowling' })}
+                                className="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wide text-teal-300"
+                              >
+                                View More
+                              </button>
+                            ) : (
+                              <span className="text-white/20 text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4">
                   {visibleKnowYourPlayersCards.map(card => {
                     const isBidder = card.statusLabel === 'Bidder'
                     // Discipline flag on the top border - null for a bidder/team
@@ -693,7 +800,7 @@ export function CountdownToLiveWrapper({
 
                         {/* Player Photo - Portrait Style */}
                         <div
-                          className="relative h-48 sm:h-56 flex items-center justify-center cursor-pointer group/photo"
+                          className="relative h-36 sm:h-56 flex items-center justify-center cursor-pointer group/photo"
                           style={{ background: 'radial-gradient(circle at 50% 22%, #1b1f27, #05070a 75%)' }}
                           onClick={() => card.imageUrl && setFullScreenImage(card.imageUrl)}
                         >
@@ -716,7 +823,7 @@ export function CountdownToLiveWrapper({
                               </div>
                             </>
                           ) : (
-                            <div className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center ${isBidder ? 'bg-purple-500/20 border border-purple-400/40' : 'bg-white/[0.08]'}`}>
+                            <div className={`w-16 h-16 sm:w-28 sm:h-28 rounded-full flex items-center justify-center ${isBidder ? 'bg-purple-500/20 border border-purple-400/40' : 'bg-white/[0.08]'}`}>
                               <span className="text-3xl sm:text-4xl font-bold text-white">
                                 {card.name.charAt(0).toUpperCase()}
                               </span>
