@@ -54,16 +54,16 @@ interface CountdownToLiveWrapperProps {
 function getRoleFlag(role?: string, specialty?: string): { label: string; background: string; color: string } | null {
   const text = `${role || ''} ${specialty || ''}`.toLowerCase()
   if (text.includes('wicket') || text.includes('keeper')) {
-    return { label: 'Wicketkeeper', background: 'rgba(255,255,255,0.72)', color: '#05070a' }
+    return { label: 'Wicketkeeper', background: 'rgba(255,255,255,0.6)', color: '#05070a' }
   }
   if (text.includes('all-rounder') || text.includes('allrounder') || text.includes('all rounder')) {
-    return { label: 'All-Rounder', background: 'linear-gradient(90deg,rgba(168,85,247,0.72),rgba(236,72,153,0.72))', color: '#ffffff' }
+    return { label: 'All-Rounder', background: 'linear-gradient(90deg,rgba(168,85,247,0.6),rgba(236,72,153,0.6))', color: '#ffffff' }
   }
   if (text.includes('bowler')) {
-    return { label: 'Bowler', background: 'rgba(20,184,166,0.72)', color: '#04211d' }
+    return { label: 'Bowler', background: 'rgba(20,184,166,0.6)', color: '#04211d' }
   }
   if (text.includes('batsman') || text.includes('batter')) {
-    return { label: 'Batsman', background: 'rgba(251,191,36,0.72)', color: '#1a1200' }
+    return { label: 'Batsman', background: 'rgba(251,191,36,0.6)', color: '#1a1200' }
   }
   return null
 }
