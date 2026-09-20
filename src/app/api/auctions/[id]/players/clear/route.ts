@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
+import { invalidatePlayers } from '@/lib/cache'
 
 // DELETE /api/auctions/[id]/players/clear - Clear all players for an auction
 export async function DELETE(
@@ -33,7 +34,10 @@ export async function DELETE(
       }
     })
 
-    return NextResponse.json({ 
+    // Whole roster removed - clear the cached status list.
+    await invalidatePlayers(params.id)
+
+    return NextResponse.json({
       message: `${result.count} players deleted successfully`,
       count: result.count
     })

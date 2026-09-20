@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { invalidatePlayers } from '@/lib/cache'
 
 // POST /api/auctions/[id]/register - Register a player for auction
 export async function POST(
@@ -35,8 +36,11 @@ export async function POST(
       }
     })
 
-    return NextResponse.json({ 
-      message: 'Registration successful', 
+    // New player row added - drop the cached roster so counts reflect it.
+    await invalidatePlayers(params.id)
+
+    return NextResponse.json({
+      message: 'Registration successful',
       player: {
         id: player.id,
         status: player.status

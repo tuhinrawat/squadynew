@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import { invalidateAuction } from '@/lib/cache'
 import { extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
 import { extractPlayerName } from '@/lib/player-name'
 
@@ -240,6 +241,10 @@ export async function POST(
         }
       })
     }
+
+    // Player statuses (and possibly retired-player bidder rows) changed in
+    // bulk - clear the cached roster and purses for this auction.
+    await invalidateAuction(params.id)
 
     return NextResponse.json({
       success: true,

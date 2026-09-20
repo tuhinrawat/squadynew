@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
+import { invalidatePlayers, invalidateBidders } from '@/lib/cache'
 
 // Applies final sold/unsold results recorded by the offline fallback page
 // (src/app/auction/[id]/offline) once the live app is reachable again. This
@@ -343,6 +344,10 @@ export async function POST(
     // network calls except this one), so without this its view of "who's
     // current" only ever updates on a page reload, and only then if some
     // OTHER tab happened to have already re-mirrored the fresher value.
+    // A batch of offline results just committed (players sold/unsold, purses
+    // deducted). Clear the cached roster and purses so the next poll is fresh.
+    await Promise.all([invalidatePlayers(params.id), invalidateBidders(params.id)])
+
     const freshAuction = await prisma.auction.findUnique({
       where: { id: params.id },
       select: { currentPlayerId: true }

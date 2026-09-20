@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
+import { invalidateAuctionMeta } from '@/lib/cache'
 
 export async function POST(
   request: NextRequest,
@@ -58,6 +59,10 @@ export async function POST(
       where: { id: auctionId },
       data: { isPublished: true }
     })
+
+    // isPublished is part of the cached auction metadata - clear it so the
+    // public view / snapshot access checks see the auction as published now.
+    await invalidateAuctionMeta(auctionId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

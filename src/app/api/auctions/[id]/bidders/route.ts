@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import bcrypt from 'bcryptjs'
+import { invalidateBidders } from '@/lib/cache'
 
 // GET /api/auctions/[id]/bidders - Fetch all bidders for an auction
 export async function GET(
@@ -168,6 +169,9 @@ export async function POST(
         }
       }
     })
+
+    // New bidder in the roster - clear the cached purse list.
+    await invalidateBidders(params.id)
 
     return NextResponse.json({
       message: 'Bidder created successfully',

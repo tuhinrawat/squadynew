@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { invalidatePlayers } from '@/lib/cache'
 
 export async function POST(
   request: NextRequest,
@@ -42,6 +43,8 @@ export async function POST(
         },
         data: { status: 'UNSOLD' }
       })
+      // The current player's status may have changed - clear the cached roster.
+      await invalidatePlayers(params.id)
     }
 
     // Update status to COMPLETED

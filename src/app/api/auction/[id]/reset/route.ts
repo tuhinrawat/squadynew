@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
 import { logEventAsync, describeError } from '@/lib/observability'
+import { invalidatePlayers, invalidateBidders } from '@/lib/cache'
 
 export async function POST(
   request: NextRequest,
@@ -69,6 +70,10 @@ export async function POST(
         bidHistory: []
       }
     })
+
+    // Everything cached for this auction is now stale (all players back to
+    // AVAILABLE, all purses restored). Clear the roster and purse caches.
+    await Promise.all([invalidatePlayers(params.id), invalidateBidders(params.id)])
 
     // Broadcast reset event - the reset already succeeded in the DB above,
     // so a Pusher hiccup here must never turn that success into a 500.

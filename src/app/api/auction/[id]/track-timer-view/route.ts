@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isCuid } from '@/lib/slug'
 import { Prisma } from '@prisma/client'
+import { recordTimerView } from '@/lib/view-tracking'
 
 export async function POST(
   req: NextRequest,
@@ -31,7 +32,16 @@ export async function POST(
       )
     }
 
-    // Increment timer views
+    // Increment the timer-view counter in Redis instead of write-locking the
+    // hot `auctions` row (see lib/view-tracking.ts). Falls back to the
+    // original Postgres increment if Redis is unavailable.
+    const timerViews = await recordTimerView(auction.id)
+
+    if (timerViews !== null) {
+      return NextResponse.json({ success: true, timerViews })
+    }
+
+    // Fallback: Redis unavailable - preserve original behaviour exactly.
     await prisma.auction.update({
       where: { id: auction.id },
       data: {
