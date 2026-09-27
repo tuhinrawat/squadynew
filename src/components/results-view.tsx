@@ -2,7 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { XCircle, Image as ImageIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { XCircle, Image as ImageIcon, Trophy } from 'lucide-react'
+import Link from 'next/link'
 import { TeamSquadPoster } from './team-squad-poster'
 import { extractPlayerName } from '@/lib/player-name'
 
@@ -36,10 +38,22 @@ export function ResultsView({ auction }: ResultsViewProps) {
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Team Squad Posters Section */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <ImageIcon className="w-6 h-6" />
-            Team Squad Posters
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <ImageIcon className="w-6 h-6" />
+              Team Squad Posters
+            </h2>
+            {/* Links to the same team-stats page used during a live auction
+                (overview, sold/unsold players, squad composition per team) -
+                it's a live view of the roster, so it works just as well here
+                once the auction is complete. */}
+            <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" className="bg-white dark:bg-gray-800">
+                <Trophy className="w-4 h-4 mr-2" />
+                Team Stats
+              </Button>
+            </Link>
+          </div>
           <div className="space-y-8">
             {teamData.map((team: any) => (
               <TeamSquadPoster

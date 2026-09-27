@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper, Pencil, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { usePusher, useAdminPusher } from '@/lib/pusher-client'
@@ -341,6 +342,17 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
   const [soldAnimation, setSoldAnimation] = useState(false)
   const [undoSaleDialogOpen, setUndoSaleDialogOpen] = useState(false)
+  // Edit Sold Data - lets the admin correct a SOLD player's buyer/price
+  // after the fact (wrong bidder recorded, a misheard amount, etc.), since
+  // there was previously no way to fix that once the auction had moved on
+  // to the next player. null selectedPlayerId means "still choosing which
+  // sold player to edit."
+  const [editSoldDialogOpen, setEditSoldDialogOpen] = useState(false)
+  const [editSoldSelectedPlayerId, setEditSoldSelectedPlayerId] = useState<string | null>(null)
+  const [editSoldBidderId, setEditSoldBidderId] = useState<string>('')
+  const [editSoldPriceInput, setEditSoldPriceInput] = useState('')
+  const [editSoldSaving, setEditSoldSaving] = useState(false)
+  const [editSoldError, setEditSoldError] = useState('')
   const [selectedBidderForBid, setSelectedBidderForBid] = useState<string | null>(null)
   const [customBidAmount, setCustomBidAmount] = useState('')
   const [showAllPlayerDetails, setShowAllPlayerDetails] = useState(false)
@@ -1599,6 +1611,57 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     }
   }
 
+  // Saves a correction from the Edit Sold Data dialog - reassigning the
+  // buyer and/or the sold price on a player who's already SOLD. There was
+  // previously no way to fix a wrong bidder or a misheard amount once the
+  // auction had moved on to the next player.
+  const handleEditSoldSave = async () => {
+    if (!editSoldSelectedPlayerId) return
+    const trimmedPrice = editSoldPriceInput.trim()
+    const soldPrice = trimmedPrice === '' ? NaN : Number(trimmedPrice)
+    if (!editSoldBidderId) {
+      setEditSoldError('Select a bidder')
+      return
+    }
+    if (!Number.isFinite(soldPrice) || soldPrice <= 0) {
+      setEditSoldError('Enter a valid sold value')
+      return
+    }
+
+    setEditSoldSaving(true)
+    setEditSoldError('')
+    try {
+      const response = await fetch(`/api/auction/${auction.id}/edit-sold-player`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: editSoldSelectedPlayerId,
+          bidderId: editSoldBidderId,
+          soldPrice
+        })
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setPlayers(prev => prev.map(p => p.id === data.player.id ? { ...p, soldTo: data.player.soldTo, soldPrice: data.player.soldPrice } : p))
+        if (data.updatedBidders) {
+          setBidders(prev => prev.map(b => {
+            const update = (data.updatedBidders as Array<{ id: string; remainingPurse: number }>).find(u => u.id === b.id)
+            return update ? { ...b, remainingPurse: update.remainingPurse } : b
+          }))
+        }
+        toast.success('Sold player record updated')
+        setEditSoldDialogOpen(false)
+        setEditSoldSelectedPlayerId(null)
+      } else {
+        setEditSoldError(data.error || 'Failed to update sold player')
+      }
+    } catch {
+      setEditSoldError('Network error. Please try again.')
+    } finally {
+      setEditSoldSaving(false)
+    }
+  }
+
   // Extract player data from JSON
   const getPlayerData = (player: Player | null) => {
     if (!player || !player.data) return {}
@@ -1911,6 +1974,17 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                         >
                           <TrendingUp className="h-4 w-4 mr-2" />
                           Bidding Console
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setEditSoldSelectedPlayerId(null)
+                            setEditSoldError('')
+                            setEditSoldDialogOpen(true)
+                          }}
+                          className="text-gray-900 dark:text-gray-100 cursor-pointer"
+                        >
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit Sold Data
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onSelect={() => window.open(`/auction/${auction.id}/offline`, '_blank')}
@@ -3151,6 +3225,183 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    {/* Edit Sold Data Dialog - corrects a SOLD player's buyer/price after
+        the fact. There was previously no way to fix a wrong bidder or a
+        misheard amount once the auction had moved past that player. */}
+    <Dialog open={editSoldDialogOpen} onOpenChange={(open) => {
+      setEditSoldDialogOpen(open)
+      if (!open) {
+        setEditSoldSelectedPlayerId(null)
+        setEditSoldError('')
+      }
+    }}>
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Edit Sold Data
+        </DialogTitle>
+        <DialogDescription className="sr-only">Correct a sold player&apos;s buyer or price</DialogDescription>
+        {(() => {
+          const soldPlayers = players.filter(p => p.status === 'SOLD')
+          const selectedPlayer = editSoldSelectedPlayerId
+            ? soldPlayers.find(p => p.id === editSoldSelectedPlayerId) ?? null
+            : null
+
+          if (!selectedPlayer) {
+            // Step 1: pick which sold player to correct
+            return (
+              <div className="space-y-3">
+                {soldPlayers.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No players have been sold yet.</p>
+                ) : (
+                  <div className="max-h-96 overflow-y-auto space-y-1.5">
+                    {soldPlayers.map(player => {
+                      const data = getPlayerData(player)
+                      const name = extractPlayerName(data) || 'Unknown Player'
+                      const bidder = bidders.find(b => b.id === player.soldTo)
+                      return (
+                        <button
+                          key={player.id}
+                          type="button"
+                          onClick={() => {
+                            setEditSoldSelectedPlayerId(player.id)
+                            setEditSoldBidderId(player.soldTo || '')
+                            setEditSoldPriceInput(player.soldPrice != null ? String(player.soldPrice) : '')
+                            setEditSoldError('')
+                          }}
+                          className="w-full flex items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <div className="min-w-0">
+                            <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{name}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {bidder?.teamName || bidder?.username || 'Unknown bidder'}
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold text-green-600 dark:text-green-400 flex-shrink-0">
+                            ₹{(player.soldPrice ?? 0).toLocaleString('en-IN')}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          // Step 2: correct the buyer and/or the price
+          const data = getPlayerData(selectedPlayer)
+          const name = extractPlayerName(data) || 'Unknown Player'
+          const photoUrl = extractProxyImageUrl(data)
+          const cricherosLink = extractCricheroesLink(data)
+          const selectedBidder = bidders.find(b => b.id === editSoldBidderId)
+          const originalPrice = selectedPlayer.soldPrice ?? 0
+          const enteredPrice = Number(editSoldPriceInput) || 0
+          // Purely informational - the server re-validates for real. If the
+          // bidder is unchanged, the original price is first "refunded"
+          // back into the preview since that's the amount actually already
+          // reserved against this exact player.
+          const previewRemainingPurse = selectedBidder
+            ? (editSoldBidderId === selectedPlayer.soldTo ? selectedBidder.remainingPurse + originalPrice : selectedBidder.remainingPurse) - enteredPrice
+            : null
+
+          return (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setEditSoldSelectedPlayerId(null)}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to sold players
+              </button>
+
+              <div className="flex items-center gap-3">
+                {photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={photoUrl} alt={name} className="w-12 h-12 rounded-full object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-700" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-gray-500 dark:text-gray-400">{name.charAt(0).toUpperCase()}</span>
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">{name}</div>
+                  {cricherosLink && (
+                    <a href={cricherosLink} target="_blank" rel="noopener noreferrer" className="text-xs text-teal-600 dark:text-teal-400 hover:underline">
+                      Cricheroes Profile
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {editSoldError && (
+                <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-3 rounded">
+                  {editSoldError}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Bidder / Team</Label>
+                <Select value={editSoldBidderId} onValueChange={setEditSoldBidderId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a bidder" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortedBidders.map(bidder => (
+                      <SelectItem key={bidder.id} value={bidder.id}>
+                        {bidder.teamName || bidder.username}{bidder.id === selectedPlayer.soldTo ? ' (current)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Team name follows the bidder selection automatically - it's
+                    not a separately editable field. */}
+                {selectedBidder && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Team: {selectedBidder.teamName || selectedBidder.username}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Sold Value (₹)</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Enter sold value"
+                  value={editSoldPriceInput}
+                  onChange={(e) => setEditSoldPriceInput(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="text-lg font-semibold"
+                />
+                {selectedBidder && previewRemainingPurse != null && (
+                  <p className={`text-xs font-semibold ${previewRemainingPurse < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {selectedBidder.teamName || selectedBidder.username}&apos;s remaining purse after this change: ₹{previewRemainingPurse.toLocaleString('en-IN')}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setEditSoldDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={handleEditSoldSave}
+                  disabled={editSoldSaving}
+                >
+                  {editSoldSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          )
+        })()}
+      </DialogContent>
+    </Dialog>
     </>
   )
 }
