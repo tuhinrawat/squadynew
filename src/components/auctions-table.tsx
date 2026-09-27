@@ -256,7 +256,11 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
       })
       if (response.ok) {
         toast.success('Auction started successfully!')
-        window.open(`/auction/${auctionId}`, '_blank', 'noopener,noreferrer')
+        // justStarted tells the freshly-opened tab to play the going-live
+        // animation immediately - it has no other way to know it just missed
+        // the moment this auction went live, since it doesn't exist yet when
+        // the /start call above actually flips the status.
+        window.open(`/auction/${auctionId}?justStarted=1`, '_blank', 'noopener,noreferrer')
       } else {
         const data = await response.json()
         toast.error(data.error || 'Failed to start auction')

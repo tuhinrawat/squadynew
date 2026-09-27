@@ -20,6 +20,7 @@ import { extractProxyImageUrl } from '@/lib/player-photo'
 import { extractPlayerName } from '@/lib/player-name'
 import { BatIcon, BallIcon } from '@/components/cricket-stat-ui'
 import { PlayerStatsDialog } from '@/components/player-stats-dialog'
+import { GoingLiveBanner } from '@/components/going-live-banner'
 import { AuctionStatus } from '@prisma/client'
 
 interface CountdownToLiveWrapperProps {
@@ -77,6 +78,11 @@ export function CountdownToLiveWrapper({
 }: CountdownToLiveWrapperProps) {
   const [showCountdown, setShowCountdown] = useState(true)
   const [auctionData, setAuctionData] = useState(auction)
+  // Captured once and never updated - a ref (not state) specifically so the
+  // going-live check in pollAuctionStatus below can read "was this DRAFT
+  // when the page loaded" without depending on auctionData itself, which
+  // would defeat that check's whole purpose (see the comment there).
+  const initialStatusRef = useRef(auction.status)
   const [currentPlayer, setCurrentPlayer] = useState(initialCurrentPlayer)
   const [stats, setStats] = useState(initialStats)
   const [bidHistory, setBidHistory] = useState(initialBidHistory)
@@ -105,6 +111,8 @@ export function CountdownToLiveWrapper({
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const knowPlayersSectionRef = useRef<HTMLDivElement | null>(null)
   const timerViewTrackedRef = useRef(false)
+  const [showGoingLiveBanner, setShowGoingLiveBanner] = useState(false)
+  const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   const knowYourPlayersCards = useMemo(() => {
     return auction.players.map(player => {
@@ -253,15 +261,32 @@ export function CountdownToLiveWrapper({
         const response = await fetch(`/api/auctions/${auction.id}/public`)
         if (response.ok) {
           const data = await response.json()
-          setAuctionData({ ...data.auction, status: data.auction.status as AuctionStatus })
-          
+          const newStatus = data.auction.status as AuctionStatus
+          // This is the one place that actually observes the DRAFT -> LIVE
+          // transition (initialStatusRef holds the DRAFT status this
+          // component started with - polling only ever runs before that
+          // flips) - play the going-live curtain now, before the status
+          // update below swaps this component's own render branch over to
+          // the live view underneath it.
+          if (isLiveStatus(newStatus) && !isLiveStatus(initialStatusRef.current)) {
+            setShowGoingLiveBanner(true)
+            if (goingLiveBannerTimeoutRef.current) {
+              clearTimeout(goingLiveBannerTimeoutRef.current)
+            }
+            goingLiveBannerTimeoutRef.current = setTimeout(() => {
+              setShowGoingLiveBanner(false)
+              goingLiveBannerTimeoutRef.current = null
+            }, 4000)
+          }
+          setAuctionData({ ...data.auction, status: newStatus })
+
           // Update all data
           setCurrentPlayer(data.currentPlayer || null)
           setStats(data.stats || initialStats)
           setBidHistory(data.bidHistory || [])
           
           // If auction is now LIVE/MOCK_RUN or PAUSED, stop polling and show live view
-          if (isLiveStatus(data.auction.status as AuctionStatus) || data.auction.status === 'PAUSED') {
+          if (isLiveStatus(newStatus) || newStatus === 'PAUSED') {
             if (pollIntervalRef.current) {
               clearInterval(pollIntervalRef.current)
               pollIntervalRef.current = null
@@ -330,6 +355,9 @@ export function CountdownToLiveWrapper({
       clearInterval(interval)
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
+      }
+      if (goingLiveBannerTimeoutRef.current) {
+        clearTimeout(goingLiveBannerTimeoutRef.current)
       }
     }
   }, [auction.scheduledStartDate, pollAuctionStatus])
@@ -1182,6 +1210,13 @@ export function CountdownToLiveWrapper({
   // Show live auction view with full layout (matching the page.tsx structure)
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      {/* Going-live curtain reveal - see pollAuctionStatus, which triggers
+          this the moment its poll first observes the auction go live. This
+          component is the one that stays mounted across the whole DRAFT ->
+          LIVE transition (the countdown/waiting screens above are separate
+          early-return branches that get replaced by this one), so it's the
+          only place that can actually catch that transition happening. */}
+      <GoingLiveBanner show={showGoingLiveBanner} onComplete={() => setShowGoingLiveBanner(false)} />
       {/* Banner for LIVE/MOCK_RUN/PAUSED published auctions */}
       {isLiveStatus(auctionData.status) && (
         <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 shadow-lg">

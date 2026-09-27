@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition, memo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Auction, Player, Bidder } from '@prisma/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -328,6 +328,7 @@ interface AdminAuctionViewProps {
 
 export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, viewMode = 'admin' }: AdminAuctionViewProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { data: session } = useSession()
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
@@ -376,7 +377,6 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
   const [showPlayerReveal, setShowPlayerReveal] = useState(false)
   const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
   const [showGoingLiveBanner, setShowGoingLiveBanner] = useState(false)
-  const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const soldAnimationRef = useRef(false)
   const showPlayerRevealRef = useRef(false)
@@ -714,39 +714,38 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     return () => { cancelled = true }
   }, [viewMode, players])
 
-  // Detect when auction goes live and show banner
-  useEffect(() => {
-    // Check if auction status changed from DRAFT/PAUSED to LIVE/MOCK_RUN
-    const wasNotLive = !isLiveStatus(previousAuctionStatus)
-    const isNowLive = isLiveStatus(auction.status)
-    const hasCurrentPlayer = currentPlayer !== null
-
-    if (wasNotLive && isNowLive && hasCurrentPlayer) {
-      console.log('🎬 Auction just went LIVE - showing going live banner')
-      setShowGoingLiveBanner(true)
-      
-      // Clear any existing timeout
-      if (goingLiveBannerTimeoutRef.current) {
-        clearTimeout(goingLiveBannerTimeoutRef.current)
-      }
-      
-      // Hide banner after 4 seconds
-      goingLiveBannerTimeoutRef.current = setTimeout(() => {
-        setShowGoingLiveBanner(false)
-        goingLiveBannerTimeoutRef.current = null
-      }, 4000)
+  // Plays the going-live curtain animation once. Deliberately NOT driven by
+  // diffing auction.status across renders - the dashboard's "Start Auction"
+  // button opens this page in a brand new tab (see auctions-table.tsx),
+  // so there's never an already-mounted AdminAuctionView instance around to
+  // observe a DRAFT -> LIVE transition on its own props. Two real triggers
+  // instead: the fresh tab was told it just started (via the ?justStarted
+  // query param that button appends), or a live Pusher connection is
+  // already open here (a co-admin, or this same admin on another device)
+  // when someone else starts it.
+  const triggerGoingLiveBanner = useCallback(() => {
+    setShowGoingLiveBanner(true)
+    if (goingLiveBannerTimeoutRef.current) {
+      clearTimeout(goingLiveBannerTimeoutRef.current)
     }
+    goingLiveBannerTimeoutRef.current = setTimeout(() => {
+      setShowGoingLiveBanner(false)
+      goingLiveBannerTimeoutRef.current = null
+    }, 4000)
+  }, [])
 
-    // Update previous status
-    setPreviousAuctionStatus(auction.status)
-
-    // Cleanup timeout on unmount
+  useEffect(() => {
+    if (searchParams.get('justStarted') === '1') {
+      triggerGoingLiveBanner()
+    }
     return () => {
       if (goingLiveBannerTimeoutRef.current) {
         clearTimeout(goingLiveBannerTimeoutRef.current)
       }
     }
-  }, [auction.status, currentPlayer, previousAuctionStatus])
+    // Only meant to check the URL once, on this tab's initial mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Memoize player bid history for performance
   const playerBidHistory = useMemo(() => {
@@ -1302,6 +1301,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     onSaleUndo: handleSaleUndo,
     onPlayerSold: handlePlayerSold,
     onNewPlayer: handleNewPlayer,
+    onAuctionStarted: triggerGoingLiveBanner,
     onAuctionPaused: handleAuctionPaused,
     onAuctionResumed: handleAuctionResumed,
     onPlayersUpdated: handlePlayersUpdated,

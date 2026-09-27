@@ -190,10 +190,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [showPlayerReveal, setShowPlayerReveal] = useState(false)
   const [pendingPlayer, setPendingPlayer] = useState<Player | null>(null)
   const [showGoingLiveBanner, setShowGoingLiveBanner] = useState(false)
-  const [previousAuctionStatus, setPreviousAuctionStatus] = useState(auction.status)
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const [localCurrentPlayer, setLocalCurrentPlayer] = useState(currentPlayer)
-  
+
   // Real-time stats calculated from players state
   const stats = useMemo(() => {
     const total = players.length
@@ -229,45 +227,35 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setIsClient(true)
   }, [])
   
-  // Update local current player when prop changes
-  useEffect(() => {
-    setLocalCurrentPlayer(currentPlayer)
-  }, [currentPlayer])
-
-  // Detect when auction goes live and show banner
-  useEffect(() => {
-    // Check if auction status changed from DRAFT/PAUSED to LIVE/MOCK_RUN
-    const { isLiveStatus } = require('@/lib/auction-status')
-    const wasNotLive = !isLiveStatus(previousAuctionStatus)
-    const isNowLive = isLiveStatus(auction.status)
-    const hasCurrentPlayer = localCurrentPlayer !== null
-
-    if (wasNotLive && isNowLive && hasCurrentPlayer) {
-      console.log('🎬 Auction just went LIVE - showing going live banner (public view)')
-      setShowGoingLiveBanner(true)
-      
-      // Clear any existing timeout
-      if (goingLiveBannerTimeoutRef.current) {
-        clearTimeout(goingLiveBannerTimeoutRef.current)
-      }
-      
-      // Hide banner after 4 seconds
-      goingLiveBannerTimeoutRef.current = setTimeout(() => {
-        setShowGoingLiveBanner(false)
-        goingLiveBannerTimeoutRef.current = null
-      }, 4000)
+  // Plays the going-live curtain animation once. Deliberately NOT driven by
+  // diffing auction.status across renders - by the time this component
+  // renders showing a live auction, it's typically a FRESH mount (either
+  // SSR'd directly because the auction was already live, or swapped in by
+  // CountdownToLiveWrapper once its own poll noticed the transition), so
+  // there's rarely an already-mounted instance around to observe a DRAFT ->
+  // LIVE change on its own props. CountdownToLiveWrapper plays this
+  // animation itself for that swap (it's the one component that's actually
+  // mounted on both sides of the transition); this component's own trigger
+  // below is a live Pusher connection is already open here (presenter mode
+  // watching a MOCK_RUN when the admin promotes it to LIVE).
+  const triggerGoingLiveBanner = useCallback(() => {
+    setShowGoingLiveBanner(true)
+    if (goingLiveBannerTimeoutRef.current) {
+      clearTimeout(goingLiveBannerTimeoutRef.current)
     }
+    goingLiveBannerTimeoutRef.current = setTimeout(() => {
+      setShowGoingLiveBanner(false)
+      goingLiveBannerTimeoutRef.current = null
+    }, 4000)
+  }, [])
 
-    // Update previous status
-    setPreviousAuctionStatus(auction.status)
-
-    // Cleanup timeout on unmount
+  useEffect(() => {
     return () => {
       if (goingLiveBannerTimeoutRef.current) {
         clearTimeout(goingLiveBannerTimeoutRef.current)
       }
     }
-  }, [auction.status, localCurrentPlayer, previousAuctionStatus])
+  }, [])
 
   // Track page view
   useEffect(() => {
@@ -702,6 +690,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setShowPlayerReveal(true)
       // Don't update current player yet - wait for animation to complete
     },
+    onAuctionStarted: triggerGoingLiveBanner,
     onAuctionPoolExhausted: () => {
       setPoolExhausted(true)
     },

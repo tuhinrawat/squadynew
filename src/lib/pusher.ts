@@ -63,6 +63,12 @@ export interface AuctionEventData {
   'new-player': {
     player: any
   }
+  // Fired once, the moment an admin transitions the auction out of DRAFT/
+  // MOCK_RUN into LIVE - distinct from 'new-player' (which fires on every
+  // player transition, including this one) so a connected client can tell
+  // "the auction just started" apart from an ordinary next-player advance
+  // and play the one-time going-live intro instead of the routine reveal.
+  'auction-started': Record<string, never>
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}

@@ -170,6 +170,7 @@ export interface AuctionEventData {
   'new-player': {
     player: any
   }
+  'auction-started': Record<string, never>
   'auction-paused': {}
   'auction-resumed': {}
   'auction-ended': {}
@@ -189,6 +190,7 @@ export interface UsePusherOptions {
   onPlayerSold?: (data: AuctionEventData['player-sold']) => void
   onSaleUndo?: (data: AuctionEventData['sale-undo']) => void
   onNewPlayer?: (data: AuctionEventData['new-player']) => void
+  onAuctionStarted?: (data: AuctionEventData['auction-started']) => void
   onAuctionPaused?: (data: AuctionEventData['auction-paused']) => void
   onAuctionResumed?: (data: AuctionEventData['auction-resumed']) => void
   onAuctionEnded?: (data: AuctionEventData['auction-ended']) => void
@@ -256,6 +258,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             channelToBind.unbind('player-sold')
             channelToBind.unbind('sale-undo')
             channelToBind.unbind('new-player')
+            channelToBind.unbind('auction-started')
             channelToBind.unbind('auction-paused')
             channelToBind.unbind('auction-resumed')
             channelToBind.unbind('auction-ended')
@@ -302,6 +305,10 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
               }
             })
             
+            channelToBind.bind('auction-started', (data: any) => {
+              callbacksRef.current.onAuctionStarted?.(data)
+            })
+
             channelToBind.bind('auction-paused', (data: any) => {
               callbacksRef.current.onAuctionPaused?.(data)
             })

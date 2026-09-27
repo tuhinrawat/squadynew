@@ -80,9 +80,12 @@ export async function POST(
       }
     })
 
-    // Broadcast new-player event - the DB already moved to LIVE with this
-    // player above, so a Pusher hiccup here must never turn that success
-    // into a 500.
+    // Broadcast auction-started (the one-time "we're live" signal, distinct
+    // from new-player so a connected client can play the going-live intro
+    // instead of the routine per-player reveal) and new-player - the DB
+    // already moved to LIVE with this player above, so a Pusher hiccup here
+    // must never turn that success into a 500.
+    await triggerAuctionEvent(params.id, 'auction-started', {}).catch(err => console.error('Pusher error (non-critical):', err))
     await triggerAuctionEvent(params.id, 'new-player', { player: randomPlayer }).catch(err => console.error('Pusher error (non-critical):', err))
 
     return NextResponse.json({ success: true, player: randomPlayer })
