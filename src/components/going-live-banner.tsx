@@ -105,10 +105,16 @@ export function GoingLiveBanner({ show, onComplete }: GoingLiveBannerProps) {
         style={{ background: 'radial-gradient(circle at 50% 50%, rgba(251,191,36,0.18), transparent 55%)' }}
       />
 
-      {/* Top curtain - starts off-screen above and drops down to cover */}
+      {/* Top curtain - closed the instant it first mounts (see `initial={false}`
+          below), then animates open on the way out. A closing sweep-in
+          animation would necessarily play over whatever's already rendered
+          underneath (the freshly-live player card, in countdown-to-live-
+          wrapper's case) - exposing it for the sweep's whole duration before
+          covering it, which read as the player card flashing before the
+          animation rather than the animation hiding it right away. */}
       <motion.div
         className="absolute inset-x-0 top-0 h-1/2"
-        initial={{ y: '-100%' }}
+        initial={false}
         animate={{ y: curtainsClosed ? '0%' : '-100%' }}
         transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
         style={{
@@ -124,10 +130,10 @@ export function GoingLiveBanner({ show, onComplete }: GoingLiveBannerProps) {
         <div className="absolute bottom-0 inset-x-0 h-2" style={{ background: 'linear-gradient(90deg, #d4af37, #f5e08a, #d4af37)' }} />
       </motion.div>
 
-      {/* Bottom curtain - starts off-screen below and rises up to cover */}
+      {/* Bottom curtain - same reasoning as the top curtain above. */}
       <motion.div
         className="absolute inset-x-0 bottom-0 h-1/2"
-        initial={{ y: '100%' }}
+        initial={false}
         animate={{ y: curtainsClosed ? '0%' : '100%' }}
         transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }}
         style={{
