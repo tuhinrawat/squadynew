@@ -11,10 +11,10 @@ import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper, Pencil, ArrowLeft } from 'lucide-react'
+import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper, Pencil, ArrowLeft, Activity } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { usePusher, useAdminPusher } from '@/lib/pusher-client'
+import { usePusher, useAdminPusher, useClientErrorReporting } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ActivityLog } from '@/components/activity-log'
 import { isLiveStatus } from '@/lib/auction-status'
@@ -1317,6 +1317,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     },
   })
 
+  // Surfaces a browser-side crash on this console to the Traceability
+  // timeline - otherwise a JS exception here is invisible outside this
+  // admin's own devtools.
+  useClientErrorReporting(auction.id)
+
   // Proactive connectivity check - independent of Pusher and of whatever the
   // admin is doing, so an outage is detected before an action ever fails.
   // The local snapshot below already mirrors continuously, so the moment
@@ -1933,7 +1938,21 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                     <span className="hidden sm:inline">Team Stats</span>
                   </Button>
                 </Link>
-                
+
+                {(session?.user?.role === 'ADMIN' || session?.user?.role === 'SUPER_ADMIN') && (
+                  <Link href={`/dashboard/observability?auctionId=${auction.id}`} target="_blank" rel="noopener noreferrer">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 h-8 w-8 sm:w-auto sm:h-9 p-0 sm:px-3"
+                      title="Every call, transition, and error captured for this auction"
+                    >
+                      <Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4 sm:mr-2" />
+                      <span className="hidden sm:inline">Traceability</span>
+                    </Button>
+                  </Link>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"

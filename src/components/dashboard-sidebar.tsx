@@ -24,12 +24,12 @@ export function DashboardSidebar({ userRole }: SidebarProps) {
       href: '/dashboard/auctions',
       icon: Hammer,
     },
+    {
+      name: 'Traceability',
+      href: '/dashboard/observability',
+      icon: Activity,
+    },
     ...(userRole === 'SUPER_ADMIN' ? [
-      {
-        name: 'Observability',
-        href: '/dashboard/observability',
-        icon: Activity,
-      },
       {
         name: 'Settings',
         href: '/dashboard/settings',

@@ -17,7 +17,7 @@ const MAX_ROWS = 500
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (session?.user?.role !== 'SUPER_ADMIN') {
+    if (session?.user?.role !== 'SUPER_ADMIN' && session?.user?.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -25,6 +25,16 @@ export async function GET(request: NextRequest) {
     const auctionId = searchParams.get('auctionId')
     if (!auctionId) {
       return NextResponse.json({ error: 'auctionId is required' }, { status: 400 })
+    }
+
+    // A regular admin only ever sees the timeline for auctions they created -
+    // this endpoint returns per-auction traceability data, not the
+    // platform-wide summary (which stays SUPER_ADMIN-only).
+    if (session.user.role !== 'SUPER_ADMIN') {
+      const auction = await prisma.auction.findUnique({ where: { id: auctionId }, select: { createdById: true } })
+      if (!auction || auction.createdById !== session.user.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
     }
 
     // Most recent MAX_ROWS, then reversed to read oldest-first like a timeline.

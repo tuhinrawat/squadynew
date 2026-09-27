@@ -17,7 +17,7 @@ import { logEventAsync } from '@/lib/observability'
 
 const clientEventSchema = z.object({
   auctionId: z.string().trim().min(1).max(100),
-  eventName: z.enum(['sync_lag', 'connected', 'connection_error', 'rebind']),
+  eventName: z.enum(['sync_lag', 'connected', 'connection_error', 'rebind', 'js_error']),
   latencyMs: z.coerce.number().nonnegative().max(600000).optional(),
   message: z.string().trim().max(300).optional(),
 })
@@ -42,10 +42,10 @@ export async function POST(request: NextRequest) {
 
     const { auctionId, eventName, latencyMs, message } = parsed.data
     logEventAsync({
-      category: eventName === 'sync_lag' ? 'sync_lag' : 'pusher_client',
+      category: eventName === 'sync_lag' ? 'sync_lag' : eventName === 'js_error' ? 'client_error' : 'pusher_client',
       eventName,
       auctionId,
-      success: eventName !== 'connection_error',
+      success: eventName !== 'connection_error' && eventName !== 'js_error',
       latencyMs,
       message,
     })

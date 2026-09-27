@@ -78,7 +78,7 @@ function describePusherError(err: unknown): string {
 
 function reportClientEvent(
   auctionId: string,
-  eventName: 'sync_lag' | 'connected' | 'connection_error' | 'rebind',
+  eventName: 'sync_lag' | 'connected' | 'connection_error' | 'rebind' | 'js_error',
   extra: { latencyMs?: number; message?: string } = {}
 ) {
   if (eventName === 'sync_lag' && Math.random() >= SYNC_LAG_SAMPLE_RATE) {
@@ -94,6 +94,44 @@ function reportClientEvent(
   } catch {
     // Never let telemetry reporting throw into the caller
   }
+}
+
+// Global crash capture - a browser-side JS exception or unhandled promise
+// rejection is otherwise invisible to the traceability system, which until
+// now only ever saw server-side errors. Capped per mount so a crash that
+// repeats on every render (an infinite error loop) can't flood this endpoint
+// - once the cap is hit, the browser console still has the full detail, this
+// just stops relaying it.
+const MAX_JS_ERROR_REPORTS_PER_MOUNT = 5
+
+export function useClientErrorReporting(auctionId: string | null | undefined) {
+  const reportCountRef = useRef(0)
+
+  useEffect(() => {
+    if (!auctionId) return
+
+    function report(message: string) {
+      if (reportCountRef.current >= MAX_JS_ERROR_REPORTS_PER_MOUNT) return
+      reportCountRef.current += 1
+      reportClientEvent(auctionId as string, 'js_error', { message: message.slice(0, 300) })
+    }
+
+    function handleError(event: ErrorEvent) {
+      report(`${event.message} (${event.filename}:${event.lineno})`)
+    }
+
+    function handleRejection(event: PromiseRejectionEvent) {
+      const reason = event.reason
+      report(reason instanceof Error ? reason.message : String(reason))
+    }
+
+    window.addEventListener('error', handleError)
+    window.addEventListener('unhandledrejection', handleRejection)
+    return () => {
+      window.removeEventListener('error', handleError)
+      window.removeEventListener('unhandledrejection', handleRejection)
+    }
+  }, [auctionId])
 }
 
 let pusherClient: Pusher | null = null

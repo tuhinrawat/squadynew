@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -113,17 +113,24 @@ function formatTime(iso: string) {
 export default function ObservabilityPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const isSuperAdmin = session?.user?.role === 'SUPER_ADMIN'
+  const isAdmin = session?.user?.role === 'ADMIN'
   const [range, setRange] = useState('24h')
-  const [auctionId, setAuctionId] = useState<string>('all')
+  // Deep-linked from a specific auction's admin console (see the
+  // "Traceability" button in admin-auction-view.tsx) - falls back to the
+  // platform-wide view for SUPER_ADMIN, or gets overridden by the
+  // "default to most recent auction" effect below for a regular admin.
+  const [auctionId, setAuctionId] = useState<string>(() => searchParams.get('auctionId') || 'all')
   const [summary, setSummary] = useState<Summary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.role !== 'SUPER_ADMIN') {
+    if (status === 'authenticated' && !isSuperAdmin && !isAdmin) {
       router.push('/dashboard')
     }
-  }, [session, status, router])
+  }, [status, isSuperAdmin, isAdmin, router])
 
   const fetchSummary = useCallback(async () => {
     setIsLoading(true)
@@ -145,17 +152,22 @@ export default function ObservabilityPage() {
     }
   }, [range, auctionId])
 
+  // The cross-auction summary is platform-wide operational data - it stays
+  // SUPER_ADMIN-only, same as the API route enforces. A regular admin never
+  // fetches it; they only get the per-auction timeline below.
   useEffect(() => {
+    if (!isSuperAdmin) return
     fetchSummary()
-  }, [fetchSummary])
+  }, [fetchSummary, isSuperAdmin])
 
   // Auto-refresh - this is the kind of page someone leaves open on a second
   // screen during a live auction, watching for a problem as it happens
   // rather than reading about it afterward.
   useEffect(() => {
+    if (!isSuperAdmin) return
     const interval = setInterval(fetchSummary, 15000)
     return () => clearInterval(interval)
-  }, [fetchSummary])
+  }, [fetchSummary, isSuperAdmin])
 
   // Live Pusher connection panel - deliberately separate from the
   // range/auction-filtered summary above: this is "right now" headroom, not
@@ -179,10 +191,32 @@ export default function ObservabilityPage() {
   }, [])
 
   useEffect(() => {
+    if (!isSuperAdmin) return
     fetchPusherStatus()
     const interval = setInterval(fetchPusherStatus, 10000)
     return () => clearInterval(interval)
-  }, [fetchPusherStatus])
+  }, [fetchPusherStatus, isSuperAdmin])
+
+  // A regular admin's own auctions - the summary endpoint's auction list is
+  // platform-wide and SUPER_ADMIN-only, so the picker needs a scoped source
+  // for anyone else. /api/auctions already returns only auctions the caller
+  // created.
+  const [myAuctions, setMyAuctions] = useState<Array<{ id: string; name: string }>>([])
+
+  useEffect(() => {
+    if (isSuperAdmin) return
+    fetch('/api/auctions')
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => setMyAuctions(data.auctions ?? []))
+      .catch(() => setMyAuctions([]))
+  }, [isSuperAdmin])
+
+  // A regular admin has no "all auctions" platform view - default straight
+  // to their most recent auction once the list loads.
+  useEffect(() => {
+    if (isSuperAdmin || myAuctions.length === 0 || auctionId !== 'all') return
+    setAuctionId(myAuctions[0].id)
+  }, [isSuperAdmin, myAuctions, auctionId])
 
   // Single-auction timeline - only meaningful once a specific auction is
   // selected, since a merged feed across every auction ever run isn't a
@@ -219,7 +253,7 @@ export default function ObservabilityPage() {
     return () => clearInterval(interval)
   }, [fetchTimeline, auctionId])
 
-  if (status !== 'authenticated' || session?.user?.role !== 'SUPER_ADMIN') {
+  if (status !== 'authenticated' || (!isSuperAdmin && !isAdmin)) {
     return null
   }
 
@@ -231,41 +265,49 @@ export default function ObservabilityPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Observability</h1>
-          <p className="text-gray-600 dark:text-gray-400">Pusher health, rate limits, and live auction signal - platform-wide</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Traceability</h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            {isSuperAdmin
+              ? 'Pusher health, rate limits, and live auction signal - platform-wide'
+              : 'Every call, transition, and error captured for a live auction, in order'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={auctionId} onValueChange={setAuctionId}>
             <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="All auctions" />
+              <SelectValue placeholder="Select an auction" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All auctions</SelectItem>
-              {summary?.auctions.map(a => (
+              {isSuperAdmin && <SelectItem value="all">All auctions</SelectItem>}
+              {(isSuperAdmin ? summary?.auctions ?? [] : myAuctions).map(a => (
                 <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Select value={range} onValueChange={setRange}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {isSuperAdmin && (
+            <Select value={range} onValueChange={setRange}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {RANGE_OPTIONS.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <button
-            onClick={fetchSummary}
+            onClick={isSuperAdmin ? fetchSummary : fetchTimeline}
             className="p-2 rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
             title="Refresh now"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`h-4 w-4 ${(isSuperAdmin ? isLoading : timelineLoading) ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
+      {isSuperAdmin && (
+      <>
       {/* Live Pusher connections - "how close are we to the ceiling right
           now," independent of the range/auction filters above */}
       <Card className="border-blue-200 dark:border-blue-900">
@@ -688,11 +730,13 @@ export default function ObservabilityPage() {
               )}
             </CardContent>
           </Card>
+      </>
+      )}
 
-          {/* Single-auction timeline - only makes sense once one auction is
-              picked; a merged feed across every auction ever run is noise,
-              not an incident replay. */}
-          {auctionId !== 'all' && (
+      {/* Single-auction timeline - only makes sense once one auction is
+          picked; a merged feed across every auction ever run is noise,
+          not an incident replay. */}
+      {auctionId !== 'all' && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

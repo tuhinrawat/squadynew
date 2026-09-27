@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { authOptions } from '@/app/api/auth/[...nextauth]/config'
 import { prisma } from '@/lib/prisma'
 import { triggerAuctionEvent } from '@/lib/pusher'
+import { logEventAsync, describeError } from '@/lib/observability'
 
 // Applies final sold/unsold results recorded by the offline fallback page
 // (src/app/auction/[id]/offline) once the live app is reachable again. This
@@ -365,6 +366,7 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error reconciling offline results:', error)
+    logEventAsync({ category: 'api_error', eventName: 'reconcile_offline', auctionId: params.id, success: false, ...describeError(error) })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -9,7 +9,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ChevronRight, Eye, Trophy, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { usePusher } from '@/lib/pusher-client'
+import { usePusher, useClientErrorReporting } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { formatCurrency } from '@/lib/currency'
@@ -586,6 +586,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Real-time subscriptions. Only the presenter link actually subscribes to
   // Pusher (see the `enabled` argument) - every other viewer relies on the
   // poll above instead.
+  // Surfaces a browser-side crash on this view to the Traceability timeline -
+  // otherwise a JS exception here (public viewer or presenter alike) is
+  // invisible outside whoever's screen it happened on.
+  useClientErrorReporting(auction.id)
+
   const { isConnected: pusherConnected } = usePusher(auction.id, {
     onNewBid: (data) => {
       console.log('[PublicAuctionView] onNewBid callback triggered', data)
