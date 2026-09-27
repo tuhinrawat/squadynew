@@ -971,6 +971,18 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     <p className="text-white/60 text-base lg:text-lg">Results will be shared shortly.</p>
                   </div>
                 </div>
+              ) : !currentPlayer ? (
+                // A fresh page load/refresh landing between players (or in the
+                // brief window before the first poll confirms the pool isn't
+                // actually exhausted) has no current player to show yet - this
+                // reads as "waiting," not "broken," while the next poll/Pusher
+                // event catches up.
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center space-y-3">
+                    <h3 className="text-2xl lg:text-3xl font-black text-white">Don&apos;t Worry, the Auction is Running</h3>
+                    <p className="text-white/60 text-base lg:text-lg">The next player will appear in just a moment.</p>
+                  </div>
+                </div>
               ) : (
                 <>
                   {/* Left: photo - dominant, not full-bleed */}
@@ -1290,6 +1302,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     )}
                   </AnimatePresence>
 
+                  {!currentPlayer && !poolExhausted ? (
+                    // Same "waiting, not broken" state as presenter mode - a
+                    // fresh load/refresh landing between players has nothing
+                    // to show yet, and the empty PlayerCard fallback ("No
+                    // Player Selected", no photo, no price) read as an error
+                    // rather than a normal moment in a running auction.
+                    <div className="rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-8 sm:p-12 text-center space-y-2">
+                      <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-100">Don&apos;t Worry, the Auction is Running</h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">The next player will appear in just a moment.</p>
+                    </div>
+                  ) : (
                   <PlayerCard
                     currentBid={currentBid}
                     lastYear={currentPlayer?.lastYearPrice != null ? {
@@ -1324,6 +1347,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       return essentials
                     })()}
                   />
+                  )}
                   {(battingStats || bowlingStats) && (
                     <p className="text-[9px] text-gray-400 dark:text-gray-500 text-center -mt-1 mb-1">Stats accurate as of 15 September 2026</p>
                   )}

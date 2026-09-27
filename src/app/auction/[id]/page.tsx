@@ -208,11 +208,19 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
     ? auction.players.find(p => p.id === auction.currentPlayerId) ?? null
     : null
 
-  // CRITICAL: If current player is SOLD, clear it to prevent showing SOLD players
+  // If current player is SOLD, don't show them - but this is a page LOAD,
+  // not an action, so the write-back has to be safe against a request that
+  // legitimately advances currentPlayerId moments later (the offline-
+  // console reconcile route resolves a player and re-picks the next one as
+  // two separate writes, not one transaction, so there's a brief real
+  // window where a concurrent page load sees this exact state). Guarding
+  // the update on currentPlayerId still equaling the stale value observed
+  // above makes it a no-op if that reconcile (or anything else) already
+  // moved it on - a page reload should never have a mutating side effect
+  // that can clobber a fresher value written a moment later.
   if (currentPlayer && currentPlayer.status === 'SOLD') {
-    // Clear the invalid currentPlayerId
-    await prisma.auction.update({
-      where: { id: auction.id },
+    await prisma.auction.updateMany({
+      where: { id: auction.id, currentPlayerId: currentPlayer.id },
       data: { currentPlayerId: null }
     })
     currentPlayer = null
