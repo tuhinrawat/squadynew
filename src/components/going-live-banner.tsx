@@ -43,9 +43,10 @@ function ShuffleLetter({ char, active, lockAtMs }: { char: string; active: boole
 // Full-screen "the auction is starting" moment: a theater curtain drops over
 // whatever the screen was showing, a slot-reel shuffle spells out LIVE
 // AUCTION while it's closed, then the curtain draws back open onto the
-// current player card underneath. Total runtime (4s) matches the window
-// callers already wait before flipping `show` back to false, so no caller
-// changes are needed - only what this component renders while `show` is true.
+// current player card underneath. Total runtime (10s) matches the window
+// callers wait before flipping `show` back to false - see the matching
+// setTimeout in each caller (admin-auction-view, public-auction-view,
+// countdown-to-live-wrapper).
 export function GoingLiveBanner({ show, onComplete }: GoingLiveBannerProps) {
   const [phase, setPhase] = useState<'idle' | 'closing' | 'shuffle' | 'opening'>('idle')
   // Adjust state during render (React's own recommended pattern for "reset
@@ -61,9 +62,9 @@ export function GoingLiveBanner({ show, onComplete }: GoingLiveBannerProps) {
   // tied to wall-clock time, not derivable from props during render.
   useEffect(() => {
     if (!show) return
-    const toShuffle = setTimeout(() => setPhase('shuffle'), 600)
-    const toOpening = setTimeout(() => setPhase('opening'), 3100)
-    const toComplete = setTimeout(() => onComplete?.(), 4000)
+    const toShuffle = setTimeout(() => setPhase('shuffle'), 700)
+    const toOpening = setTimeout(() => setPhase('opening'), 8700)
+    const toComplete = setTimeout(() => onComplete?.(), 10000)
     return () => {
       clearTimeout(toShuffle)
       clearTimeout(toOpening)

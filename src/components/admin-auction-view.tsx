@@ -731,7 +731,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
     goingLiveBannerTimeoutRef.current = setTimeout(() => {
       setShowGoingLiveBanner(false)
       goingLiveBannerTimeoutRef.current = null
-    }, 4000)
+    }, 10000)
   }, [])
 
   useEffect(() => {

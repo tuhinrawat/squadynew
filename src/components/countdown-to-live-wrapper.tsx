@@ -276,7 +276,7 @@ export function CountdownToLiveWrapper({
       goingLiveBannerTimeoutRef.current = setTimeout(() => {
         setShowGoingLiveBanner(false)
         goingLiveBannerTimeoutRef.current = null
-      }, 4000)
+      }, 10000)
     }
     setAuctionData({ ...data.auction, status: newStatus })
 
