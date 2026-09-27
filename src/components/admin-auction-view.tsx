@@ -2096,6 +2096,12 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                   auctionName: currentPlayer.lastYearAuctionName,
                 } : null}
                 serialNumber={currentPlayer?.serialNumber}
+                // Admin is running the auction, not scouting a player - the
+                // photo and career stats are the public/presenter stage's
+                // job, not this console's. Smaller card, no stats, more
+                // room for the actual bidding controls below it.
+                compact
+                hideStats
                 name={playerName}
                 imageUrl={extractProxyImageUrl(playerData)}
                 basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
@@ -2923,9 +2929,10 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </div>
           )}
           
-          {/* Custom Amount Input */}
+          {/* Custom Amount Input - sized for fast, error-free entry mid-auction,
+              not a typical form field: bigger touch target, bigger digits. */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Total Bid Amount (₹)</Label>
+            <Label className="text-base font-medium">Total Bid Amount (₹)</Label>
             <Input
               type="number"
               placeholder="Enter total bid amount"
@@ -2934,7 +2941,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
                 setBidAmount(Number(e.target.value))
                 setError('')
               }}
-              className="text-lg font-semibold"
+              className="h-16 text-3xl font-bold text-center"
             />
             <p className="text-xs text-gray-500">
               {(() => {
@@ -2946,11 +2953,11 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </p>
           </div>
           
-          {/* Buttons */}
+          {/* Buttons - h-14 and larger text for easier clicking/tapping mid-auction */}
           <div className="flex gap-3">
             <Button
               variant="outline"
-              className="flex-1 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
+              className="flex-1 h-14 text-base font-semibold text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800"
               onClick={() => {
                 setCustomBidModalOpen(false)
                 setError('')
@@ -2960,7 +2967,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
               Cancel
             </Button>
             <Button
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+              className="flex-1 h-14 text-base font-semibold bg-green-600 hover:bg-green-700 text-white"
               onClick={async () => {
                 // Determine which bidder to use (admin selected or user's own)
                 const activeBidder = selectedBidderForBid 

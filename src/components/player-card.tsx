@@ -40,9 +40,17 @@ export interface PlayerCardProps {
 	// Manage Players - the same number printed on the physical plaque the
 	// team hands the winning bidder, so it needs to read clearly at a glance.
 	serialNumber?: number | null
+	// Shrinks the photo zone and tightens spacing - the admin console's own
+	// use of this card cares about the bid/price numbers, not a large photo,
+	// unlike the public/presenter stage where the photo IS the point.
+	compact?: boolean
+	// Skips the batting/bowling panels entirely - admin doesn't need career
+	// stats to run the auction, and dropping them (rather than just shrinking
+	// them) is what actually saves the vertical space compact mode is for.
+	hideStats?: boolean
 }
 
-export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear, battingStats, bowlingStats, serialNumber }: PlayerCardProps) {
+export default function PlayerCard({ name, imageUrl, tags = [], fields = [], basePrice, profileLink, currentBid, lastYear, battingStats, bowlingStats, serialNumber, compact = false, hideStats = false }: PlayerCardProps) {
 	// Extract field values
 	const speciality = fields.find(f => f.label === 'Speciality')?.value || ''
 	const battingStyle = fields.find(f => f.label === 'Batting')?.value || ''
@@ -72,14 +80,14 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 		<div className="relative rounded-xl overflow-hidden w-full max-w-4xl mx-auto font-['Montserrat'] bg-[#0a0d12]">
 
 			{/* Photo zone - full-bleed, not circular */}
-			<div className="relative h-[220px] sm:h-[340px] lg:h-[400px] overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+			<div className={`relative overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 ${compact ? 'h-[110px] sm:h-[150px]' : 'h-[220px] sm:h-[340px] lg:h-[400px]'}`}>
 				{/* Auction number plaque - the same number the team hands the
 				    winning bidder on a physical placard, so it has to read as
 				    the biggest, boldest thing on the card after the photo
 				    itself, not a quiet detail. */}
 				{serialNumber != null && (
-					<div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 flex items-center justify-center w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 border-2 sm:border-[3px] border-white/90 shadow-xl">
-						<span className="text-2xl sm:text-4xl font-black text-[#1a1200] tabular-nums leading-none">{serialNumber}</span>
+					<div className={`absolute z-20 flex items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 border-white/90 shadow-xl ${compact ? 'top-2 left-2 w-8 h-8 border-2' : 'top-3 left-3 sm:top-4 sm:left-4 w-14 h-14 sm:w-20 sm:h-20 border-2 sm:border-[3px]'}`}>
+						<span className={`font-black text-[#1a1200] tabular-nums leading-none ${compact ? 'text-sm' : 'text-2xl sm:text-4xl'}`}>{serialNumber}</span>
 					</div>
 				)}
 				{imageUrl && !imageFailed ? (
@@ -103,7 +111,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 					</>
 				) : (
 					<div className="absolute inset-0 flex items-center justify-center">
-						<span className="text-8xl sm:text-9xl font-black text-white/70">{name.charAt(0).toUpperCase()}</span>
+						<span className={`font-black text-white/70 ${compact ? 'text-4xl sm:text-5xl' : 'text-8xl sm:text-9xl'}`}>{name.charAt(0).toUpperCase()}</span>
 					</div>
 				)}
 				{/* Vignette - darkens the frame's edges so a narrow portrait
@@ -118,7 +126,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 			</div>
 
 			{/* Content */}
-			<div className="relative p-3 sm:p-6 lg:p-8">
+			<div className={compact ? 'relative p-2 sm:p-3' : 'relative p-3 sm:p-6 lg:p-8'}>
 				{/* Current Bid Banner - always the first thing visible, no scrolling required */}
 				{currentBid !== undefined && (
 					// Amber, not teal - teal is now the site's general accent
@@ -128,7 +136,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 					// Pulses only while there's an actual bid to draw the eye to a
 					// change - an empty "No bids yet" state has nothing urgent to
 					// signal, so it stays still.
-					<div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 mb-3 sm:mb-5 ${currentBid ? 'animate-pulse' : ''}`}>
+					<div className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 sm:px-4 sm:py-2.5 ${compact ? 'mb-2' : 'mb-3 sm:mb-5'} ${currentBid ? 'animate-pulse' : ''}`}>
 						<span className="text-[9px] sm:text-xs font-bold uppercase tracking-wider text-amber-300/80">Current Bid</span>
 						{currentBid ? (
 							<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-end">
@@ -145,7 +153,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 				)}
 
 				{/* Name */}
-				<h2 className="text-xl sm:text-3xl lg:text-4xl font-black text-white uppercase tracking-tight leading-tight">
+				<h2 className={`font-black text-white uppercase tracking-tight leading-tight ${compact ? 'text-base sm:text-xl' : 'text-xl sm:text-3xl lg:text-4xl'}`}>
 					{name}
 				</h2>
 
@@ -163,7 +171,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 
 				{/* Speciality + Base price */}
 				{(speciality || basePrice !== undefined) && (
-					<div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 mb-3 sm:mb-5">
+					<div className={`flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 ${compact ? 'mb-2' : 'mb-3 sm:mb-5'}`}>
 						{speciality && (
 							<>
 								<span className="text-[9px] sm:text-xs font-bold uppercase tracking-widest text-teal-400">{speciality}</span>
@@ -186,7 +194,7 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 				    raw number dump. A panel only renders when the player has
 				    that discipline's data at all; a pure batter gets one
 				    full-width panel with no Bowling panel beside it. */}
-				{(battingStats || bowlingStats) && (
+				{!hideStats && (battingStats || bowlingStats) && (
 					<div className={`grid gap-3 mb-3 sm:mb-5 ${battingStats && bowlingStats ? 'grid-cols-2' : 'grid-cols-1'}`}>
 						{battingStats && (
 							<div className="bg-white/[0.03] border border-white/[0.08] rounded-lg p-3 sm:p-4">
