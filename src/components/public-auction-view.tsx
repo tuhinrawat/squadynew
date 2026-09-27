@@ -294,7 +294,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // Handler when reveal animation completes
   const handleRevealComplete = useCallback(() => {
     setShowPlayerReveal(false)
-    
+
     if (pendingPlayer) {
       setIsImageLoading(true)
       setCurrentPlayer(pendingPlayer)
@@ -304,6 +304,41 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       setPendingPlayer(null)
     }
   }, [pendingPlayer])
+
+  // Guards the background snapshot poll (below) against reverting the screen
+  // to a player it has already moved past. The snapshot endpoint is edge-
+  // cached (see route.ts) for cost reasons, so for a few seconds after a
+  // sale/unsold advances the auction, a poll can still receive a stale
+  // response naming the PREVIOUS player - without this, that stale response
+  // would flash the old player back on screen until the following poll (or
+  // the presenter's reveal-completion) catches up with fresh data. Every id
+  // this screen has ever actually displayed and then moved away from gets
+  // recorded here with an expiry comfortably longer than the cache's max
+  // staleness window (s-maxage=2 + stale-while-revalidate=5 = 7s) plus
+  // margin for poll-timing jitter - once a poll's proposed `currentPlayer`
+  // shows up in this set, it's treated as an echo of the past, not news.
+  const displayedPlayerIdRef = useRef<string | null>(initialPlayer?.id ?? null)
+  const supersededPlayerIdsRef = useRef<Map<string, number>>(new Map())
+  const SUPERSEDED_TTL_MS = 15000
+
+  const isSupersededPlayerId = useCallback((id: string) => {
+    const expiresAt = supersededPlayerIdsRef.current.get(id)
+    if (expiresAt === undefined) return false
+    if (Date.now() > expiresAt) {
+      supersededPlayerIdsRef.current.delete(id)
+      return false
+    }
+    return true
+  }, [])
+
+  useEffect(() => {
+    const previousId = displayedPlayerIdRef.current
+    const nextId = currentPlayer?.id ?? null
+    if (previousId && previousId !== nextId) {
+      supersededPlayerIdsRef.current.set(previousId, Date.now() + SUPERSEDED_TTL_MS)
+    }
+    displayedPlayerIdRef.current = nextId
+  }, [currentPlayer?.id])
 
   // Initialize bid history and current bid from initial data
   useEffect(() => {
@@ -402,13 +437,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     // event, since setCurrentPlayer here is the same commit that
     // handleRevealComplete normally makes once the animation finishes.
     if (options?.skipTurnState) return
+    // A stale edge-cached response naming a player this screen has already
+    // moved past (see the tracking effect above) - not a real update, so
+    // leave whatever's currently displayed alone rather than flashing back
+    // to it. Everything else in this snapshot (players, bidders, pool
+    // state) still applies; only the current-player/bid fields are stale.
+    const incomingPlayerId = snapshot.currentPlayer?.id
+    if (incomingPlayerId && isSupersededPlayerId(incomingPlayerId)) return
     setCurrentPlayer(snapshot.currentPlayer)
     const { sortedHistory, currentBid: derivedBid, highestBidderId: derivedHighest } =
       deriveCurrentBidForPlayer(snapshot.bidHistory, snapshot.currentPlayer?.id)
     setBidHistory(sortedHistory)
     setCurrentBid(derivedBid)
     setHighestBidderId(derivedHighest)
-  }, [])
+  }, [isSupersededPlayerId])
 
   // Tracks whether OUR polling is actually succeeding - the correct signal
   // for a non-presenter viewer's "Live/Reconnecting" badge, since these
