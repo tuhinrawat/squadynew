@@ -48,7 +48,14 @@ function ShuffleLetter({ char, active, lockAtMs }: { char: string; active: boole
 // setTimeout in each caller (admin-auction-view, public-auction-view,
 // countdown-to-live-wrapper).
 export function GoingLiveBanner({ show, onComplete }: GoingLiveBannerProps) {
-  const [phase, setPhase] = useState<'idle' | 'closing' | 'shuffle' | 'opening'>('idle')
+  // Initialized from the initial `show` value, not hardcoded to 'idle' -
+  // this component isn't always already mounted with show=false by the time
+  // a caller flips it to true (countdown-to-live-wrapper mounts it for the
+  // first time already showing, in the same update that flips auction status
+  // to LIVE). Starting at 'idle' regardless left that case with nothing
+  // covering the screen until the first scheduled phase change below fired,
+  // flashing the live view underneath for a beat before the curtain caught up.
+  const [phase, setPhase] = useState<'idle' | 'closing' | 'shuffle' | 'opening'>(() => (show ? 'closing' : 'idle'))
   // Adjust state during render (React's own recommended pattern for "reset
   // this state when a prop changes") rather than a useEffect - reflects
   // `show` flipping immediately, without an extra render pass in between.

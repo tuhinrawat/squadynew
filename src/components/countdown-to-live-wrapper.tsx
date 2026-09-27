@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { FullScreenCountdown } from './full-screen-countdown'
-import { PublicAuctionView } from './public-auction-view'
+import { PublicAuctionWrapper } from './public-auction-wrapper'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
@@ -77,6 +78,11 @@ export function CountdownToLiveWrapper({
   initialBidHistory,
   bidders,
 }: CountdownToLiveWrapperProps) {
+  // The presenter link (?presenter=1) needs to survive the DRAFT -> LIVE
+  // transition this component drives client-side - read directly off the
+  // URL (like PublicAuctionWrapper already does) rather than threaded down
+  // as a prop, so it's correct however this component was reached.
+  const isPresenter = useSearchParams().get('presenter') === '1'
   const [showCountdown, setShowCountdown] = useState(true)
   const [auctionData, setAuctionData] = useState(auction)
   // Captured once and never updated - a ref (not state) specifically so the
@@ -1250,84 +1256,51 @@ export function CountdownToLiveWrapper({
     )
   }
 
-  // Show live auction view with full layout (matching the page.tsx structure)
+  // Show live auction view - matching the exact shell page.tsx's own
+  // already-live branch renders (dark stage, presenter-aware chrome,
+  // PublicAuctionWrapper), so a client that transitions here live gets the
+  // same result a fresh reload of an already-live auction would. This used
+  // to be a separate, hand-rolled light-mode header/breadcrumb here that had
+  // silently drifted from that other branch and never accounted for
+  // presenter mode at all - a presenter tab that was open during the
+  // countdown lost presenter mode entirely the moment it went live, only
+  // regaining it on a manual refresh (which re-runs page.tsx's own branch).
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Going-live curtain reveal - see pollAuctionStatus, which triggers
-          this the moment its poll first observes the auction go live. This
-          component is the one that stays mounted across the whole DRAFT ->
-          LIVE transition (the countdown/waiting screens above are separate
-          early-return branches that get replaced by this one), so it's the
-          only place that can actually catch that transition happening. */}
-      <GoingLiveBanner show={showGoingLiveBanner} onComplete={() => setShowGoingLiveBanner(false)} />
-      {/* Banner for LIVE/MOCK_RUN/PAUSED published auctions */}
-      {isLiveStatus(auctionData.status) && (
-        <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-green-600 via-emerald-600 to-teal-600 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-center gap-3 text-white">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                <h2 className="text-lg md:text-xl font-bold">{auctionData.name}</h2>
-              </div>
-              <span className="text-sm md:text-base text-green-100">• LIVE - Open to Public</span>
+    <div className="dark">
+      <div className={`min-h-screen bg-[#05070a] ${isPresenter ? '' : 'pb-20 sm:pb-0'}`}>
+        {/* Going-live curtain reveal - fires the moment either the poll or
+            the Pusher listener above first observes the auction go live.
+            This component is the one that stays mounted across the whole
+            DRAFT -> LIVE transition (the countdown/waiting screens above are
+            separate early-return branches that get replaced by this one),
+            so it's the only place that can actually catch that transition
+            happening. Shown to the presenter too - it's the one piece of
+            chrome worth seeing there. */}
+        <GoingLiveBanner show={showGoingLiveBanner} onComplete={() => setShowGoingLiveBanner(false)} />
+        {!isPresenter && (
+          <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
+              <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
+                <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
+                  <span>Home</span>
+                </Link>
+                <span>→</span>
+                <span className="text-gray-900 dark:text-gray-100 font-medium truncate max-w-xs">
+                  {auctionData.name} - Live Auction
+                </span>
+              </nav>
             </div>
           </div>
-        </div>
-      )}
-      {auctionData.status === 'PAUSED' && (
-        <div className="fixed top-0 left-0 right-0 z-[9998] bg-gradient-to-r from-yellow-600 via-amber-600 to-orange-600 shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-center gap-3 text-white">
-              <h2 className="text-lg md:text-xl font-bold">{auctionData.name}</h2>
-              <span className="text-sm md:text-base text-yellow-100">• PAUSED - Open to Public</span>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Header for Public View */}
-      <header className={`bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 ${(isLiveStatus(auctionData.status) || auctionData.status === 'PAUSED') ? 'mt-[88px]' : ''}`}>
-        <div className="max-w-full mx-auto px-4 sm:px-6">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center">
-              <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-8 w-auto" />
-            </Link>
-            <div className="flex items-center gap-4">
-              <Link href="/register">
-                <button className="text-sm px-3 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-                  Register
-                </button>
-              </Link>
-              <Link href="/signin">
-                <button className="text-sm px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md">
-                  Sign In
-                </button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </header>
-      {/* Breadcrumbs - Hidden on mobile for public view */}
-      <div className="hidden sm:block bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-full mx-auto px-4 sm:px-6 py-3">
-          <nav className="flex items-center space-x-1 text-sm text-gray-500 dark:text-gray-400">
-            <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
-              <span>Home</span>
-            </Link>
-            <span>→</span>
-            <span className="text-gray-900 dark:text-gray-100 font-medium truncate max-w-xs">
-              {auctionData.name} - Live Auction
-            </span>
-          </nav>
-        </div>
+        )}
+
+        <PublicAuctionWrapper
+          auction={auctionData as any}
+          currentPlayer={currentPlayer}
+          stats={stats}
+          bidHistory={bidHistory}
+          bidders={bidders}
+        />
       </div>
-      
-      <PublicAuctionView
-        auction={auctionData as any}
-        currentPlayer={currentPlayer}
-        stats={stats}
-        bidHistory={bidHistory}
-        bidders={bidders}
-      />
     </div>
   )
 }
