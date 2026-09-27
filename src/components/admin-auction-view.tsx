@@ -20,7 +20,7 @@ import { isLiveStatus } from '@/lib/auction-status'
 import { formatCurrency } from '@/lib/currency'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
-import { extractProxyImageUrl, extractProfilePhotoValue, extractGoogleDriveFileId } from '@/lib/player-photo'
+import { extractProxyImageUrl } from '@/lib/player-photo'
 import { extractPlayerName } from '@/lib/player-name'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
@@ -2143,92 +2143,7 @@ export function AdminAuctionView({ auction, currentPlayer: initialPlayer, stats:
             </div>
           )}
 
-          <CardHeader className="hidden">
-                <div className="flex flex-col items-center gap-3">
-                  {(() => {
-                    const profilePhotoLink = extractProfilePhotoValue(playerData)
-                    
-                    // If no profile photo, show placeholder with player name
-                    if (!profilePhotoLink) {
-                      return (
-                        <>
-                          <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center ring-4 ring-blue-200 dark:ring-blue-900 shadow-2xl">
-                            <span className="text-gray-600 dark:text-gray-400 text-4xl sm:text-5xl lg:text-6xl font-semibold">
-                              {playerName.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <CardTitle className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-gray-100 text-center">{playerName}</CardTitle>
-                            {currentPlayer?.data && (currentPlayer.data as { isIcon?: boolean }).isIcon && (
-                              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg px-3 py-1 text-sm font-bold">
-                                ⭐ BIDDER CHOICE
-                              </Badge>
-                            )}
-                          </div>
-                        </>
-                      )
-                    }
-                    
-                    // Extract file ID from the Google Drive URL
-                    const fileId = extractGoogleDriveFileId(profilePhotoLink)
-
-                    // Use proxy API to bypass CORB
-                    const proxyImageUrl = fileId ? `/api/proxy-image?id=${fileId}` : null
-                      
-                    return (
-                      <>
-                        <div className="w-48 h-48 sm:w-56 sm:h-56 lg:w-64 lg:h-64 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center overflow-hidden relative ring-4 ring-blue-200 dark:ring-blue-900 shadow-2xl">
-                          {proxyImageUrl ? (
-                            <>
-                              {isImageLoading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full z-10">
-                                  <div className="w-8 h-8 border-4 border-gray-300 border-t-gray-600 dark:border-gray-600 dark:border-t-gray-300 rounded-full animate-spin"></div>
-                                </div>
-                              )}
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img 
-                                src={proxyImageUrl}
-                                alt={playerName}
-                                className="rounded-full object-contain w-full h-full p-2"
-                                onError={(e) => {
-                                  setIsImageLoading(false)
-                                  console.error('Image failed to load, showing initial')
-                                  const img = e.currentTarget
-                                  img.style.display = 'none'
-                                  const parent = img.parentElement
-                                  if (parent) {
-                                    parent.innerHTML = `
-                                      <span class="text-gray-600 dark:text-gray-400 text-4xl sm:text-5xl lg:text-6xl font-semibold">
-                                        ${playerName.charAt(0).toUpperCase()}
-                                      </span>
-                                    `
-                                  }
-                                }}
-                                onLoad={() => {
-                                  setIsImageLoading(false)
-                                }}
-                              />
-                            </>
-                          ) : (
-                            <span className="text-gray-600 dark:text-gray-400 text-4xl sm:text-5xl lg:text-6xl font-semibold">
-                              {playerName.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <CardTitle className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-gray-100 text-center">{playerName}</CardTitle>
-                          {currentPlayer?.data && (currentPlayer.data as { isIcon?: boolean }).isIcon && (
-                            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg px-3 py-1 text-sm font-bold">
-                              ⭐ BIDDER CHOICE
-                            </Badge>
-                          )}
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
+          <CardContent className="space-y-3 sm:space-y-4 p-3 sm:p-6">
                 {/* Essential Fields */}
                 <div className="hidden">
                   {(() => {

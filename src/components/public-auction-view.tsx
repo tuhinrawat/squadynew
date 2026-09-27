@@ -314,12 +314,35 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // the presenter's reveal-completion) catches up with fresh data. Every id
   // this screen has ever actually displayed and then moved away from gets
   // recorded here with an expiry comfortably longer than the cache's max
-  // staleness window (s-maxage=2 + stale-while-revalidate=5 = 7s) plus
-  // margin for poll-timing jitter - once a poll's proposed `currentPlayer`
-  // shows up in this set, it's treated as an echo of the past, not news.
+  // staleness window (s-maxage=2 + stale-while-revalidate=5 = 7s) - widened
+  // with generous margin over that theoretical figure, since real-world
+  // staleness (many viewers hitting different edge PoPs, revalidation
+  // timing) can run longer than the nominal header value suggests - once a
+  // poll's proposed `currentPlayer` shows up in this set, it's treated as an
+  // echo of the past, not news.
   const displayedPlayerIdRef = useRef<string | null>(initialPlayer?.id ?? null)
   const supersededPlayerIdsRef = useRef<Map<string, number>>(new Map())
-  const SUPERSEDED_TTL_MS = 15000
+  const SUPERSEDED_TTL_MS = 30000
+
+  // Same "don't go backward" idea, applied to the bid amount instead of the
+  // player - a stale cached snapshot can correctly name the CURRENT player
+  // while still carrying bid history from before the newest bid landed,
+  // reverting "Current Bid: X" to "No Bids Yet" until the next poll catches
+  // up. Tracks the newest bid timestamp actually shown for whichever player
+  // is on screen (from a live Pusher bid or an earlier poll) and rejects a
+  // poll whose bid data for that same player is older than that.
+  //
+  // Bounded by a grace window rather than enforced forever: a bid can be
+  // legitimately undone by the admin, and the database doesn't keep any
+  // marker of that (the bid row is just removed - see undo-bid/route.ts),
+  // so an undo and a stale cache hit look identical from here. Refusing
+  // forever would leave a plain (non-presenter) viewer - who has no other
+  // source of bid updates - stuck showing the undone amount permanently.
+  // After this window, the poll's data is trusted again regardless, so an
+  // undo self-corrects within roughly the same delay the original flicker
+  // bug already took to resolve, instead of getting stuck.
+  const bestKnownBidTimestampRef = useRef<number>(0)
+  const BID_REGRESSION_GRACE_MS = 10000
 
   const isSupersededPlayerId = useCallback((id: string) => {
     const expiresAt = supersededPlayerIdsRef.current.get(id)
@@ -442,14 +465,31 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     // leave whatever's currently displayed alone rather than flashing back
     // to it. Everything else in this snapshot (players, bidders, pool
     // state) still applies; only the current-player/bid fields are stale.
-    const incomingPlayerId = snapshot.currentPlayer?.id
+    const incomingPlayerId = snapshot.currentPlayer?.id ?? null
     if (incomingPlayerId && isSupersededPlayerId(incomingPlayerId)) return
-    setCurrentPlayer(snapshot.currentPlayer)
+
     const { sortedHistory, currentBid: derivedBid, highestBidderId: derivedHighest } =
-      deriveCurrentBidForPlayer(snapshot.bidHistory, snapshot.currentPlayer?.id)
+      deriveCurrentBidForPlayer(snapshot.bidHistory, incomingPlayerId ?? undefined)
+    const newestIncomingBidMs = sortedHistory[0] ? new Date(sortedHistory[0].timestamp).getTime() : 0
+    const sameDisplayedPlayer = incomingPlayerId != null && incomingPlayerId === displayedPlayerIdRef.current
+    const bidBaselineAge = Date.now() - bestKnownBidTimestampRef.current
+    // See BID_REGRESSION_GRACE_MS above: only refuse a bid regression for a
+    // bounded window, so a genuine admin undo (indistinguishable from a
+    // stale cache hit here) still self-corrects rather than sticking forever.
+    const isStaleBidForSamePlayer =
+      sameDisplayedPlayer &&
+      newestIncomingBidMs < bestKnownBidTimestampRef.current &&
+      bidBaselineAge < BID_REGRESSION_GRACE_MS
+
+    setCurrentPlayer(snapshot.currentPlayer)
+    if (isStaleBidForSamePlayer) return
+
     setBidHistory(sortedHistory)
     setCurrentBid(derivedBid)
     setHighestBidderId(derivedHighest)
+    bestKnownBidTimestampRef.current = sameDisplayedPlayer
+      ? Math.max(bestKnownBidTimestampRef.current, newestIncomingBidMs)
+      : newestIncomingBidMs
   }, [isSupersededPlayerId])
 
   // Tracks whether OUR polling is actually succeeding - the correct signal
@@ -562,7 +602,13 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     onNewBid: (data) => {
       console.log('[PublicAuctionView] onNewBid callback triggered', data)
       logger.log('PublicAuctionView onNewBid')
-      
+
+      // Raises the bar the presenter's safety-net poll (see applySnapshot)
+      // must clear before it's allowed to touch bid state again - without
+      // this, that poll could revert this real-time bid back to a stale
+      // cached one a few seconds later.
+      bestKnownBidTimestampRef.current = Date.now()
+
       // Batch critical state updates - React 18 automatically batches these
       // This reduces from 4-5 re-renders to just 1
       setCurrentBid({
