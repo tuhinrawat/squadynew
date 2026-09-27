@@ -21,6 +21,7 @@ import { extractPlayerName } from '@/lib/player-name'
 import { BatIcon, BallIcon } from '@/components/cricket-stat-ui'
 import { PlayerStatsDialog } from '@/components/player-stats-dialog'
 import { GoingLiveBanner } from '@/components/going-live-banner'
+import { usePusher } from '@/lib/pusher-client'
 import { AuctionStatus } from '@prisma/client'
 
 interface CountdownToLiveWrapperProps {
@@ -113,6 +114,10 @@ export function CountdownToLiveWrapper({
   const timerViewTrackedRef = useRef(false)
   const [showGoingLiveBanner, setShowGoingLiveBanner] = useState(false)
   const goingLiveBannerTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  // Guards against applying the going-live transition twice - the poll below
+  // and the Pusher listener further down can both observe it (e.g. a poll
+  // tick lands moments after the Pusher event already handled it).
+  const hasGoneLiveRef = useRef(false)
 
   const knowYourPlayersCards = useMemo(() => {
     return auction.players.map(player => {
@@ -249,6 +254,46 @@ export function CountdownToLiveWrapper({
     knowPlayersSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
+  // Applies a freshly-fetched auction snapshot - shared between the poll
+  // below and the Pusher listener further down, since either one can be the
+  // first to observe the DRAFT -> LIVE transition depending on which fires
+  // first (Pusher is near-instant; the poll is a fallback for a dropped
+  // connection).
+  const applyAuctionSnapshot = useCallback((data: any) => {
+    const newStatus = data.auction.status as AuctionStatus
+
+    // initialStatusRef holds the DRAFT status this component started with -
+    // this only ever fires once, the first time either signal observes the
+    // flip - play the going-live curtain now, before the status update below
+    // swaps this component's own render branch over to the live view
+    // underneath it.
+    if (isLiveStatus(newStatus) && !isLiveStatus(initialStatusRef.current) && !hasGoneLiveRef.current) {
+      hasGoneLiveRef.current = true
+      setShowGoingLiveBanner(true)
+      if (goingLiveBannerTimeoutRef.current) {
+        clearTimeout(goingLiveBannerTimeoutRef.current)
+      }
+      goingLiveBannerTimeoutRef.current = setTimeout(() => {
+        setShowGoingLiveBanner(false)
+        goingLiveBannerTimeoutRef.current = null
+      }, 4000)
+    }
+    setAuctionData({ ...data.auction, status: newStatus })
+
+    // Update all data
+    setCurrentPlayer(data.currentPlayer || null)
+    setStats(data.stats || initialStats)
+    setBidHistory(data.bidHistory || [])
+
+    // If auction is now LIVE/MOCK_RUN or PAUSED, stop polling and show live view
+    if (isLiveStatus(newStatus) || newStatus === 'PAUSED') {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+  }, [initialStats])
+
   // Poll for auction status when countdown reaches zero
   const pollAuctionStatus = useCallback(async () => {
     // Clear any existing polling
@@ -260,38 +305,7 @@ export function CountdownToLiveWrapper({
       try {
         const response = await fetch(`/api/auctions/${auction.id}/public`)
         if (response.ok) {
-          const data = await response.json()
-          const newStatus = data.auction.status as AuctionStatus
-          // This is the one place that actually observes the DRAFT -> LIVE
-          // transition (initialStatusRef holds the DRAFT status this
-          // component started with - polling only ever runs before that
-          // flips) - play the going-live curtain now, before the status
-          // update below swaps this component's own render branch over to
-          // the live view underneath it.
-          if (isLiveStatus(newStatus) && !isLiveStatus(initialStatusRef.current)) {
-            setShowGoingLiveBanner(true)
-            if (goingLiveBannerTimeoutRef.current) {
-              clearTimeout(goingLiveBannerTimeoutRef.current)
-            }
-            goingLiveBannerTimeoutRef.current = setTimeout(() => {
-              setShowGoingLiveBanner(false)
-              goingLiveBannerTimeoutRef.current = null
-            }, 4000)
-          }
-          setAuctionData({ ...data.auction, status: newStatus })
-
-          // Update all data
-          setCurrentPlayer(data.currentPlayer || null)
-          setStats(data.stats || initialStats)
-          setBidHistory(data.bidHistory || [])
-          
-          // If auction is now LIVE/MOCK_RUN or PAUSED, stop polling and show live view
-          if (isLiveStatus(newStatus) || newStatus === 'PAUSED') {
-            if (pollIntervalRef.current) {
-              clearInterval(pollIntervalRef.current)
-              pollIntervalRef.current = null
-            }
-          }
+          applyAuctionSnapshot(await response.json())
         }
       } catch (error) {
         console.error('Error polling auction status:', error)
@@ -305,7 +319,30 @@ export function CountdownToLiveWrapper({
         pollIntervalRef.current = null
       }
     }, 10 * 60 * 1000)
-  }, [auction.id, initialStats])
+  }, [auction.id, applyAuctionSnapshot])
+
+  // Fires the instant the admin starts the auction, however far off the
+  // scheduled time still is - without this, an admin starting early left
+  // anyone already on this page stuck watching the countdown (or, with no
+  // scheduled date at all, a static "waiting" screen) until either the
+  // originally scheduled time passed or they manually refreshed, at which
+  // point a fresh page load just serves the live view directly with no
+  // curtain, since the transition itself was never observed client-side.
+  // Subscribed unconditionally (not gated on countdown/schedule state) so it
+  // covers every pre-live screen this component can render.
+  const handleAuctionStartedEvent = useCallback(async () => {
+    if (hasGoneLiveRef.current) return
+    try {
+      const response = await fetch(`/api/auctions/${auction.id}/public`)
+      if (response.ok) {
+        applyAuctionSnapshot(await response.json())
+      }
+    } catch (error) {
+      console.error('Error fetching auction after going live:', error)
+    }
+  }, [auction.id, applyAuctionSnapshot])
+
+  usePusher(auction.id, { onAuctionStarted: handleAuctionStartedEvent })
 
   // Track timer view on mount (only once)
   useEffect(() => {
@@ -330,6 +367,10 @@ export function CountdownToLiveWrapper({
   useEffect(() => {
     if (!auction.scheduledStartDate) {
       setShowCountdown(false)
+      // No scheduled time to count down to - the Pusher listener above is
+      // the primary signal here, but poll too as a fallback in case that
+      // connection ever drops.
+      pollAuctionStatus()
       return
     }
 
@@ -1195,7 +1236,9 @@ export function CountdownToLiveWrapper({
             </p>
                 <div className="bg-white/40 backdrop-blur-md border border-white/60 rounded-lg p-6">
               <p className="text-base sm:text-lg text-purple-200">
-                The scheduled time has arrived. The auction will begin shortly.
+                {auction.scheduledStartDate
+                  ? 'The scheduled time has arrived. The auction will begin shortly.'
+                  : 'This page updates the moment the admin starts the auction.'}
               </p>
             </div>
           </div>

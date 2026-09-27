@@ -17,19 +17,6 @@ import { isLiveStatus } from '@/lib/auction-status'
 import { calculateAuctionStats, parseBidHistory } from '@/lib/auction-view-data'
 import type { Metadata } from 'next'
 
-function isScheduledDateInFuture(date: Date | string | null | undefined): boolean {
-  if (!date) {
-    return false
-  }
-
-  const scheduledTime = new Date(date).getTime()
-  if (Number.isNaN(scheduledTime)) {
-    return false
-  }
-
-  return scheduledTime > Date.now()
-}
-
 // Generate dynamic metadata for better social sharing
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const isId = isCuid(params.id)
@@ -256,40 +243,23 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
         return <ResultsView auction={auction} userId="" userRole="BIDDER" />
       }
 
-      // If published but DRAFT status - show ONLY full-page countdown (nothing else)
+      // If published but DRAFT status - show ONLY full-page countdown (nothing else).
+      // Always routed through CountdownToLiveWrapper, scheduled date or not -
+      // that component is also what listens for the admin actually starting
+      // the auction (via Pusher) and plays the going-live transition the
+      // instant that happens, rather than only after a scheduled time passes
+      // or a manual refresh. Without a scheduled date it just shows a
+      // "waiting" message instead of a ticking countdown.
       if (auction.status === 'DRAFT') {
-        // Check if scheduledStartDate exists and is valid
-        const hasScheduledDate = isScheduledDateInFuture(auction.scheduledStartDate)
-        
-        if (hasScheduledDate) {
-          return (
-            <CountdownToLiveWrapper
-              auction={auctionWithRelations as unknown as Parameters<typeof CountdownToLiveWrapper>[0]['auction']}
-              initialCurrentPlayer={currentPlayer}
-              initialStats={auctionStats}
-              initialBidHistory={fullBidHistory}
-              bidders={auctionWithRelations.bidders as unknown as Parameters<typeof CountdownToLiveWrapper>[0]['bidders']}
-            />
-          )
-        } else {
-          // No scheduled date or invalid date - show message with instructions
-          return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
-              <div className="text-center px-4 max-w-2xl">
-                <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">{auction.name}</h1>
-                <p className="text-xl md:text-2xl text-gray-300 mb-6">Published Auction</p>
-                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 mt-8">
-                  <p className="text-lg md:text-xl text-gray-300 mb-4">
-                    ⏰ Scheduled start date not set
-                  </p>
-                  <p className="text-md md:text-lg text-gray-400">
-                    To display the countdown timer, please set a scheduled start date and time for this auction in the dashboard.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )
-        }
+        return (
+          <CountdownToLiveWrapper
+            auction={auctionWithRelations as unknown as Parameters<typeof CountdownToLiveWrapper>[0]['auction']}
+            initialCurrentPlayer={currentPlayer}
+            initialStats={auctionStats}
+            initialBidHistory={fullBidHistory}
+            bidders={auctionWithRelations.bidders as unknown as Parameters<typeof CountdownToLiveWrapper>[0]['bidders']}
+          />
+        )
       }
 
       // For LIVE, PAUSED, and MOCK_RUN status, show full auction view
