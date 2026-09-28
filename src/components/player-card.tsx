@@ -79,8 +79,13 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 	return (
 		<div className="relative rounded-xl overflow-hidden w-full max-w-4xl mx-auto font-['Montserrat'] bg-[#0a0d12]">
 
-			{/* Photo zone - full-bleed, not circular */}
-			<div className={`relative overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 ${compact ? 'h-[110px] sm:h-[150px]' : 'h-[220px] sm:h-[340px] lg:h-[400px]'}`}>
+			{/* Photo zone - full-bleed, not circular. Mobile's height was 220px,
+			    which starved a typical tall/portrait event photo (see the
+			    object-contain reasoning below) down to a narrow strip with most
+			    of the frame's width sitting empty on either side of it - taller
+			    now so the same photo renders visibly bigger without touching the
+			    "never crop" guarantee. */}
+			<div className={`relative overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 ${compact ? 'h-[110px] sm:h-[150px]' : 'h-[300px] sm:h-[340px] lg:h-[400px]'}`}>
 				{/* Auction number plaque - the same number the team hands the
 				    winning bidder on a physical placard, so it has to read as
 				    the biggest, boldest thing on the card after the photo
