@@ -884,7 +884,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   }, [pendingPlayer])
 
   const getProfilePhotoUrl = useCallback((playerData: any): string | undefined => {
-    return extractProxyImageUrl(playerData)
+    // Full-screen projector stage - the one photo genuinely worth the larger
+    // fetch. See proxy-image/route.ts.
+    return extractProxyImageUrl(playerData, 800)
   }, [])
 
   // Presenter mode (?presenter=1) is a dedicated full-screen stage meant to
@@ -1316,7 +1318,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     } : null}
                     serialNumber={currentPlayer?.serialNumber}
                     name={playerName}
-                    imageUrl={extractProxyImageUrl(playerData)}
+                    imageUrl={extractProxyImageUrl(playerData, 600)}
                     basePrice={(currentPlayer?.data as any)?.['Base Price'] || (currentPlayer?.data as any)?.['base price'] || 1000}
                     tags={((currentPlayer as any)?.isIcon || (currentPlayer?.data as any)?.isIcon) ? [{ label: 'Bidder Choice', color: 'purple' }] : []}
                     profileLink={cricherosLink}

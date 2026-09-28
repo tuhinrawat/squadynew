@@ -39,11 +39,19 @@ export function extractGoogleDriveFileId(link: string): string | null {
 // CORB/CORS restrictions on hotlinking) - falls back to the raw value only
 // when it's already a plain http(s) URL rather than a Drive link this can
 // extract a file ID from.
-export function extractProxyImageUrl(data: Record<string, unknown> | null | undefined): string | undefined {
+//
+// `width` requests a smaller (or larger) image from the proxy than its
+// default - see proxy-image/route.ts's ALLOWED_WIDTHS. Every caller used to
+// get a fixed 1000px image regardless of context, which is why a 60px grid
+// thumbnail and the one large stage photo downloaded the same ~300KB file;
+// pass the size that actually matches how the photo is displayed. Has no
+// effect on an already-external http(s) URL, which this proxy doesn't
+// control.
+export function extractProxyImageUrl(data: Record<string, unknown> | null | undefined, width?: number): string | undefined {
   const value = extractProfilePhotoValue(data)
   if (!value) return undefined
   const fileId = extractGoogleDriveFileId(value)
-  if (fileId) return `/api/proxy-image?id=${fileId}`
+  if (fileId) return `/api/proxy-image?id=${fileId}${width ? `&w=${width}` : ''}`
   if (value.startsWith('http://') || value.startsWith('https://')) return value
   return undefined
 }

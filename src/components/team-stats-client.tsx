@@ -166,7 +166,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   }
 
   function getProfilePhotoUrl(playerData: any): string | undefined {
-    return extractProxyImageUrl(playerData)
+    // Small roster-grid thumbnail, not a hero photo - see proxy-image/route.ts.
+    return extractProxyImageUrl(playerData, 200)
   }
 
   // Get bidder logo/photo - prioritize team logo (logoUrl), fallback to bidderPhotoUrl for retired players

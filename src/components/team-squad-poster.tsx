@@ -52,7 +52,8 @@ interface TeamSquadPosterProps {
  * Get player profile photo URL
  */
 function getProfilePhotoUrl(playerData: PlayerData): string | undefined {
-  return extractProxyImageUrl(playerData)
+  // One tile among many on a shared poster, not a hero photo - see proxy-image/route.ts.
+  return extractProxyImageUrl(playerData, 300)
 }
 
 /**

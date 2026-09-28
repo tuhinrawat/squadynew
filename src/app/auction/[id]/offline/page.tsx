@@ -37,7 +37,8 @@ function extractName(data: PlayerData): string {
 }
 
 function extractImageUrl(data: PlayerData): string | undefined {
-  return extractProxyImageUrl(data)
+  // Small list-row thumbnail, not a hero photo - see proxy-image/route.ts.
+  return extractProxyImageUrl(data, 200)
 }
 
 function extractFields(data: PlayerData) {

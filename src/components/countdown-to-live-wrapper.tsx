@@ -128,7 +128,8 @@ export function CountdownToLiveWrapper({
   const knowYourPlayersCards = useMemo(() => {
     return auction.players.map(player => {
       const playerData = player.data as any
-      const imageUrl = extractProxyImageUrl(playerData)
+      // Small pool-grid card, not a hero photo - see proxy-image/route.ts.
+      const imageUrl = extractProxyImageUrl(playerData, 200)
       const specialty = playerData?.Speciality || playerData?.speciality || playerData?.specialty
       const role = playerData?.Role || playerData?.role || ''
       const statsSummary = [

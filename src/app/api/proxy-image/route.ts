@@ -21,8 +21,24 @@ class UpstreamFetchError extends Error {
   }
 }
 
-async function fetchDriveImage(fileId: string): Promise<{ contentType: string; buffer: ArrayBuffer }> {
-  const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`
+// Every caller used to get a fixed 1000px-wide image regardless of where it
+// was displayed - a 60px grid thumbnail and the one large stage photo both
+// downloaded the same ~300KB file. That alone accounted for the large
+// majority of this app's total outbound bandwidth on a real auction day
+// (observed: ~83% of total egress from ~1,100 requests to this one route).
+// An allowlist (rather than passing the query param straight through) keeps
+// this from becoming an arbitrary-size proxy some caller could abuse to
+// force oversized upstream fetches.
+const ALLOWED_WIDTHS = [150, 200, 300, 400, 600, 800, 1000] as const
+const DEFAULT_WIDTH = 400
+
+function resolveWidth(param: string | null): number {
+  const parsed = param ? Number(param) : NaN
+  return ALLOWED_WIDTHS.includes(parsed as typeof ALLOWED_WIDTHS[number]) ? parsed : DEFAULT_WIDTH
+}
+
+async function fetchDriveImage(fileId: string, width: number): Promise<{ contentType: string; buffer: ArrayBuffer }> {
+  const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w${width}`
   const response = await fetch(imageUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -51,15 +67,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Missing or invalid file ID' }, { status: 400 })
     }
 
-    let pending = inFlight.get(fileId)
+    const width = resolveWidth(searchParams.get('w'))
+    // Different widths are different actual downloads - keying in-flight
+    // coalescing and the (implicit, via the full request URL) edge cache by
+    // fileId alone would either serve the wrong size or collapse two
+    // legitimately different requests into one.
+    const cacheKey = `${fileId}:${width}`
+
+    let pending = inFlight.get(cacheKey)
     if (!pending) {
-      pending = fetchDriveImage(fileId)
-      inFlight.set(fileId, pending)
+      pending = fetchDriveImage(fileId, width)
+      inFlight.set(cacheKey, pending)
       // Remove once settled (success or failure) so a later request for the
       // same id fetches fresh rather than being stuck sharing a failed or
       // long-gone promise.
       pending.finally(() => {
-        if (inFlight.get(fileId) === pending) inFlight.delete(fileId)
+        if (inFlight.get(cacheKey) === pending) inFlight.delete(cacheKey)
       })
     }
 
