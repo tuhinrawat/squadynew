@@ -83,21 +83,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             },
           })
         : Promise.resolve(null),
-      // Feeds the public view's sold ticker. Bounded to 5 rows regardless of
-      // roster size, unlike the bulk `players` query above - fetching each
-      // one's full `data` blob here is fine at this fixed, small count (same
-      // order of magnitude as the single current-player fetch above), where
-      // doing it for the whole roster on every poll was the actual cause of
-      // a several-MB response. soldAt is null for anything sold before this
-      // field existed - excluded rather than padding the list with them,
-      // since mixing in unrelated old sales just to fill 5 slots was more
-      // confusing than a ticker with fewer than 5 (even zero) real recent
-      // sales until enough real ones accumulate after this deploy.
+      // Feeds the public view's Recent Sales bar/sheet. Bounded to 10 rows
+      // regardless of roster size, unlike the bulk `players` query above -
+      // fetching each one's full `data` blob here is fine at this fixed,
+      // small count (same order of magnitude as the single current-player
+      // fetch above), where doing it for the whole roster on every poll was
+      // the actual cause of a several-MB response. soldAt is null for
+      // anything sold before this field existed - excluded rather than
+      // padding the list with them, since mixing in unrelated old sales just
+      // to fill 10 slots was more confusing than a list with fewer than 10
+      // (even zero) real recent sales until enough real ones accumulate
+      // after this deploy.
       prisma.player.findMany({
         where: { auctionId: auction.id, status: 'SOLD', soldAt: { not: null } },
         orderBy: { soldAt: 'desc' },
-        take: 5,
-        select: { id: true, data: true, soldTo: true, soldPrice: true },
+        take: 10,
+        select: { id: true, data: true, soldTo: true, soldPrice: true, soldAt: true },
       }),
     ])
 
@@ -127,6 +128,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         name: extractPlayerName(p.data as Record<string, unknown> | null | undefined) || 'Unknown Player',
         price: p.soldPrice ?? 0,
         buyer: buyer?.teamName || buyer?.username || 'Unknown',
+        soldAt: p.soldAt,
       }
     })
 

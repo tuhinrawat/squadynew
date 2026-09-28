@@ -6,7 +6,7 @@ import { Auction, Player } from '@prisma/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { ChevronRight, Trophy, RefreshCw } from 'lucide-react'
+import { ChevronRight, ChevronUp, Trophy, RefreshCw, X } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher, useClientErrorReporting } from '@/lib/pusher-client'
@@ -85,6 +85,19 @@ interface RecentSale {
   name: string
   price: number
   buyer: string
+  soldAt: string
+}
+
+// Same seconds/minutes/clock-time thresholds already used for bid timestamps
+// in the Live Bid History sheet below, kept consistent across both. Callers
+// gate this on `isClient` themselves (client-only, since "now" would mismatch
+// between server and first client render otherwise).
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso)
+  const diffSeconds = Math.floor((Date.now() - then.getTime()) / 1000)
+  if (diffSeconds < 60) return `${diffSeconds}s ago`
+  if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
+  return then.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: string | undefined) {
@@ -106,14 +119,22 @@ function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: stri
   return { sortedHistory, currentBid: null, highestBidderId: null }
 }
 
-// Bottom scrolling ticker of recent sales. 'floating' (the default, used by
-// regular public viewers) is fixed above the page's branding footer on
-// mobile and drops to normal document flow on desktop, right before that
-// same footer. 'inline' (presenter only) is always normal flow - the
-// presenter screen is a fixed-height flex column, so it just takes its own
-// row and the stage above it shrinks to fit, no positioning math needed.
-function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; variant?: 'floating' | 'inline' }) {
+// Bottom bar showing the single latest sale, static (no scrolling marquee -
+// that made it unreadable on a glance and was pure decoration once it kept
+// looping past). 'floating' (the default, used by regular public viewers) is
+// fixed above the page's branding footer on mobile and drops to normal
+// document flow on desktop, right before that same footer. 'inline'
+// (presenter only) is always normal flow - the presenter screen is a
+// fixed-height flex column, so it just takes its own row and the stage above
+// it shrinks to fit, no positioning math needed.
+//
+// Public only: tapping this opens the full Recent Sales sheet (onClick is
+// omitted for presenter - nobody touches that screen). This is now the one
+// way a public viewer catches up on what happened while they weren't
+// watching, since the view no longer auto-refreshes - see the effects above.
+function SoldTicker({ sales, variant = 'floating', onClick }: { sales: RecentSale[]; variant?: 'floating' | 'inline'; onClick?: () => void }) {
   if (sales.length === 0) return null
+  const latest = sales[0]
   // bottom-0, not bottom-8 - this sits flush at the true bottom of the
   // screen, with the branding footer positioned just above it (bottom-8 in
   // page.tsx). Both at bottom-8 previously left the actual bottom-most 32px
@@ -128,27 +149,33 @@ function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; vari
   const containerSizeClasses = variant === 'inline' ? 'h-16 border-t-2' : 'h-8 sm:h-9 border-t'
   const itemSizeClasses = variant === 'inline' ? 'gap-3 px-10 text-xl' : 'gap-2 px-6 text-xs sm:text-sm'
   const labelSizeClasses = variant === 'inline' ? 'px-8 text-base' : 'px-3 sm:px-4 text-[9px] sm:text-[11px]'
-  return (
-    <div className={`${positionClasses} ${containerSizeClasses} bg-[#05070a] border-amber-500/30 flex items-center`}>
-      {/* Fixed label, never scrolls - only the sales list to its right does. */}
+  const containerClassName = `${positionClasses} ${containerSizeClasses} w-full bg-[#05070a] border-amber-500/30 flex items-center ${onClick ? 'cursor-pointer hover:bg-white/[0.02] transition-colors text-left' : ''}`
+  const content = (
+    <>
+      {/* Fixed label - never scrolls, and never did; only the content beside
+          it used to. */}
       <div className={`flex-shrink-0 h-full flex items-center bg-amber-500/10 border-r border-amber-500/30 font-black uppercase tracking-widest text-amber-400 whitespace-nowrap ${labelSizeClasses}`}>
-        Last 5 Sales
+        Recent Sales
       </div>
-      <div className="flex-1 min-w-0 overflow-hidden">
-        {/* Content rendered twice so the loop from -50% back to 0% is
-            invisible - see .animate-ticker-scroll in globals.css. */}
-        <div className="flex whitespace-nowrap animate-ticker-scroll">
-          {[...sales, ...sales].map((sale, i) => (
-            <span key={`${sale.id}-${i}`} className={`inline-flex items-center flex-shrink-0 font-bold ${itemSizeClasses}`}>
-              <span className="text-white uppercase">{sale.name}</span>
-              <span className="text-gray-600">&rarr;</span>
-              <span className="text-amber-400">{sale.buyer}</span>
-              <span className="text-emerald-400 tabular-nums">₹{sale.price.toLocaleString('en-IN')}</span>
-            </span>
-          ))}
-        </div>
+      <div className="flex-1 min-w-0 overflow-hidden flex items-center justify-between">
+        <span className={`inline-flex items-center flex-shrink min-w-0 font-bold ${itemSizeClasses}`}>
+          <span className="text-white uppercase truncate">{latest.name}</span>
+          <span className="text-gray-600 flex-shrink-0">&rarr;</span>
+          <span className="text-amber-400 truncate">{latest.buyer}</span>
+          <span className="text-emerald-400 tabular-nums flex-shrink-0">₹{latest.price.toLocaleString('en-IN')}</span>
+        </span>
+        {onClick && (
+          <ChevronUp className="h-4 w-4 text-gray-500 flex-shrink-0 mr-3 sm:mr-4" aria-hidden="true" />
+        )}
       </div>
-    </div>
+    </>
+  )
+  return onClick ? (
+    <button type="button" onClick={onClick} className={containerClassName}>
+      {content}
+    </button>
+  ) : (
+    <div className={containerClassName}>{content}</div>
   )
 }
 
@@ -208,6 +235,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   // Bid history modal state
   const [bidHistoryModalOpen, setBidHistoryModalOpen] = useState(false)
+  // Recent Sales sheet - opened by tapping the bottom bar (public only, see
+  // SoldTicker above). The only way to see the full recent-sales history
+  // now that the view doesn't auto-refresh.
+  const [recentSalesModalOpen, setRecentSalesModalOpen] = useState(false)
 
   // Expose modal opener via ref
   useEffect(() => {
@@ -1668,7 +1699,70 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           </div>
         </DialogContent>
       </Dialog>
-      <SoldTicker sales={recentSales} />
+      <SoldTicker sales={recentSales} onClick={() => setRecentSalesModalOpen(true)} />
+
+      {/* Recent Sales sheet - slides up from the bottom at any screen size
+          (not gated to mobile the way the Live Bid History sheet is above),
+          since this is now the only way to see anything beyond the single
+          latest sale shown in the bar itself. Sorted latest-first, oldest
+          last - the same order the snapshot endpoint already returns them
+          in, so no client-side re-sort needed. */}
+      <Dialog open={recentSalesModalOpen} onOpenChange={setRecentSalesModalOpen}>
+        <DialogContent
+          className="!fixed !bottom-0 !left-1/2 !top-auto !-translate-x-1/2 !translate-y-0 !w-full sm:!max-w-lg rounded-t-lg p-0 border-0"
+          style={{ maxHeight: '75vh', display: 'flex', flexDirection: 'column' }}
+          showCloseButton={false}
+        >
+          <div className="bg-[#0b0e14] rounded-t-lg flex flex-col text-white" style={{ maxHeight: '75vh' }}>
+            {/* Drag handle */}
+            <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mt-2 mb-3 flex-shrink-0" />
+
+            <div className="px-4 py-3 border-b border-white/10 flex-shrink-0 flex items-center justify-between">
+              <div>
+                <DialogTitle className="text-base font-black uppercase tracking-tight text-white">Recent Sales</DialogTitle>
+                <DialogDescription className="text-xs text-gray-500">Latest {recentSales.length} sale{recentSales.length === 1 ? '' : 's'}, most recent first</DialogDescription>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRecentSalesModalOpen(false)}
+                className="p-2 -mr-2 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {recentSales.length === 0 ? (
+                <div className="text-center py-10 text-sm text-gray-500">No sales yet.</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-[#0b0e14]">
+                    <tr className="text-left text-[10px] text-gray-500 uppercase tracking-wider border-b border-white/10">
+                      <th className="px-4 py-2 font-bold">Player</th>
+                      <th className="px-3 py-2 font-bold">Sold To</th>
+                      <th className="px-3 py-2 font-bold text-right">Price</th>
+                      <th className="px-4 py-2 font-bold text-right">When</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentSales.map(sale => (
+                      <tr key={sale.id} className="border-b border-white/5 last:border-0">
+                        <td className="px-4 py-2.5 font-bold text-white uppercase truncate max-w-[7rem]">{sale.name}</td>
+                        <td className="px-3 py-2.5 text-amber-400 truncate max-w-[6rem]">{sale.buyer}</td>
+                        <td className="px-3 py-2.5 text-emerald-400 font-bold tabular-nums text-right whitespace-nowrap">₹{sale.price.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-2.5 text-gray-500 text-xs text-right whitespace-nowrap">
+                          {isClient ? formatRelativeTime(sale.soldAt) : ''}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
       )}
     </>
