@@ -7,25 +7,6 @@
  */
 
 import React from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Eye } from 'lucide-react'
-
-// Memoized Live Badges Component - Ultra compact on mobile
-export const LiveBadges = React.memo(({ viewerCount }: { viewerCount: number }) => {
-  return (
-    <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-1 sm:mb-4">
-      <Badge className="bg-green-500 text-white text-[10px] sm:text-xs font-bold px-1.5 py-0.5 sm:px-3 sm:py-1.5 animate-pulse">
-        ● LIVE
-      </Badge>
-      <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 sm:px-3 sm:py-1.5 animate-pulse">
-        <Eye className="h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 mr-0.5 sm:mr-1.5" />
-        <span className="hidden sm:inline">Live Views: </span>{viewerCount || 0}
-      </Badge>
-    </div>
-  )
-}, (prev, next) => prev.viewerCount === next.viewerCount)
-
-LiveBadges.displayName = 'LiveBadges'
 
 // Memoized Stats Display Component
 interface StatsDisplayProps {

@@ -6,14 +6,13 @@ import { Auction, Player } from '@prisma/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { ChevronRight, Eye, Trophy, RefreshCw } from 'lucide-react'
+import { ChevronRight, Trophy, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { usePusher, useClientErrorReporting } from '@/lib/pusher-client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '@/lib/logger'
 import { formatCurrency } from '@/lib/currency'
-import { useViewerCount } from '@/hooks/use-viewer-count'
 import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
@@ -182,9 +181,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // one, and would flash the wrong entries for the brief moment before the
   // first poll (which fires immediately on mount) corrects it.
   const [recentSales, setRecentSales] = useState<RecentSale[]>([])
-  
-  // Track live viewer count
-  const viewerCount = useViewerCount(auction.id, true)
   const [players, setPlayers] = useState(auction.players)
   const [biddersState, setBiddersState] = useState(bidders)
   const [showPlayerReveal, setShowPlayerReveal] = useState(false)
@@ -1177,9 +1173,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 unsold={stats.unsold}
                 remaining={stats.remaining}
               />
-              <span className="inline-flex items-center gap-1 text-gray-400 text-xs font-semibold">
-                <Eye className="h-3 w-3" /> {viewerCount || 0}
-              </span>
               {isPresenter ? (
                 <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${pollHealthy ? 'text-emerald-400' : 'text-red-400'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${pollHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />

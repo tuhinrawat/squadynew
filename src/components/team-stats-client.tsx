@@ -1,18 +1,18 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { Auction, Player, Bidder, User } from '@prisma/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye, ExternalLink, Instagram, Search, ChevronDown, Calendar, ArrowUpDown } from 'lucide-react'
+import { ArrowLeft, Users, Trophy, TrendingUp, Grid3x3, List, ChevronRight, User as UserIcon, Eye, ExternalLink, Instagram, Search, ChevronDown, Calendar, ArrowUpDown, RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ActivityLog } from '@/components/activity-log'
 import { FixturesBracket } from '@/components/fixtures-bracket'
 import Link from 'next/link'
-import { initializePusher } from '@/lib/pusher-client'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl } from '@/lib/player-photo'
@@ -45,7 +45,21 @@ const teamColors = [
 ]
 
 export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProps) {
-  const [auction, setAuction] = useState(initialAuction)
+  // Not live - this view used to hold its own Pusher subscription, which
+  // meant every open tab was a real, billed connection rather than the
+  // lightweight polling the main public view uses. At real audience sizes
+  // (people leaving this open as a second screen during a long auction)
+  // that adds up fast for a view that isn't the one anyone is bidding from.
+  // A manual refresh re-runs the server component below and hands back a
+  // fresh `initialAuction` prop - no local state to keep in sync.
+  const auction = initialAuction
+  const router = useRouter()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const handleRefresh = () => {
+    setIsRefreshing(true)
+    router.refresh()
+    setTimeout(() => setIsRefreshing(false), 600)
+  }
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'sold' | 'unsold' | 'know' | 'fixtures'>('overview')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -71,71 +85,6 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
   const [knowPlayersVisibleCount, setKnowPlayersVisibleCount] = useState(KNOW_PLAYERS_PAGE_SIZE)
   const [fixtures, setFixtures] = useState<any[]>([])
   const [fixturesLoading, setFixturesLoading] = useState(true)
-
-  // Subscribe to real-time updates with incremental updates (no API calls - millisecond latency)
-  useEffect(() => {
-    const pusher = initializePusher()
-    const channel = pusher.subscribe(`auction-${auction.id}`)
-
-    channel.bind('player-sold', (data: { 
-      playerId: string
-      bidderId: string
-      amount: number
-      playerName: string
-      updatedBidders?: Array<{ id: string; remainingPurse: number }>
-    }) => {
-      // Update auction state instantly from Pusher data (no API call - ~0ms latency)
-      setAuction(prev => {
-        const updated = { ...prev }
-        // Update player status instantly
-        updated.players = prev.players.map(p => 
-          p.id === data.playerId 
-            ? { ...p, status: 'SOLD' as const, soldTo: data.bidderId, soldPrice: data.amount }
-            : p
-        )
-        // Update bidder purse instantly if provided
-        if (data.updatedBidders) {
-          updated.bidders = prev.bidders.map(b => {
-            const update = data.updatedBidders!.find(ub => ub.id === b.id)
-            return update ? { ...b, remainingPurse: update.remainingPurse } : b
-          })
-        }
-        return updated
-      })
-    })
-
-    channel.bind('players-updated', (data: { 
-      players?: any[]
-      bidders?: Array<{ id: string; remainingPurse: number }>
-    }) => {
-      // Update from Pusher data if available (no API call - ~0ms latency)
-      if (data.players || data.bidders) {
-        setAuction(prev => {
-          const updated = { ...prev }
-          if (data.players) {
-            updated.players = prev.players.map(p => {
-              const update = data.players!.find(up => up.id === p.id)
-              // Merge rather than replace - the broadcast only carries the
-              // fields that changed, not the full player record.
-              return update ? { ...p, ...update } : p
-            })
-          }
-          if (data.bidders) {
-            updated.bidders = prev.bidders.map(b => {
-              const update = data.bidders!.find(ub => ub.id === b.id)
-              return update ? { ...b, remainingPurse: update.remainingPurse } : b
-            })
-          }
-          return updated
-        })
-      }
-    })
-
-    return () => {
-      channel.unbind_all()
-      pusher.unsubscribe(`auction-${auction.id}`)
-    }
-  }, [auction.id])
 
   // Fetch fixtures
   useEffect(() => {
@@ -453,28 +402,43 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                   {selectedTeamData ? selectedTeamData.name : 'Team Statistics'}
                 </h1>
                 <p className="text-xs sm:text-sm text-white/70 truncate">{auction.name}</p>
+                {/* This view isn't live - see the comment on the `auction` const
+                    above. Sold/unsold counts and purses only update on refresh. */}
+                <p className="text-[10px] sm:text-xs text-white/50 truncate">Press Refresh to view updates</p>
               </div>
 
-              {!selectedTeam && (
-                <div className="hidden sm:flex items-center gap-2">
-                  <Button
-                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('grid')}
-                    className={viewMode === 'grid' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'}
-                  >
-                    <Grid3x3 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setViewMode('list')}
-                    className={viewMode === 'list' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefresh}
+                  className="text-white hover:bg-white/20 px-2 sm:px-3"
+                  aria-label="Refresh"
+                >
+                  <RefreshCw className={`h-4 w-4 sm:mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+                {!selectedTeam && (
+                  <div className="hidden sm:flex items-center gap-2">
+                    <Button
+                      variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('grid')}
+                      className={viewMode === 'grid' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'}
+                    >
+                      <Grid3x3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === 'list' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('list')}
+                      className={viewMode === 'list' ? 'bg-white text-blue-900' : 'text-white hover:bg-white/20'}
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
