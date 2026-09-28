@@ -58,7 +58,6 @@ interface PublicAuctionViewProps {
   bidHistory: BidHistoryEntry[]
   bidders: Bidder[]
   onOpenBidHistoryRef?: React.MutableRefObject<(() => void) | null> // Ref to expose modal opener
-  onRefreshRef?: React.MutableRefObject<(() => void) | null> // Ref to expose a manual force-refresh
   // The presenter link (?presenter=1) - see public-auction-wrapper.tsx. True
   // keeps a real Pusher connection (the anchor's screen needs instant
   // updates); false (the default, every other viewer) drops Pusher entirely
@@ -153,7 +152,7 @@ function SoldTicker({ sales, variant = 'floating' }: { sales: RecentSale[]; vari
   )
 }
 
-export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, onRefreshRef, isPresenter = false }: PublicAuctionViewProps) {
+export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, isPresenter = false }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
   // to recycle) - without this, spectators have no way to tell "waiting for
@@ -517,27 +516,32 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     }
   }, [auction.id, applySnapshot])
 
-  // Expose a manual refresh trigger via ref - same pattern as
-  // onOpenBidHistoryRef above. This is what the header's big Refresh button
-  // calls: it just forces the same fetchSnapshot the 6s poll already runs,
-  // rather than a full page reload.
-  useEffect(() => {
-    if (onRefreshRef) {
-      onRefreshRef.current = () => { fetchSnapshot() }
-    }
-  }, [onRefreshRef, fetchSnapshot])
-
   // Non-presenter viewers (the default) never subscribe to Pusher at all -
-  // see the `enabled` argument on usePusher below - so this poll is their
-  // only source of live updates. The edge cache on the snapshot endpoint
-  // (see route.ts) is what makes this affordable regardless of how many
-  // viewers are polling at once.
+  // see the `enabled` argument on usePusher below. They also no longer
+  // auto-poll: at real audience sizes (1000+ concurrent), a 6s poll from
+  // every viewer pushed a single 2-hour auction's Edge Request count well
+  // past Vercel's Flat Rate CDN cap (1M/cycle) on its own. This single fetch
+  // on mount catches up on anything that changed between SSR and hydration;
+  // after that, the Refresh button in the stage header below (with its own
+  // 15s attention pulse) is the only way this view updates.
   useEffect(() => {
     if (isPresenter) return
     fetchSnapshot()
-    const interval = setInterval(fetchSnapshot, 6000)
-    return () => clearInterval(interval)
   }, [isPresenter, fetchSnapshot])
+
+  // Periodic attention pulse on the manual Refresh button - fires briefly on
+  // a fixed rhythm rather than pulsing continuously, so it stays noticeable
+  // without becoming visual noise across a 2-hour auction. Presenter doesn't
+  // need this: that screen stays live via Pusher regardless.
+  const [refreshAttention, setRefreshAttention] = useState(false)
+  useEffect(() => {
+    if (isPresenter) return
+    const interval = setInterval(() => {
+      setRefreshAttention(true)
+      setTimeout(() => setRefreshAttention(false), 1400)
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [isPresenter])
 
   // Presenter safety net. Pusher delivers updates instantly when it works,
   // but a single dropped message (a brief network blip on the venue's
@@ -581,7 +585,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
   // Real-time subscriptions. Only the presenter link actually subscribes to
   // Pusher (see the `enabled` argument) - every other viewer relies on the
-  // poll above instead.
+  // manual Refresh button in the stage header instead (see the effects
+  // above).
   // Surfaces a browser-side crash on this view to the Traceability timeline -
   // otherwise a JS exception here (public viewer or presenter alike) is
   // invisible outside whoever's screen it happened on.
@@ -1179,13 +1184,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   {pollHealthy ? 'Live' : 'Reconnecting…'}
                 </span>
               ) : (
+                // The only way this view updates now - no auto-poll behind
+                // it (see the effect above). Pulses every 15s (rather than
+                // continuously) so it stays noticeable without becoming
+                // visual noise across a 2-hour auction.
                 <button
                   type="button"
                   onClick={() => fetchSnapshot()}
-                  className="inline-flex items-center gap-1 text-gray-400 hover:text-white text-xs font-semibold transition-colors"
-                  title="Refresh now"
+                  className={`relative inline-flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-[#04211d] text-xs font-bold px-3 py-1.5 rounded-full shadow-lg transition-transform motion-reduce:transform-none ${refreshAttention ? 'scale-110' : 'scale-100'}`}
+                  title="This screen doesn't auto-refresh - tap to check for updates"
                 >
-                  <RefreshCw className="h-3 w-3" /> Refresh
+                  {refreshAttention && (
+                    <span className="absolute inset-0 rounded-full bg-teal-400 opacity-75 animate-ping motion-reduce:hidden" aria-hidden="true" />
+                  )}
+                  <RefreshCw className="relative h-3.5 w-3.5" /> <span className="relative">Refresh</span>
                 </button>
               )}
               <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
@@ -1218,10 +1230,13 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                   <button
                     type="button"
                     onClick={() => fetchSnapshot()}
-                    className="inline-flex items-center gap-0.5 text-gray-400 text-[9px] font-bold flex-shrink-0"
-                    title="Refresh now"
+                    className={`relative inline-flex items-center gap-1 bg-teal-500 text-[#04211d] text-[9px] font-black px-2 py-1 rounded-full shadow-md flex-shrink-0 transition-transform motion-reduce:transform-none ${refreshAttention ? 'scale-110' : 'scale-100'}`}
+                    title="This screen doesn't auto-refresh - tap to check for updates"
                   >
-                    <RefreshCw className="h-2.5 w-2.5" />
+                    {refreshAttention && (
+                      <span className="absolute inset-0 rounded-full bg-teal-400 opacity-75 animate-ping motion-reduce:hidden" aria-hidden="true" />
+                    )}
+                    <RefreshCw className="relative h-2.5 w-2.5" /> <span className="relative">Refresh</span>
                   </button>
                 )}
               </div>

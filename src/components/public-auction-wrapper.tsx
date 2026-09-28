@@ -48,7 +48,6 @@ export function PublicAuctionWrapper({
   bidders
 }: PublicAuctionWrapperProps) {
   const openBidHistoryRef = useRef<(() => void) | null>(null)
-  const refreshRef = useRef<(() => void) | null>(null)
   // Presenter link (?presenter=1), handed specifically to whoever is running
   // the live event off this screen - see PublicAuctionView for what this
   // actually changes (a real Pusher connection vs. a background poll).
@@ -67,11 +66,6 @@ export function PublicAuctionWrapper({
               openBidHistoryRef.current()
             }
           }}
-          onRefresh={() => {
-            if (refreshRef.current) {
-              refreshRef.current()
-            }
-          }}
         />
       )}
 
@@ -82,7 +76,6 @@ export function PublicAuctionWrapper({
         bidHistory={bidHistory}
         bidders={bidders}
         onOpenBidHistoryRef={openBidHistoryRef}
-        onRefreshRef={refreshRef}
         isPresenter={isPresenter}
       />
     </>
