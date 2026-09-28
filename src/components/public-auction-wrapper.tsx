@@ -1,6 +1,5 @@
 'use client'
 
-import { useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PublicHeader } from './public-header'
 import { PublicAuctionView } from './public-auction-view'
@@ -47,7 +46,6 @@ export function PublicAuctionWrapper({
   bidHistory,
   bidders
 }: PublicAuctionWrapperProps) {
-  const openBidHistoryRef = useRef<(() => void) | null>(null)
   // Presenter link (?presenter=1), handed specifically to whoever is running
   // the live event off this screen - see PublicAuctionView for what this
   // actually changes (a real Pusher connection vs. a background poll).
@@ -59,14 +57,7 @@ export function PublicAuctionWrapper({
           a screen being projected for a room to watch - presenter mode
           builds its own minimal top strip inside PublicAuctionView instead. */}
       {!isPresenter && (
-        <PublicHeader
-          auctionId={auction.id}
-          onOpenBidHistory={() => {
-            if (openBidHistoryRef.current) {
-              openBidHistoryRef.current()
-            }
-          }}
-        />
+        <PublicHeader auctionId={auction.id} />
       )}
 
       <PublicAuctionView
@@ -75,7 +66,6 @@ export function PublicAuctionWrapper({
         stats={stats}
         bidHistory={bidHistory}
         bidders={bidders}
-        onOpenBidHistoryRef={openBidHistoryRef}
         isPresenter={isPresenter}
       />
     </>

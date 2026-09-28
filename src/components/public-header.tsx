@@ -3,14 +3,13 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Instagram, Clock, Trophy } from 'lucide-react'
+import { Instagram, Trophy } from 'lucide-react'
 
 interface PublicHeaderProps {
-  onOpenBidHistory?: () => void // Callback to open bid history modal
   auctionId?: string // For the "All Players & Teams" link
 }
 
-export function PublicHeader({ onOpenBidHistory, auctionId }: PublicHeaderProps) {
+export function PublicHeader({ auctionId }: PublicHeaderProps) {
   return (
     <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -21,11 +20,11 @@ export function PublicHeader({ onOpenBidHistory, auctionId }: PublicHeaderProps)
               <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" priority />
             </Link>
           </div>
-          {/* Right: All Players & Teams + Live Bids (mobile) + Instagram + Buttons */}
+          {/* Right: All Players & Teams + Instagram + Buttons */}
           <div className="flex items-center gap-0.5 sm:gap-3">
-            {/* All Players & Teams - mobile only, just before Live Bids. The
-                desktop stage header already has its own copy of this link -
-                on mobile there was previously no way to reach it at all. */}
+            {/* All Players & Teams - mobile only. The desktop stage header
+                already has its own copy of this link - on mobile there was
+                previously no way to reach it at all. */}
             {auctionId && (
               <Link href={`/auction/${auctionId}/teams`} target="_blank" rel="noopener noreferrer" className="sm:hidden">
                 <Button
@@ -37,18 +36,6 @@ export function PublicHeader({ onOpenBidHistory, auctionId }: PublicHeaderProps)
                   <Trophy className="h-4 w-4" />
                 </Button>
               </Link>
-            )}
-            {/* Live Bids Button - Mobile only, first in sequence */}
-            {onOpenBidHistory && (
-              <Button
-                onClick={onOpenBidHistory}
-                size="sm"
-                className="sm:hidden relative bg-red-600 hover:bg-red-700 text-white h-7 px-2 animate-pulse shadow-lg"
-                aria-label="Open Live Bid History"
-              >
-                <Clock className="h-4 w-4 mr-1" />
-                <span className="text-xs font-semibold">Live Bids</span>
-              </Button>
             )}
             {/* Instagram Icon - Always visible */}
             <a

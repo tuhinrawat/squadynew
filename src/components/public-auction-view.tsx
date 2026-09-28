@@ -57,7 +57,6 @@ interface PublicAuctionViewProps {
   }
   bidHistory: BidHistoryEntry[]
   bidders: Bidder[]
-  onOpenBidHistoryRef?: React.MutableRefObject<(() => void) | null> // Ref to expose modal opener
   // The presenter link (?presenter=1) - see public-auction-wrapper.tsx. True
   // keeps a real Pusher connection (the anchor's screen needs instant
   // updates); false (the default, every other viewer) drops Pusher entirely
@@ -98,6 +97,10 @@ function formatRelativeTime(iso: string): string {
   if (diffSeconds < 60) return `${diffSeconds}s ago`
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
   return then.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatClockTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: string | undefined) {
@@ -165,7 +168,7 @@ function SoldTicker({ sales, variant = 'floating', onClick }: { sales: RecentSal
           <span className="text-emerald-400 tabular-nums flex-shrink-0">₹{latest.price.toLocaleString('en-IN')}</span>
         </span>
         {onClick && (
-          <ChevronUp className="h-4 w-4 text-gray-500 flex-shrink-0 mr-3 sm:mr-4" aria-hidden="true" />
+          <ChevronUp className="h-6 w-6 text-teal-400 flex-shrink-0 mr-3 sm:mr-4 animate-bounce motion-reduce:animate-none" aria-hidden="true" />
         )}
       </div>
     </>
@@ -179,7 +182,7 @@ function SoldTicker({ sales, variant = 'floating', onClick }: { sales: RecentSal
   )
 }
 
-export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, onOpenBidHistoryRef, isPresenter = false }: PublicAuctionViewProps) {
+export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats: initialStats, bidHistory: initialHistory, bidders, isPresenter = false }: PublicAuctionViewProps) {
   const [currentPlayer, setCurrentPlayer] = useState(initialPlayer)
   // True once a sale empties the pool (nothing AVAILABLE, nothing UNSOLD left
   // to recycle) - without this, spectators have no way to tell "waiting for
@@ -239,13 +242,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // SoldTicker above). The only way to see the full recent-sales history
   // now that the view doesn't auto-refresh.
   const [recentSalesModalOpen, setRecentSalesModalOpen] = useState(false)
-
-  // Expose modal opener via ref
-  useEffect(() => {
-    if (onOpenBidHistoryRef) {
-      onOpenBidHistoryRef.current = () => setBidHistoryModalOpen(true)
-    }
-  }, [onOpenBidHistoryRef])
 
 
   // Set client-side rendered flag
@@ -516,6 +512,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // alarm anyone); a single success recovers it immediately.
   const [pollHealthy, setPollHealthy] = useState(true)
   const pollFailureStreakRef = useRef(0)
+  // Powers the "Updated at HH:MM" label next to the floating Refresh button -
+  // the only clock a non-presenter viewer has on how stale their screen
+  // might be, now that nothing updates automatically.
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  // Brief spin on tap - the only feedback a viewer gets that pressing the
+  // floating Refresh button actually did something, since an edge-cached
+  // fetch this fast would otherwise complete with no visible change at all.
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -540,6 +544,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       })
       pollFailureStreakRef.current = 0
       setPollHealthy(true)
+      setLastRefreshedAt(new Date())
     } catch (error) {
       logger.error('Failed to fetch auction snapshot:', error)
       pollFailureStreakRef.current += 1
@@ -547,32 +552,24 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     }
   }, [auction.id, applySnapshot])
 
+  const handleManualRefresh = useCallback(() => {
+    fetchSnapshot()
+    setIsRefreshing(true)
+    setTimeout(() => setIsRefreshing(false), 600)
+  }, [fetchSnapshot])
+
   // Non-presenter viewers (the default) never subscribe to Pusher at all -
   // see the `enabled` argument on usePusher below. They also no longer
   // auto-poll: at real audience sizes (1000+ concurrent), a 6s poll from
   // every viewer pushed a single 2-hour auction's Edge Request count well
   // past Vercel's Flat Rate CDN cap (1M/cycle) on its own. This single fetch
   // on mount catches up on anything that changed between SSR and hydration;
-  // after that, the Refresh button in the stage header below (with its own
-  // 15s attention pulse) is the only way this view updates.
+  // after that, the floating Refresh button is the only way this view
+  // updates.
   useEffect(() => {
     if (isPresenter) return
     fetchSnapshot()
   }, [isPresenter, fetchSnapshot])
-
-  // Periodic attention pulse on the manual Refresh button - fires briefly on
-  // a fixed rhythm rather than pulsing continuously, so it stays noticeable
-  // without becoming visual noise across a 2-hour auction. Presenter doesn't
-  // need this: that screen stays live via Pusher regardless.
-  const [refreshAttention, setRefreshAttention] = useState(false)
-  useEffect(() => {
-    if (isPresenter) return
-    const interval = setInterval(() => {
-      setRefreshAttention(true)
-      setTimeout(() => setRefreshAttention(false), 1400)
-    }, 15000)
-    return () => clearInterval(interval)
-  }, [isPresenter])
 
   // Presenter safety net. Pusher delivers updates instantly when it works,
   // but a single dropped message (a brief network blip on the venue's
@@ -1209,27 +1206,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 unsold={stats.unsold}
                 remaining={stats.remaining}
               />
-              {isPresenter ? (
+              {isPresenter && (
                 <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${pollHealthy ? 'text-emerald-400' : 'text-red-400'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${pollHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
                   {pollHealthy ? 'Live' : 'Reconnecting…'}
                 </span>
-              ) : (
-                // The only way this view updates now - no auto-poll behind
-                // it (see the effect above). Pulses every 15s (rather than
-                // continuously) so it stays noticeable without becoming
-                // visual noise across a 2-hour auction.
-                <button
-                  type="button"
-                  onClick={() => fetchSnapshot()}
-                  className={`relative inline-flex items-center gap-1.5 bg-teal-500 hover:bg-teal-400 text-[#04211d] text-xs font-bold px-3 py-1.5 rounded-full shadow-lg transition-transform motion-reduce:transform-none ${refreshAttention ? 'scale-110' : 'scale-100'}`}
-                  title="This screen doesn't auto-refresh - tap to check for updates"
-                >
-                  {refreshAttention && (
-                    <span className="absolute inset-0 rounded-full bg-teal-400 opacity-75 animate-ping motion-reduce:hidden" aria-hidden="true" />
-                  )}
-                  <RefreshCw className="relative h-3.5 w-3.5" /> <span className="relative">Refresh</span>
-                </button>
               )}
               <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
                 <Button className="bg-white/10 hover:bg-white/20 text-white border-white/20 h-8 text-xs" size="sm">
@@ -1252,23 +1233,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 <Badge className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 gap-1 animate-pulse">● LIVE</Badge>
                 <span className="text-[9px] font-bold text-amber-400">{stats.sold} sold</span>
                 <span className="text-[9px] font-bold text-gray-500">&middot; {stats.remaining} left</span>
-                {isPresenter ? (
+                {isPresenter && (
                   <span className={`inline-flex items-center gap-1 text-[9px] font-bold ${pollHealthy ? 'text-emerald-400' : 'text-red-400'}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${pollHealthy ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
                     {pollHealthy ? 'Live' : 'Reconnecting'}
                   </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => fetchSnapshot()}
-                    className={`relative inline-flex items-center gap-1 bg-teal-500 text-[#04211d] text-[9px] font-black px-2 py-1 rounded-full shadow-md flex-shrink-0 transition-transform motion-reduce:transform-none ${refreshAttention ? 'scale-110' : 'scale-100'}`}
-                    title="This screen doesn't auto-refresh - tap to check for updates"
-                  >
-                    {refreshAttention && (
-                      <span className="absolute inset-0 rounded-full bg-teal-400 opacity-75 animate-ping motion-reduce:hidden" aria-hidden="true" />
-                    )}
-                    <RefreshCw className="relative h-2.5 w-2.5" /> <span className="relative">Refresh</span>
-                  </button>
                 )}
               </div>
             </div>
@@ -1763,6 +1732,30 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Floating manual-refresh control - this is now the view's only source
+          of freshness (no auto-poll), so it needs to read as a persistent,
+          ambient affordance rather than something tucked into a header a
+          viewer might not scan. The continuous heartbeat glow (vs. a
+          one-off pulse) is what signals "this is always live to press,"
+          not "something just happened." Positioned to clear both the
+          Recent Sales bar and the branding footer, which are also fixed to
+          the true bottom of the screen on mobile. */}
+      <div className="fixed bottom-24 sm:bottom-6 right-4 sm:right-6 z-40 flex flex-col items-end gap-1.5">
+        {lastRefreshedAt && (
+          <span className="bg-black/70 backdrop-blur-sm text-gray-300 text-[10px] font-semibold px-2.5 py-1 rounded-full border border-white/10 whitespace-nowrap shadow-md">
+            Updated {formatClockTime(lastRefreshedAt)}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleManualRefresh}
+          aria-label="Refresh auction data"
+          className="w-14 h-14 rounded-full bg-teal-500 hover:bg-teal-400 active:bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-500/30 animate-heartbeat motion-reduce:animate-none transition-colors"
+        >
+          <RefreshCw className={`h-6 w-6 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+        </button>
+      </div>
     </div>
       )}
     </>

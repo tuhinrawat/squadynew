@@ -239,3 +239,32 @@ body {
   animation: float 3s ease-in-out infinite;
 }
 
+/* Continuous "thump-thump...rest" heartbeat, used on the public view's
+   floating Refresh button - that button is now the only way the view ever
+   updates (no auto-poll), so it needs to read as a persistent, ambient
+   signal rather than something that only calls attention to itself
+   occasionally. The glow (box-shadow) expands and fades in sync with each
+   beat rather than the whole animation just changing size, closer to how an
+   actual pulse reads. */
+@keyframes heartbeat-glow {
+  0%, 100%, 70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.55);
+  }
+  14% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 10px rgba(45, 212, 191, 0);
+  }
+  28% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 10px rgba(45, 212, 191, 0);
+  }
+}
+
+.animate-heartbeat {
+  animation: heartbeat-glow 1.8s ease-in-out infinite;
+}
+
