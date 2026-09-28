@@ -138,18 +138,21 @@ function deriveCurrentBidForPlayer(rawHistory: BidHistoryEntry[], playerId: stri
 function SoldTicker({ sales, variant = 'floating', onClick }: { sales: RecentSale[]; variant?: 'floating' | 'inline'; onClick?: () => void }) {
   if (sales.length === 0) return null
   const latest = sales[0]
-  // bottom-0, not bottom-8 - this sits flush at the true bottom of the
-  // screen, with the branding footer positioned just above it (bottom-8 in
-  // page.tsx). Both at bottom-8 previously left the actual bottom-most 32px
-  // of the viewport uncovered by either, showing scrolled content through it.
+  // bottom-8, not bottom-0 - this sits just above the branding footer
+  // (fixed at bottom-0 in page.tsx, itself ~32px tall), rather than below
+  // it, so it reads as the more prominent, more tappable of the two bars
+  // sitting right above the thumb instead of buried under the branding.
   const positionClasses = variant === 'floating'
-    ? 'fixed bottom-0 left-0 right-0 z-30 sm:static sm:z-auto'
+    ? 'fixed bottom-8 left-0 right-0 z-30 sm:static sm:z-auto'
     : 'flex-shrink-0'
   // Presenter gets a much bigger banner than regular viewers - it's read
   // from across a room on a projector, not held in a hand a foot from the
   // eyes, so it needs a size closer to the rest of the presenter stage's
   // own scale (which already runs text-3xl+ for the player name).
-  const containerSizeClasses = variant === 'inline' ? 'h-16 border-t-2' : 'h-8 sm:h-9 border-t'
+  // h-11 (was h-8) on mobile - a bigger tap target for the bar that opens
+  // the Recent Sales sheet, now that it's the one sitting right above the
+  // thumb instead of the footer.
+  const containerSizeClasses = variant === 'inline' ? 'h-16 border-t-2' : 'h-11 sm:h-9 border-t'
   const itemSizeClasses = variant === 'inline' ? 'gap-3 px-10 text-xl' : 'gap-2 px-6 text-xs sm:text-sm'
   const labelSizeClasses = variant === 'inline' ? 'px-8 text-base' : 'px-3 sm:px-4 text-[9px] sm:text-[11px]'
   const containerClassName = `${positionClasses} ${containerSizeClasses} w-full bg-[#05070a] border-amber-500/30 flex items-center ${onClick ? 'cursor-pointer hover:bg-white/[0.02] transition-colors text-left' : ''}`
@@ -1168,9 +1171,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       
       {/* Hide main content when banner is showing */}
       {!showGoingLiveBanner && (
-    /* pb-48 (was pb-40): the extra room is for the sold ticker's own h-8
-       bar, which now sits fixed below the branding footer on mobile - see
-       SoldTicker below and the footer's bottom-8 offset in page.tsx. */
+    /* pb-48: the extra room is for the fixed mobile stack at the bottom of
+       the screen - the sold ticker's own h-11 bar sitting above the
+       branding footer's ~h-8 bar - see SoldTicker below and the footer's
+       bottom-0 offset in page.tsx. */
     <div className="pb-48 sm:pb-3 bg-[#05070a]">
       <div className="max-w-7xl mx-auto">
         {/* Stage - a fixed-composition "broadcast" surface: every row below

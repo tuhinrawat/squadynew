@@ -308,11 +308,12 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
               content is shorter than it, in normal flow otherwise. Dropped
               entirely in presenter mode - a projected screen has no room
               for it and no browser chrome to anchor it against.
-              bottom-8 on mobile (not bottom-0) leaves exactly enough room
-              for the sold ticker's own h-8 bar to sit below this footer
-              without overlapping it - see SoldTicker in public-auction-view. */}
+              bottom-0 on mobile - this now sits flush at the true bottom of
+              the screen, with the taller, more tappable Recent Sales bar
+              sitting just above it (bottom-8, matching this footer's own
+              ~32px height) - see SoldTicker in public-auction-view. */}
           {!isPresenterMode && (
-            <footer className="mt-8 sm:mt-8 bg-gradient-to-b from-gray-900 to-black border-t border-gray-800 fixed bottom-8 left-0 right-0 sm:sticky sm:top-[100vh] sm:bottom-auto sm:left-auto sm:right-auto z-20">
+            <footer className="mt-8 sm:mt-8 bg-gradient-to-b from-gray-900 to-black border-t border-gray-800 fixed bottom-0 left-0 right-0 sm:sticky sm:top-[100vh] sm:bottom-auto sm:left-auto sm:right-auto z-20">
               <div className="max-w-7xl mx-auto px-3 py-3">
                 <div className="flex items-center justify-between gap-2">
                   {/* Left: Logo & Copyright */}
