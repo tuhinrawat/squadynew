@@ -203,6 +203,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
   const [soldAnimation, setSoldAnimation] = useState(false)
+  // True from the moment a sale is heard until the next player actually
+  // arrives. SoldCelebration dismisses on its own fixed ~3.2s timer (or an
+  // early click) regardless of how long the server actually takes to pick
+  // and broadcast the next player - if that takes longer, the celebration
+  // would disappear while the stage still shows the just-sold player with
+  // nothing covering it. The plain fallback cover below renders whenever
+  // this is true, so there's never a gap between "sold celebration ends"
+  // and "reveal animation starts" where the stale card is exposed.
+  const [awaitingNextPlayer, setAwaitingNextPlayer] = useState(false)
   // Who/what the SOLD celebration should show - captured off the
   // player-sold event at the moment it fires (including the photo, straight
   // off the player who was just on the block), since currentBid/currentPlayer
@@ -735,12 +744,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         photoUrl: extractProxyImageUrl(playerData, 600),
       })
       setSoldAnimation(true)
+      setAwaitingNextPlayer(true)
       // No dismiss timer here - SoldCelebration owns its own auto-dismiss
       // (and lets a click/Escape end it early), so this only ever needs to
       // flip back to false, never on a blind delay.
     },
     onNewPlayer: (data) => {
       setPoolExhausted(false)
+      setAwaitingNextPlayer(false)
       // The underlying data commits immediately - admin (which drove this
       // change) already shows the new player the instant it clicked Mark
       // Sold/Skip, and this view falling behind by the length of a cosmetic
@@ -767,6 +778,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     onAuctionStarted: triggerGoingLiveBanner,
     onAuctionPoolExhausted: () => {
       setPoolExhausted(true)
+      setAwaitingNextPlayer(false)
     },
     onAuctionEnded: () => {
       window.location.reload()
@@ -1062,6 +1074,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                 bidderName={soldInfo?.bidderName}
                 onDismiss={() => setSoldAnimation(false)}
               />
+
+              {/* Fills the gap between "sold celebration ends" and "reveal
+                  animation starts" if the server takes longer to broadcast
+                  the next player than that celebration's own fixed timer -
+                  otherwise the just-sold player would flash back into view
+                  uncovered for however long that gap lasts. */}
+              {awaitingNextPlayer && (
+                <div className="absolute inset-0 z-40 bg-[#05070a]" />
+              )}
 
               <AnimatePresence>
                 {showPlayerReveal && pendingPlayer && (
@@ -1427,6 +1448,16 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       </p>
                     </div>
                   )}
+                  {/* Fills the gap between "sold celebration ends" and "reveal
+                      animation starts" if the server takes longer to
+                      broadcast the next player than that celebration's own
+                      fixed timer - otherwise the just-sold player would
+                      flash back into view uncovered for however long that
+                      gap lasts. */}
+                  {awaitingNextPlayer && (
+                    <div className="absolute inset-0 z-40 rounded-lg bg-gray-50 dark:bg-gray-900" />
+                  )}
+
                   <AnimatePresence>
                     {showPlayerReveal && pendingPlayer && (
                       <PlayerRevealAnimation

@@ -539,7 +539,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               filteredTeamsData.length === 0 ? (
                 <p className="text-center text-white/50 text-sm py-12">No teams, bidders, or players match &ldquo;{searchQuery}&rdquo;.</p>
               ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {filteredTeamsData.map((team) => (
                     <Card key={team.id} className="border-0 shadow-2xl overflow-hidden p-0 gap-0 bg-transparent">
                       {/* Header: identity (name/purse/bidder) up top, then a
