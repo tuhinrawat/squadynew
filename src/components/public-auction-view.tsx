@@ -749,6 +749,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       // (and lets a click/Escape end it early), so this only ever needs to
       // flip back to false, never on a blind delay.
     },
+    onPlayerUnsold: () => {
+      // Marking a player unsold has no celebration overlay of its own (unlike
+      // sold's SoldCelebration), so without this the outgoing player's card
+      // would sit fully visible - no coverage at all - until onNewPlayer
+      // eventually fires and the reveal animation starts. Same fallback
+      // overlay the sold path uses, cleared the same way (onNewPlayer /
+      // onAuctionPoolExhausted).
+      setAwaitingNextPlayer(true)
+    },
     onNewPlayer: (data) => {
       setPoolExhausted(false)
       setAwaitingNextPlayer(false)

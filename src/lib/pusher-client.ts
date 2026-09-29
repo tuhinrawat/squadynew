@@ -193,6 +193,10 @@ export interface AuctionEventData {
     bidderRemainingPurse?: number // Added for instant UI updates
     updatedBidders?: Array<{ id: string; remainingPurse: number }> // Batch updates
   }
+  'player-unsold': {
+    playerId: string
+    playerName: string
+  }
   'sale-undo': {
     playerId: string
     player?: any // Updated player data after undo
@@ -227,6 +231,7 @@ export interface UsePusherOptions {
   onNewBid?: (data: AuctionEventData['new-bid']) => void
   onBidUndo?: (data: AuctionEventData['bid-undo']) => void
   onPlayerSold?: (data: AuctionEventData['player-sold']) => void
+  onPlayerUnsold?: (data: AuctionEventData['player-unsold']) => void
   onSaleUndo?: (data: AuctionEventData['sale-undo']) => void
   onNewPlayer?: (data: AuctionEventData['new-player']) => void
   onAuctionStarted?: (data: AuctionEventData['auction-started']) => void
@@ -296,6 +301,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             channelToBind.unbind('new-bid')
             channelToBind.unbind('bid-undo')
             channelToBind.unbind('player-sold')
+            channelToBind.unbind('player-unsold')
             channelToBind.unbind('sale-undo')
             channelToBind.unbind('new-player')
             channelToBind.unbind('auction-started')
@@ -329,7 +335,11 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             channelToBind.bind('player-sold', (data: any) => {
               callbacksRef.current.onPlayerSold?.(data)
             })
-            
+
+            channelToBind.bind('player-unsold', (data: AuctionEventData['player-unsold']) => {
+              callbacksRef.current.onPlayerUnsold?.(data)
+            })
+
             channelToBind.bind('sale-undo', (data: any) => {
               try {
                 callbacksRef.current.onSaleUndo?.(data)
