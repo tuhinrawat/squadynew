@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover'
 import { Clock, Play, Pause, SkipForward, Square, Undo2, TrendingUp, ChevronDown, ChevronUp, Share2, MoreVertical, Trophy, RotateCcw, WifiOff, Download, PartyPopper, Pencil, ArrowLeft, Activity } from 'lucide-react'
 import Link from 'next/link'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -237,57 +238,13 @@ function BidConsolePanel({
         />
       </div>
 
-      {/* Bidder roster - grouped by first letter of name, like a contacts
-          list, so a specific bidder can be found by eye instead of
-          scanning the whole grid. Relies on `bidders` already arriving
-          sorted alphabetically (see sortedBidders in the parent). */}
-      <div className="p-2.5 flex-1 min-h-0 overflow-y-auto">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Tap Who Called It &middot; {bidders.length} Bidders</div>
-        {(() => {
-          const groups: { letter: string; bidders: BidderWithUser[] }[] = []
-          bidders.forEach(bidder => {
-            const letter = (bidder.user?.name || bidder.username || '#').charAt(0).toUpperCase()
-            const lastGroup = groups[groups.length - 1]
-            if (lastGroup && lastGroup.letter === letter) {
-              lastGroup.bidders.push(bidder)
-            } else {
-              groups.push({ letter, bidders: [bidder] })
-            }
-          })
-          return groups.map(group => (
-            <div key={group.letter} className="mb-2 last:mb-0">
-              <div className="text-[9px] font-black text-teal-400/80 uppercase tracking-widest mb-1 px-0.5">{group.letter}</div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {group.bidders.map(bidder => {
-                  const isLeader = bidder.id === highestBidderId
-                  const isSelected = bidder.id === selectedBidderId
-                  return (
-                    <button
-                      key={bidder.id}
-                      disabled={isLeader}
-                      onClick={() => onSelectBidder(bidder.id)}
-                      className={`text-left p-1.5 rounded-lg border flex items-center gap-1.5 min-w-0 ${
-                        isLeader
-                          ? 'bg-green-500/10 border-green-500/40 cursor-not-allowed'
-                          : isSelected
-                          ? 'bg-teal-500/15 border-teal-500'
-                          : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.06]'
-                      }`}
-                    >
-                      <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${isLeader ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-gray-200'}`}>
-                        {(bidder.user?.name || bidder.username || '?').charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className={`text-[10px] font-bold truncate ${isLeader ? 'text-green-300' : 'text-gray-100'}`}>{bidder.user?.name || bidder.username || 'Bidder'}</div>
-                        {bidder.teamName && <div className="text-[9px] font-medium truncate text-gray-500">{bidder.teamName}</div>}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))
-        })()}
+      {/* Bidder - a searchable dropdown instead of a grid to scan by eye.
+          Type a name or team to filter; the current leading bidder is
+          shown but can't be reselected (they're already winning), same
+          rule the old grid enforced by disabling their tile. */}
+      <div className="p-2.5 flex-1 min-h-0">
+        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Bidder &middot; {bidders.length} Bidders</div>
+        <BidderCombobox bidders={bidders} highestBidderId={highestBidderId} selectedBidderId={selectedBidderId} onSelect={onSelectBidder} />
       </div>
 
       {/* Confirm bar */}
@@ -307,6 +264,87 @@ function BidConsolePanel({
         </Button>
       </div>
     </div>
+  )
+}
+
+// A real, stable, module-scope component - same reasoning as BidConsolePanel
+// above: this owns its own typed-input state, so defining it inline inside
+// BidConsolePanel's render would remount it (and drop input focus) on every
+// keystroke-driven re-render.
+function BidderCombobox({
+  bidders,
+  highestBidderId,
+  selectedBidderId,
+  onSelect,
+}: {
+  bidders: BidderWithUser[]
+  highestBidderId: string | null
+  selectedBidderId: string | null
+  onSelect: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const selected = bidders.find(b => b.id === selectedBidderId)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return bidders
+    return bidders.filter(b => {
+      const name = (b.user?.name || b.username || '').toLowerCase()
+      const team = (b.teamName || '').toLowerCase()
+      return name.includes(q) || team.includes(q)
+    })
+  }, [bidders, query])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverAnchor asChild>
+        <div className="relative">
+          <input
+            type="text"
+            value={open ? query : (selected ? (selected.user?.name || selected.username || '') : '')}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => { setQuery(''); setOpen(true) }}
+            placeholder="Select bidder — type to search"
+            className="w-full bg-white/[0.05] border border-white/15 rounded-md pl-3 pr-8 py-2 text-sm text-white placeholder:text-gray-500"
+          />
+          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+        </div>
+      </PopoverAnchor>
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        className="w-[var(--radix-popover-trigger-width)] p-1 max-h-64 overflow-y-auto bg-[#12161f] border-white/10"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {filtered.length === 0 && (
+          <div className="px-3 py-2 text-xs text-gray-500">No bidder or team matches</div>
+        )}
+        {filtered.map(bidder => {
+          const isLeader = bidder.id === highestBidderId
+          const isSelected = bidder.id === selectedBidderId
+          const name = bidder.user?.name || bidder.username || 'Bidder'
+          return (
+            <button
+              key={bidder.id}
+              type="button"
+              disabled={isLeader}
+              onClick={() => { onSelect(bidder.id); setQuery(''); setOpen(false) }}
+              className={`w-full text-left px-3 py-2 rounded text-sm flex items-center justify-between gap-2 ${
+                isLeader
+                  ? 'opacity-40 cursor-not-allowed'
+                  : isSelected
+                  ? 'bg-teal-500/15 text-teal-300'
+                  : 'hover:bg-white/[0.06] text-gray-100'
+              }`}
+            >
+              <span className="truncate">{name}{bidder.teamName ? ` · ${bidder.teamName}` : ''}</span>
+              {isLeader && <span className="text-[9px] font-bold text-green-400 flex-shrink-0 uppercase tracking-wide">Leading</span>}
+            </button>
+          )
+        })}
+      </PopoverContent>
+    </Popover>
   )
 }
 

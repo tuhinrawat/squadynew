@@ -570,15 +570,19 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                           </div>
                         )}
 
-                        {/* Full roster + bid history are still one click away,
-                            just no longer required for the at-a-glance view. */}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedTeam(team.id)}
-                          className="mt-3 w-full text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors"
-                        >
-                          {team.players.length > 5 ? `+${team.players.length - 5} more · ` : ''}View Full Roster
-                        </button>
+                        {/* Only shown when there's actually more to see than
+                            the preview above already covers - with 5 or
+                            fewer players bought, the full roster IS the
+                            preview, so a link to it would be pure redundancy. */}
+                        {team.players.length > 5 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTeam(team.id)}
+                            className="mt-3 w-full text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors"
+                          >
+                            +{team.players.length - 5} more · View Full Roster
+                          </button>
+                        )}
                       </div>
                     </Card>
                   ))}
