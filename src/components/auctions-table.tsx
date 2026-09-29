@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History, WifiOff, KeyRound } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History, WifiOff, KeyRound, Download } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -337,6 +337,31 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   // own settings to authenticate the "sync results back" call - see
   // syncKey on the Auction model. Every auction already has one (database-
   // generated), so this is just a copy action, never a "generate" step.
+  // Warms Vercel's edge cache for every eligible player's presenter-width
+  // photo ahead of a live event, so presenter mode isn't making its first,
+  // live, at-showtime request to Google Drive's unofficial thumbnail
+  // endpoint for each player - see preload-images/route.ts. Presenter view
+  // also does its own lighter, automatic warm-up on load using data it
+  // already has; this is the "do it now, see the result" action for before
+  // going live.
+  const handlePreloadImages = (auctionId: string) => {
+    toast.promise(
+      fetch(`/api/auction/${auctionId}/preload-images`, { method: 'POST' }).then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'Failed to preload images')
+        return data as { succeeded: number; totalWithPhoto: number; failed: number }
+      }),
+      {
+        loading: 'Preloading player photos - this can take a minute for a large pool...',
+        success: (data) =>
+          data.failed > 0
+            ? `${data.succeeded}/${data.totalWithPhoto} photos cached, ${data.failed} failed - check those players' photo links`
+            : `${data.succeeded}/${data.totalWithPhoto} photos cached and ready for presenter view`,
+        error: (err: Error) => err.message || 'Failed to preload images',
+      }
+    )
+  }
+
   const handleCopySyncKey = (syncKey: string) => {
     navigator.clipboard.writeText(syncKey).then(() => {
       toast.success('Sync key copied to clipboard!')
@@ -578,6 +603,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                         <Share2 className="mr-2 h-4 w-4" />
                         Copy Presenter Link
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handlePreloadImages(auction.id)}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Preload Images
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleCopySyncKey(auction.syncKey)}>
                         <KeyRound className="mr-2 h-4 w-4" />
                         Copy Sync Key
@@ -751,6 +780,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                       <DropdownMenuItem onClick={() => handleCopyPresenterUrl(auction.id)}>
                         <Share2 className="mr-2 h-4 w-4" />
                         Copy Presenter Link
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handlePreloadImages(auction.id)}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Preload Images
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleCopySyncKey(auction.syncKey)}>
                         <KeyRound className="mr-2 h-4 w-4" />

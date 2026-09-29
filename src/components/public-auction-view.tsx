@@ -21,6 +21,7 @@ import { SoldCelebration } from '@/components/sold-celebration'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl } from '@/lib/player-photo'
+import { preloadImagesSafe } from '@/lib/image-preloader'
 import { extractPlayerName } from '@/lib/player-name'
 import { BatIcon, BallIcon, StatTile } from '@/components/cricket-stat-ui'
 // Memoized components for performance
@@ -940,6 +941,41 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return extractProxyImageUrl(playerData, 800)
   }, [])
 
+  const presenterPhotoUrl = getProfilePhotoUrl(playerData)
+
+  // Swapping <img src> alone leaves the browser showing the PREVIOUS
+  // player's decoded photo until the new one finishes downloading, while
+  // the name/stats right next to it (plain state, not a fetch) update
+  // instantly - see the loading overlay in the isPresenter branch below.
+  // Reset synchronously during render (React's own recommended pattern for
+  // "derived state that must reset when a prop changes") rather than in a
+  // useEffect, which would show one extra stale frame before catching up.
+  const [presenterPhotoLoaded, setPresenterPhotoLoaded] = useState(!presenterPhotoUrl)
+  const [trackedPresenterPhotoUrl, setTrackedPresenterPhotoUrl] = useState(presenterPhotoUrl)
+  if (presenterPhotoUrl !== trackedPresenterPhotoUrl) {
+    setTrackedPresenterPhotoUrl(presenterPhotoUrl)
+    setPresenterPhotoLoaded(!presenterPhotoUrl)
+  }
+
+  // Silently warms this browser's own HTTP cache for every player still
+  // eligible to come up on stage (see preload-images/route.ts's server-side
+  // equivalent, triggered manually from the dashboard before going live).
+  // This covers the case that action can't: presenter view opening on a
+  // DIFFERENT device than whichever one triggered that dashboard action.
+  // Fire-and-forget, once - not blocking the current player's own photo,
+  // which is already being requested by the <img> render below.
+  useEffect(() => {
+    if (!isPresenter) return
+    const urls = auction.players
+      .filter(p => p.status !== 'RETIRED')
+      .map(p => extractProxyImageUrl(p.data as Record<string, unknown>, 800))
+      .filter((url): url is string => !!url)
+    preloadImagesSafe(urls)
+    // Deliberately run once per mount, not on every player/auction update -
+    // this is a one-time background warm-up, not a live sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPresenter])
+
   // Presenter mode (?presenter=1) is a dedicated full-screen stage meant to
   // be projected for a room to watch, not the interactive per-viewer page -
   // see the design brief this came from. It reuses all the same state above
@@ -952,7 +988,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const presenterBattingStyle = playerData?.Batting || playerData?.batting || playerData?.['Batting Type'] || playerData?.['batting type']
     const presenterBowlingStyle = playerData?.Bowling || playerData?.bowling || playerData?.['Bowling Type'] || playerData?.['bowling type']
     const presenterBasePrice = Number(playerData?.['Base Price'] || playerData?.['base price']) || 1000
-    const presenterPhotoUrl = getProfilePhotoUrl(playerData)
     const presenterBattingStats = battingStats
     const presenterBowlingStats = bowlingStats
     const presenterIsBidderChoice = !!(currentPlayer?.isIcon || (currentPlayer?.data as any)?.isIcon)
@@ -1042,9 +1077,24 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         <span className="text-5xl lg:text-6xl font-black text-[#1a1200] tabular-nums leading-none">{currentPlayer.serialNumber}</span>
                       </div>
                     )}
+                    {/* Loading state for the swap itself - without this, the
+                        PREVIOUS player's decoded photo stays visible the
+                        whole time the new one is downloading, even though
+                        the name/stats beside it have already moved on. */}
+                    {presenterPhotoUrl && !presenterPhotoLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 border-4 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+                      </div>
+                    )}
                     {presenterPhotoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={presenterPhotoUrl} alt={playerName} className="w-full h-full object-contain" />
+                      <img
+                        src={presenterPhotoUrl}
+                        alt={playerName}
+                        onLoad={() => setPresenterPhotoLoaded(true)}
+                        onError={() => setPresenterPhotoLoaded(true)}
+                        className={`w-full h-full object-contain transition-opacity duration-300 ${presenterPhotoLoaded ? 'opacity-100' : 'opacity-0'}`}
+                      />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center opacity-20">
                         <svg width="220" height="380" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={2.5}>
