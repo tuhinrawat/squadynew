@@ -31,11 +31,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const auction = isId
       ? await prisma.auction.findUnique({
           where: { id: idOrSlug },
-          select: { id: true, status: true, currentPlayerId: true, bidHistory: true, isPublished: true },
+          select: { id: true, status: true, currentPlayerId: true, bidHistory: true, isPublished: true, isOfflineMode: true },
         })
       : await prisma.auction.findUnique({
           where: { slug: idOrSlug },
-          select: { id: true, status: true, currentPlayerId: true, bidHistory: true, isPublished: true },
+          select: { id: true, status: true, currentPlayerId: true, bidHistory: true, isPublished: true, isOfflineMode: true },
         })
 
     if (!auction) {
@@ -135,6 +135,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const body = {
       auctionId: auction.id,
       auctionStatus: auction.status,
+      isOfflineMode: auction.isOfflineMode,
       currentPlayer,
       players,
       bidders,

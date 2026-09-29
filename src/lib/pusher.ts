@@ -82,6 +82,10 @@ export interface AuctionEventData {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
   }
+  // See offline-mode/route.ts - a presenter/admin screen still connected
+  // when this fires updates instantly; every other viewer only picks it up
+  // on their next manual Refresh, same as any other change.
+  'offline-mode-changed': { isOfflineMode: boolean }
 }
 
 export type AuctionEventName = keyof AuctionEventData

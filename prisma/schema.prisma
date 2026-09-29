@@ -68,6 +68,13 @@ model Auction {
   rules                   Json
   status                  AuctionStatus @default(DRAFT)
   isPublished             Boolean       @default(false)
+  // Admin-triggered fallback flag, independent of `status` - toggled from the
+  // dashboard when the live stage itself is broken (a crashed session, a
+  // connectivity outage) while the auction keeps running by other means (the
+  // offline console, or the admin's own standalone tool). The public view
+  // reads this to swap its stage for a "still running, check Team Stats"
+  // message instead of leaving spectators staring at a frozen player card.
+  isOfflineMode           Boolean       @default(false)
   customFields            Json? // Store custom field definitions for public registration
   columnOrder             Json? // Store Excel column order as array
   visibleColumns          Json? // Store visible columns for player table

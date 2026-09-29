@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History, WifiOff } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -43,6 +43,7 @@ interface Auction {
   rules?: any
   status: AuctionStatus
   isPublished: boolean
+  isOfflineMode: boolean
   createdAt: Date
   totalViews: number
   uniqueVisitors: number
@@ -330,6 +331,38 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     })
   }
 
+  // Independent of the auction's actual status - for when the live stage
+  // itself is broken (a crashed session, a venue connectivity outage) but
+  // the auction keeps running some other way (the offline console, or the
+  // admin's own tool). Public viewers see a "still running, check Team
+  // Stats" message instead of a frozen stage until this is turned back off.
+  const handleToggleOfflineMode = async (auctionId: string, currentlyOffline: boolean) => {
+    const confirmed = window.confirm(
+      currentlyOffline
+        ? 'Mark this auction back online? Viewers will see the normal live stage again next time they refresh.'
+        : 'Mark this auction offline? Viewers will see a "still running - check Team Stats" message instead of the live stage, until you turn this back off.'
+    )
+    if (!confirmed) return
+
+    try {
+      const response = await fetch(`/api/auction/${auctionId}/offline-mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !currentlyOffline })
+      })
+      if (response.ok) {
+        toast.success(currentlyOffline ? 'Auction marked back online' : 'Auction marked offline - viewers will see the fallback message')
+        window.location.reload()
+      } else {
+        const data = await response.json()
+        toast.error(data.error || 'Failed to update offline mode')
+      }
+    } catch (error) {
+      console.error('Error toggling offline mode:', error)
+      toast.error('Failed to update offline mode')
+    }
+  }
+
   const handleOpenLinkPrevious = async (auction: Auction) => {
     setLinkPreviousAuction(auction)
     setLinkPreviousDialogOpen(true)
@@ -531,6 +564,19 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                         <Share2 className="mr-2 h-4 w-4" />
                         Copy Presenter Link
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleOfflineMode(auction.id, auction.isOfflineMode)}>
+                        {auction.isOfflineMode ? (
+                          <>
+                            <Globe className="mr-2 h-4 w-4" />
+                            Mark Auction Back Online
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="mr-2 h-4 w-4" />
+                            Notify Viewers: Offline Mode
+                          </>
+                        )}
+                      </DropdownMenuItem>
                     </>
                   )}
                   <DropdownMenuItem
@@ -687,6 +733,19 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                       <DropdownMenuItem onClick={() => handleCopyPresenterUrl(auction.id)}>
                         <Share2 className="mr-2 h-4 w-4" />
                         Copy Presenter Link
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleOfflineMode(auction.id, auction.isOfflineMode)}>
+                        {auction.isOfflineMode ? (
+                          <>
+                            <Globe className="mr-2 h-4 w-4" />
+                            Mark Auction Back Online
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="mr-2 h-4 w-4" />
+                            Notify Viewers: Offline Mode
+                          </>
+                        )}
                       </DropdownMenuItem>
                     </>
                   )}

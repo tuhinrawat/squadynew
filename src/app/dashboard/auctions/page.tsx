@@ -49,6 +49,7 @@ export default async function AuctionsList({ searchParams }: { searchParams: { p
         scheduledStartDate: true,
         status: true,
         isPublished: true,
+        isOfflineMode: true,
         createdAt: true,
         totalViews: true,
         timerViews: true,

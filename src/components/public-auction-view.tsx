@@ -77,6 +77,7 @@ interface AuctionSnapshot {
   bidHistory: BidHistoryEntry[]
   poolExhausted: boolean
   recentSales: RecentSale[]
+  isOfflineMode: boolean
 }
 
 interface RecentSale {
@@ -191,6 +192,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // to recycle) - without this, spectators have no way to tell "waiting for
   // the next player" apart from "there is no next player."
   const [poolExhausted, setPoolExhausted] = useState(false)
+  // Admin-triggered fallback (dashboard's "Notify Viewers: Offline Mode") -
+  // see applySnapshot below. Seeded from the initial SSR value so a fresh
+  // page load already shows the fallback message if it was already on,
+  // rather than flashing the normal stage first.
+  const [isOfflineMode, setIsOfflineMode] = useState(auction.isOfflineMode)
   const [currentBid, setCurrentBid] = useState<{ bidderId: string; amount: number; bidderName: string; teamName?: string } | null>(null)
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
@@ -467,6 +473,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     }))
     setPoolExhausted(snapshot.poolExhausted)
     setRecentSales(snapshot.recentSales)
+    setIsOfflineMode(snapshot.isOfflineMode)
     // Skipped while the presenter's reveal animation is playing (see the
     // presenter safety-net poll below) - applying this mid-animation would
     // cut the reveal short instead of catching up on a genuinely missed
@@ -544,6 +551,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         bidHistory: data.bidHistory,
         poolExhausted: data.poolExhausted,
         recentSales: data.recentSales ?? [],
+        isOfflineMode: !!data.isOfflineMode,
       })
       pollFailureStreakRef.current = 0
       setPollHealthy(true)
@@ -606,6 +614,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           bidHistory: data.bidHistory,
           poolExhausted: data.poolExhausted,
           recentSales: data.recentSales ?? [],
+          isOfflineMode: !!data.isOfflineMode,
         }, { skipTurnState: showPlayerReveal || !!pendingPlayer })
       } catch (error) {
         logger.error('Presenter safety-net poll failed:', error)
@@ -1288,6 +1297,27 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
               {isClient && (
                 <div className="relative">
+                  {isOfflineMode ? (
+                    // Admin-triggered fallback (dashboard's "Notify Viewers:
+                    // Offline Mode") - the live stage itself may be showing
+                    // stale or frozen data right now, so replace it entirely
+                    // rather than leave spectators staring at a guess. Team
+                    // Stats is a separate, independently-refreshed page (see
+                    // its own file) that keeps working off the same database
+                    // regardless of what's wrong with this screen.
+                    <div className="rounded-xl border-2 border-amber-400/50 bg-gradient-to-r from-amber-950/60 to-orange-950/60 p-8 sm:p-12 text-center space-y-3">
+                      <h3 className="text-lg sm:text-xl font-bold text-white">Squady Auction Is Still Running</h3>
+                      <p className="text-sm text-gray-300 max-w-md mx-auto">
+                        This screen isn&apos;t updating right now, but the auction itself hasn&apos;t stopped. Check the Team Stats page for the latest sold/unsold results.
+                      </p>
+                      <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
+                        <Button className="bg-amber-500 hover:bg-amber-400 text-black font-semibold">
+                          View Team Stats
+                        </Button>
+                      </Link>
+                    </div>
+                  ) : (
+                  <>
                   {/* Pool exhausted: nothing left to auction. Shown above the
                       (now stale) last-sold player card instead of leaving
                       spectators looking at a frozen screen with no explanation. */}
@@ -1389,6 +1419,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       </span>
                       <ChevronRight className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
                     </button>
+                  )}
+                  </>
                   )}
                 </div>
               )}
