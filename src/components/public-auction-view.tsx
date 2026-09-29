@@ -1305,13 +1305,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     // Stats is a separate, independently-refreshed page (see
                     // its own file) that keeps working off the same database
                     // regardless of what's wrong with this screen.
-                    <div className="rounded-xl border-2 border-amber-400/50 bg-gradient-to-r from-amber-950/60 to-orange-950/60 p-8 sm:p-12 text-center space-y-3">
-                      <h3 className="text-lg sm:text-xl font-bold text-white">Squady Auction Is Still Running</h3>
-                      <p className="text-sm text-gray-300 max-w-md mx-auto">
-                        This screen isn&apos;t updating right now, but the auction itself hasn&apos;t stopped. Check the Team Stats page for the latest sold/unsold results.
-                      </p>
+                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-6 sm:p-8 text-center space-y-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <h3 className="text-base sm:text-lg font-bold text-emerald-400 uppercase tracking-tight">Auction Is Live</h3>
+                      </div>
+                      <p className="text-sm text-gray-300">Keep an eye on Team Stats for the latest updates.</p>
                       <Link href={`/auction/${auction.id}/teams`} target="_blank" rel="noopener noreferrer">
-                        <Button className="bg-amber-500 hover:bg-amber-400 text-black font-semibold">
+                        <Button className="bg-emerald-500 hover:bg-emerald-400 text-black font-semibold">
                           View Team Stats
                         </Button>
                       </Link>
