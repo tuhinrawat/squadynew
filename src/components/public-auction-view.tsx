@@ -338,7 +338,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // echo of the past, not news.
   const displayedPlayerIdRef = useRef<string | null>(initialPlayer?.id ?? null)
   const supersededPlayerIdsRef = useRef<Map<string, number>>(new Map())
-  const SUPERSEDED_TTL_MS = 30000
+  // Only ever populated from a real Pusher event now (see onNewPlayer) -
+  // never wrongly by a poll's own guess - so a generous window here has no
+  // downside beyond covering genuinely slow edge-cache revalidation.
+  const SUPERSEDED_TTL_MS = 60000
 
   // Same "don't go backward" idea, applied to the bid amount instead of the
   // player - a stale cached snapshot can correctly name the CURRENT player
@@ -370,13 +373,18 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     return true
   }, [])
 
+  // Deliberately does NOT populate supersededPlayerIdsRef here - that used to
+  // fire on ANY currentPlayer change, including one a stale poll itself just
+  // applied. If a bad poll ever reverted the screen to an older player, this
+  // effect would blacklist the CORRECT player's id as "superseded" right as
+  // we moved away from it - so the very next poll's genuinely fresh data,
+  // naming that same correct player, got rejected too, locking the screen
+  // onto the wrong player until a hard refresh wiped this ref state clean.
+  // Marking supersession only belongs where forward progress is actually
+  // trustworthy - see onNewPlayer below, which is Pusher-driven, not a poll
+  // guessing from a possibly-stale cached response.
   useEffect(() => {
-    const previousId = displayedPlayerIdRef.current
-    const nextId = currentPlayer?.id ?? null
-    if (previousId && previousId !== nextId) {
-      supersededPlayerIdsRef.current.set(previousId, Date.now() + SUPERSEDED_TTL_MS)
-    }
-    displayedPlayerIdRef.current = nextId
+    displayedPlayerIdRef.current = currentPlayer?.id ?? null
   }, [currentPlayer?.id])
 
   // Initialize bid history and current bid from initial data
@@ -740,6 +748,14 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       // matters during a live auction. pendingPlayer/showPlayerReveal below
       // still drive the reveal animation as a purely visual overlay on top
       // of already-correct data, not as a gate on when that data updates.
+      //
+      // This is also the ONE trustworthy place to blacklist the player
+      // we're leaving as "superseded" for the safety-net poll below - a real
+      // Pusher event, not a guess from a possibly-stale cached snapshot.
+      const leavingPlayerId = displayedPlayerIdRef.current
+      if (leavingPlayerId) {
+        supersededPlayerIdsRef.current.set(leavingPlayerId, Date.now() + SUPERSEDED_TTL_MS)
+      }
       setIsImageLoading(true)
       setCurrentPlayer(data.player as Player)
       setCurrentBid(null)
