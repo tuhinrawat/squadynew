@@ -47,19 +47,6 @@ export function PublicHeader({ auctionId }: PublicHeaderProps) {
             >
               <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
             </a>
-            {/* Register & Sign In - Desktop only */}
-            <div className="hidden md:flex items-center gap-3">
-              <Link href="/register">
-                <Button variant="ghost" size="sm" className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 h-9">
-                  Register
-                </Button>
-              </Link>
-              <Link href="/signin">
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white h-9 text-xs sm:text-sm">
-                  Sign In
-                </Button>
-              </Link>
-            </div>
           </div>
         </div>
       </div>

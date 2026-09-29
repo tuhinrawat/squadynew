@@ -501,7 +501,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {teamsData.map((team) => (
-                    <Card key={team.id} className="border-0 shadow-2xl overflow-hidden">
+                    <Card key={team.id} className="border-0 shadow-2xl overflow-hidden p-0 gap-0 bg-transparent">
                       {/* Header: name, purse left, bidder, at-a-glance stat line -
                           everything you'd otherwise have had to click in to see. */}
                       <div className={`${team.colorScheme.bg} p-3 sm:p-5 text-white`}>
