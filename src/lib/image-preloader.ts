@@ -25,11 +25,19 @@ export function preloadImages(urls: string[]): Promise<void[]> {
 }
 
 /**
- * Preload images with error handling (doesn't fail on individual errors)
+ * Preload images with error handling (doesn't fail on individual errors),
+ * in bounded-concurrency batches rather than all at once. Firing every URL
+ * simultaneously would itself become a thundering-herd burst against
+ * whatever's serving them (see proxy-image/route.ts's own reasoning for the
+ * same concern server-side) and would compete for bandwidth with anything
+ * else loading on the page at that moment.
  */
-export async function preloadImagesSafe(urls: string[]): Promise<boolean> {
+export async function preloadImagesSafe(urls: string[], batchSize = 6): Promise<boolean> {
+  const valid = urls.filter(url => url)
   try {
-    await Promise.allSettled(urls.filter(url => url).map(url => preloadImage(url)))
+    for (let i = 0; i < valid.length; i += batchSize) {
+      await Promise.allSettled(valid.slice(i, i + batchSize).map(url => preloadImage(url)))
+    }
     return true
   } catch (error) {
     console.warn('Some images failed to preload:', error)

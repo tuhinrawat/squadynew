@@ -951,10 +951,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // "derived state that must reset when a prop changes") rather than in a
   // useEffect, which would show one extra stale frame before catching up.
   const [presenterPhotoLoaded, setPresenterPhotoLoaded] = useState(!presenterPhotoUrl)
+  // Separate from "loaded" - a failed fetch still needs to stop the spinner,
+  // but should fall back to the silhouette placeholder, not a browser's
+  // broken-image icon left behind by an <img> whose src never resolved.
+  const [presenterPhotoFailed, setPresenterPhotoFailed] = useState(false)
   const [trackedPresenterPhotoUrl, setTrackedPresenterPhotoUrl] = useState(presenterPhotoUrl)
   if (presenterPhotoUrl !== trackedPresenterPhotoUrl) {
     setTrackedPresenterPhotoUrl(presenterPhotoUrl)
     setPresenterPhotoLoaded(!presenterPhotoUrl)
+    setPresenterPhotoFailed(false)
   }
 
   // Silently warms this browser's own HTTP cache for every player still
@@ -962,15 +967,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // equivalent, triggered manually from the dashboard before going live).
   // This covers the case that action can't: presenter view opening on a
   // DIFFERENT device than whichever one triggered that dashboard action.
-  // Fire-and-forget, once - not blocking the current player's own photo,
-  // which is already being requested by the <img> render below.
+  //
+  // Deliberately delayed and batched (preloadImagesSafe caps concurrency) -
+  // firing every player's photo request at once would itself become the
+  // thundering-herd problem this is meant to prevent, and would compete for
+  // bandwidth with the CURRENT player's own photo, which the <img> below
+  // needs to win that race, not queue behind a hundred others.
   useEffect(() => {
     if (!isPresenter) return
     const urls = auction.players
       .filter(p => p.status !== 'RETIRED')
       .map(p => extractProxyImageUrl(p.data as Record<string, unknown>, 800))
       .filter((url): url is string => !!url)
-    preloadImagesSafe(urls)
+    const timer = setTimeout(() => preloadImagesSafe(urls), 2000)
+    return () => clearTimeout(timer)
     // Deliberately run once per mount, not on every player/auction update -
     // this is a one-time background warm-up, not a live sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1081,18 +1091,18 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         PREVIOUS player's decoded photo stays visible the
                         whole time the new one is downloading, even though
                         the name/stats beside it have already moved on. */}
-                    {presenterPhotoUrl && !presenterPhotoLoaded && (
+                    {presenterPhotoUrl && !presenterPhotoFailed && !presenterPhotoLoaded && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-16 h-16 border-4 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
                       </div>
                     )}
-                    {presenterPhotoUrl ? (
+                    {presenterPhotoUrl && !presenterPhotoFailed ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={presenterPhotoUrl}
                         alt={playerName}
                         onLoad={() => setPresenterPhotoLoaded(true)}
-                        onError={() => setPresenterPhotoLoaded(true)}
+                        onError={() => { setPresenterPhotoLoaded(true); setPresenterPhotoFailed(true) }}
                         className={`w-full h-full object-contain transition-opacity duration-300 ${presenterPhotoLoaded ? 'opacity-100' : 'opacity-0'}`}
                       />
                     ) : (
@@ -1179,7 +1189,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <BatIcon size={20} />
-                              <span className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
+                              <span className="text-base lg:text-xl font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               {presenterBattingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBattingStats.matches} />}
@@ -1193,7 +1203,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <BallIcon size={20} />
-                              <span className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
+                              <span className="text-base lg:text-xl font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               {presenterBowlingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBowlingStats.matches} />}
