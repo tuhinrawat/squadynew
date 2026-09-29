@@ -942,12 +942,18 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // from across a room removed. The regular public view below is untouched.
   if (isPresenter) {
     const presenterRole = playerData?.Speciality || playerData?.speciality || playerData?.Role || playerData?.role
+    const presenterBattingStyle = playerData?.Batting || playerData?.batting || playerData?.['Batting Type'] || playerData?.['batting type']
+    const presenterBowlingStyle = playerData?.Bowling || playerData?.bowling || playerData?.['Bowling Type'] || playerData?.['bowling type']
     const presenterBasePrice = Number(playerData?.['Base Price'] || playerData?.['base price']) || 1000
     const presenterPhotoUrl = getProfilePhotoUrl(playerData)
     const presenterBattingStats = battingStats
     const presenterBowlingStats = bowlingStats
     const presenterIsBidderChoice = !!(currentPlayer?.isIcon || (currentPlayer?.data as any)?.isIcon)
     const presenterCricherosLink = cricherosLink
+    // Same club intake-survey questions as the fields builder further below.
+    const presenterAbility = playerData?.['How would you rate your current cricketing ability?']
+    const presenterLastPlayed = playerData?.['When did you last play cricket?']
+    const presenterPlays = playerData?.['How frequently do you currently play cricket?']
 
     return (
       <>
@@ -1061,6 +1067,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     <h1 className="text-3xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[0.98] mb-3 break-words">
                       {playerName}
                     </h1>
+                    {(presenterBattingStyle || presenterBowlingStyle) && (
+                      <p className="text-sm lg:text-base text-white/50 font-medium mb-4 -mt-2">
+                        {[presenterBattingStyle, presenterBowlingStyle].filter(Boolean).join('  ·  ')}
+                      </p>
+                    )}
                     {/* Badges, not fine print - this reads from across a
                         room, so base/last-year price get the same
                         pill treatment as the "Bidder Choice"/Cricheroes
@@ -1106,52 +1117,59 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       </motion.div>
                     </AnimatePresence>
 
-                    {/* Career stats - a headline rate-stat row per discipline
-                        (as before), now with room to add a supporting row of
-                        tiles for the next-most-useful numbers, rather than
-                        just cramming more into one line. */}
+                    {/* Career stats - one panel per discipline, four big
+                        numbers each (Matches/Runs/Average/Strike Rate for
+                        batting, Matches/Wickets/Economy/Average for bowling) -
+                        same panel style and same four numbers as the
+                        PlayerCard used on the public/admin views, so the
+                        projected stage and every other screen read the same
+                        stats the same way. */}
                     {(presenterBattingStats || presenterBowlingStats) && (
-                      <div className="flex flex-col gap-4 mb-6">
+                      <div className={`grid gap-4 mb-4 ${presenterBattingStats && presenterBowlingStats ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         {presenterBattingStats && (
-                          <div>
-                            <div className="flex items-center gap-4 text-base lg:text-xl flex-wrap mb-3">
-                              <BatIcon size={26} />
-                              {presenterBattingStats.runs !== undefined && <span className="font-black text-white tabular-nums">{presenterBattingStats.runs} Runs</span>}
-                              {presenterBattingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white tabular-nums">{presenterBattingStats.average.toFixed(2)}</b></span>}
-                              {presenterBattingStats.strikeRate !== undefined && <span className="font-bold text-white/60">SR <b className="text-white tabular-nums">{presenterBattingStats.strikeRate.toFixed(2)}</b></span>}
+                          <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <BatIcon size={20} />
+                              <span className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
                             </div>
-                            {(presenterBattingStats.matches !== undefined || presenterBattingStats.highest !== undefined || presenterBattingStats.fours !== undefined || presenterBattingStats.sixes !== undefined) && (
-                              <div className="grid grid-cols-4 gap-3">
-                                {presenterBattingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBattingStats.matches} />}
-                                {presenterBattingStats.highest !== undefined && <StatTile size="lg" label="Highest" value={presenterBattingStats.highest} />}
-                                {presenterBattingStats.fours !== undefined && <StatTile size="lg" label="4s" value={presenterBattingStats.fours} />}
-                                {presenterBattingStats.sixes !== undefined && <StatTile size="lg" label="6s" value={presenterBattingStats.sixes} />}
-                              </div>
-                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                              {presenterBattingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBattingStats.matches} />}
+                              {presenterBattingStats.runs !== undefined && <StatTile size="lg" label="Runs" value={presenterBattingStats.runs} />}
+                              {presenterBattingStats.average !== undefined && <StatTile size="lg" label="Average" value={presenterBattingStats.average.toFixed(2)} />}
+                              {presenterBattingStats.strikeRate !== undefined && <StatTile size="lg" label="Strike Rate" value={presenterBattingStats.strikeRate.toFixed(2)} />}
+                            </div>
                           </div>
                         )}
                         {presenterBowlingStats && (
-                          <div>
-                            <div className="flex items-center gap-4 text-base lg:text-xl flex-wrap mb-3">
-                              <BallIcon size={26} />
-                              {presenterBowlingStats.wickets !== undefined && <span className="font-black text-white tabular-nums">{presenterBowlingStats.wickets} Wkts</span>}
-                              {presenterBowlingStats.economy !== undefined && <span className="font-bold text-white/60">Econ <b className="text-white tabular-nums">{presenterBowlingStats.economy.toFixed(2)}</b></span>}
-                              {presenterBowlingStats.average !== undefined && <span className="font-bold text-white/60">Avg <b className="text-white tabular-nums">{presenterBowlingStats.average.toFixed(2)}</b></span>}
+                          <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <BallIcon size={20} />
+                              <span className="text-xs lg:text-sm font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
                             </div>
-                            {(presenterBowlingStats.matches !== undefined || presenterBowlingStats.best !== undefined || presenterBowlingStats.maidens !== undefined || presenterBowlingStats.overs !== undefined) && (
-                              <div className="grid grid-cols-4 gap-3">
-                                {presenterBowlingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBowlingStats.matches} />}
-                                {presenterBowlingStats.best !== undefined && <StatTile size="lg" label="Best" value={presenterBowlingStats.best} />}
-                                {presenterBowlingStats.maidens !== undefined && <StatTile size="lg" label="Maidens" value={presenterBowlingStats.maidens} />}
-                                {presenterBowlingStats.overs !== undefined && <StatTile size="lg" label="Overs" value={presenterBowlingStats.overs} />}
-                              </div>
-                            )}
+                            <div className="grid grid-cols-2 gap-3">
+                              {presenterBowlingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBowlingStats.matches} />}
+                              {presenterBowlingStats.wickets !== undefined && <StatTile size="lg" label="Wickets" value={presenterBowlingStats.wickets} />}
+                              {presenterBowlingStats.economy !== undefined && <StatTile size="lg" label="Economy" value={presenterBowlingStats.economy.toFixed(2)} />}
+                              {presenterBowlingStats.average !== undefined && <StatTile size="lg" label="Average" value={presenterBowlingStats.average.toFixed(2)} />}
+                            </div>
                           </div>
                         )}
                       </div>
                     )}
+
+                    {/* Ability / Last played / Plays - from the club's intake
+                        survey. Only renders when the player actually has at
+                        least one of these three answers. */}
+                    {(presenterAbility || presenterLastPlayed || presenterPlays) && (
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-4 text-xs lg:text-sm text-white/50">
+                        {presenterAbility && <span><span className="font-bold text-white/80">Ability:</span> {presenterAbility}</span>}
+                        {presenterLastPlayed && <span><span className="font-bold text-white/80">Last played:</span> {presenterLastPlayed}</span>}
+                        {presenterPlays && <span><span className="font-bold text-white/80">Plays:</span> {presenterPlays}</span>}
+                      </div>
+                    )}
+
                     {(presenterBattingStats || presenterBowlingStats) && (
-                      <p className="text-[10px] text-white/30 -mt-4 mb-4">Stats accurate as of 15 September 2026</p>
+                      <p className="text-[10px] text-white/30 -mt-2 mb-4">Stats accurate as of 15 September 2026</p>
                     )}
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1386,6 +1404,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       add('Fielding', ['Fielding', 'fielding', 'FIELD', 'Field'])
                       add('Speciality', ['Speciality', 'speciality', 'Specialty', 'specialty', 'Role', 'role'])
                       add('Wicket Keeper', ['Wicket Keeper', 'wicket keeper', 'Wicket Keeper', 'WicketKeeper', 'wicketKeeper', 'WK', 'wk'])
+                      // From the club's Google Form intake survey - exact
+                      // question text as the column header, no shorter alias.
+                      add('Ability', ['How would you rate your current cricketing ability?'])
+                      add('Last Played', ['When did you last play cricket?'])
+                      add('Plays', ['How frequently do you currently play cricket?'])
                       return essentials
                     })()}
                   />

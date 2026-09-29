@@ -3,16 +3,8 @@
 import { ReactNode, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { PlayerStatsDialog } from '@/components/player-stats-dialog'
-import { BatIcon, BallIcon, ScaleBar } from '@/components/cricket-stat-ui'
-import {
-	BattingStats,
-	BowlingStats,
-	BATTING_AVERAGE_RANGE,
-	BATTING_STRIKE_RATE_RANGE,
-	BOWLING_ECONOMY_RANGE,
-	BOWLING_AVERAGE_RANGE,
-	scalePercent,
-} from '@/lib/cricket-stats'
+import { StatTile } from '@/components/cricket-stat-ui'
+import { BattingStats, BowlingStats } from '@/lib/cricket-stats'
 
 export interface PlayerCardProps {
 	name: string
@@ -55,6 +47,11 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 	const speciality = fields.find(f => f.label === 'Speciality')?.value || ''
 	const battingStyle = fields.find(f => f.label === 'Batting')?.value || ''
 	const bowlingStyle = fields.find(f => f.label === 'Bowling')?.value || ''
+	// From the club's Google Form intake survey - see the exact question text
+	// each alias matches against in the callers' `fields` builders.
+	const ability = fields.find(f => f.label === 'Ability')?.value || ''
+	const lastPlayed = fields.find(f => f.label === 'Last Played')?.value || ''
+	const plays = fields.find(f => f.label === 'Plays')?.value || ''
 
 	const [openStats, setOpenStats] = useState<'batting' | 'bowling' | null>(null)
 
@@ -174,54 +171,54 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 					</div>
 				)}
 
-				{/* Speciality + Base price */}
-				{(speciality || basePrice !== undefined) && (
-					<div className={`flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 ${compact ? 'mb-2' : 'mb-3 sm:mb-5'}`}>
+				{/* Role pill + batting/bowling hand - replaces the old plain
+				    Speciality label with the same "All-rounder · Right Handed ·
+				    Right Arm Medium Pace" identity line used across the rest of
+				    the redesigned stats section below. */}
+				{(speciality || battingStyle || bowlingStyle) && (
+					<div className={`flex flex-wrap items-center gap-2 mt-1.5 ${compact ? 'mb-2' : 'mb-2 sm:mb-3'}`}>
 						{speciality && (
-							<>
-								<span className="text-[9px] sm:text-xs font-bold uppercase tracking-widest text-teal-400">{speciality}</span>
-								{basePrice !== undefined && <span className="text-gray-600">&middot;</span>}
-							</>
+							<span className="inline-flex px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-300 text-[10px] sm:text-xs font-bold uppercase tracking-wide">
+								{speciality}
+							</span>
 						)}
-						{basePrice !== undefined && (
-							<span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
-								Base <span className="text-gray-200 font-bold tabular-nums">₹{basePrice.toLocaleString('en-IN')}</span>
+						{(battingStyle || bowlingStyle) && (
+							<span className="text-[10px] sm:text-xs text-gray-400 font-medium">
+								{[battingStyle, bowlingStyle].filter(Boolean).join('  ·  ')}
 							</span>
 						)}
 					</div>
 				)}
 
+				{/* Base price - its own line now that Speciality moved into the
+				    role pill above. */}
+				{basePrice !== undefined && (
+					<div className={compact ? 'mb-2' : 'mb-3 sm:mb-5'}>
+						<span className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wide">
+							Base <span className="text-gray-200 font-bold tabular-nums">₹{basePrice.toLocaleString('en-IN')}</span>
+						</span>
+					</div>
+				)}
+
 				{/* Batting / Bowling career stat panels - side by side, always
-				    visible. Each shows one career total plus the two metrics
-				    that actually decide how good a player is (see
-				    src/lib/cricket-stats.ts for why those two, not every
-				    uploaded column) as "how good is this" scale bars, not a
-				    raw number dump. A panel only renders when the player has
-				    that discipline's data at all; a pure batter gets one
-				    full-width panel with no Bowling panel beside it. */}
+				    visible. Each shows the four numbers that actually decide how
+				    good a player is (see src/lib/cricket-stats.ts) as plain big
+				    numbers rather than a "how good is this" scale bar - easier
+				    to read at a glance, and consistent with the same panel style
+				    used on the presenter stage (public-auction-view.tsx). A panel
+				    only renders when the player has that discipline's data at
+				    all; a pure batter gets one full-width panel with no Bowling
+				    panel beside it. */}
 				{!hideStats && (battingStats || bowlingStats) && (
 					<div className={`grid gap-3 mb-3 sm:mb-5 ${battingStats && bowlingStats ? 'grid-cols-2' : 'grid-cols-1'}`}>
 						{battingStats && (
 							<div className="bg-white/[0.03] border border-white/[0.08] rounded-lg p-3 sm:p-4">
-								<div className="flex items-start justify-between mb-3 sm:mb-4">
-									<div className="flex items-center gap-1.5">
-										<BatIcon />
-										<span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
-									</div>
-									{battingStats.runs !== undefined && (
-										<div className="text-right leading-none">
-											<span className="text-lg sm:text-xl font-black text-white tabular-nums">{battingStats.runs}</span>
-											<div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-gray-500 mt-0.5">Runs</div>
-										</div>
-									)}
-								</div>
-								<div className="space-y-3">
-									{battingStats.average !== undefined && (
-										<ScaleBar label="Average" value={scalePercent(battingStats.average, BATTING_AVERAGE_RANGE)} formatted={battingStats.average.toFixed(2)} />
-									)}
-									{battingStats.strikeRate !== undefined && (
-										<ScaleBar label="Strike Rate" value={scalePercent(battingStats.strikeRate, BATTING_STRIKE_RATE_RANGE)} formatted={battingStats.strikeRate.toFixed(2)} />
-									)}
+								<span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
+								<div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2.5 sm:mt-3">
+									{battingStats.matches !== undefined && <StatTile label="Matches" value={battingStats.matches} />}
+									{battingStats.runs !== undefined && <StatTile label="Runs" value={battingStats.runs} />}
+									{battingStats.average !== undefined && <StatTile label="Average" value={battingStats.average.toFixed(2)} />}
+									{battingStats.strikeRate !== undefined && <StatTile label="Strike Rate" value={battingStats.strikeRate.toFixed(2)} />}
 								</div>
 								<button
 									type="button"
@@ -236,25 +233,12 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 
 						{bowlingStats && (
 							<div className="bg-white/[0.03] border border-white/[0.08] rounded-lg p-3 sm:p-4">
-								<div className="flex items-start justify-between mb-3 sm:mb-4">
-									<div className="flex items-center gap-1.5">
-										<BallIcon />
-										<span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
-									</div>
-									{bowlingStats.wickets !== undefined && (
-										<div className="text-right leading-none">
-											<span className="text-lg sm:text-xl font-black text-white tabular-nums">{bowlingStats.wickets}</span>
-											<div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider text-gray-500 mt-0.5">Wickets</div>
-										</div>
-									)}
-								</div>
-								<div className="space-y-3">
-									{bowlingStats.economy !== undefined && (
-										<ScaleBar label="Economy" value={scalePercent(bowlingStats.economy, BOWLING_ECONOMY_RANGE, true)} formatted={bowlingStats.economy.toFixed(2)} />
-									)}
-									{bowlingStats.average !== undefined && (
-										<ScaleBar label="Average" value={scalePercent(bowlingStats.average, BOWLING_AVERAGE_RANGE, true)} formatted={bowlingStats.average.toFixed(2)} />
-									)}
+								<span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
+								<div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2.5 sm:mt-3">
+									{bowlingStats.matches !== undefined && <StatTile label="Matches" value={bowlingStats.matches} />}
+									{bowlingStats.wickets !== undefined && <StatTile label="Wickets" value={bowlingStats.wickets} />}
+									{bowlingStats.economy !== undefined && <StatTile label="Economy" value={bowlingStats.economy.toFixed(2)} />}
+									{bowlingStats.average !== undefined && <StatTile label="Average" value={bowlingStats.average.toFixed(2)} />}
 								</div>
 								<button
 									type="button"
@@ -266,6 +250,17 @@ export default function PlayerCard({ name, imageUrl, tags = [], fields = [], bas
 								</button>
 							</div>
 						)}
+					</div>
+				)}
+
+				{/* Ability / Last played / Plays - from the club's intake survey
+				    (see the `fields` extraction above). Only renders when the
+				    player actually has at least one of these three answers. */}
+				{!hideStats && (ability || lastPlayed || plays) && (
+					<div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 sm:mb-5 text-[10px] sm:text-xs text-gray-400">
+						{ability && <span><span className="font-bold text-gray-200">Ability:</span> {ability}</span>}
+						{lastPlayed && <span><span className="font-bold text-gray-200">Last played:</span> {lastPlayed}</span>}
+						{plays && <span><span className="font-bold text-gray-200">Plays:</span> {plays}</span>}
 					</div>
 				)}
 
