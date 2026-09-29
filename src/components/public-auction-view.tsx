@@ -17,6 +17,7 @@ import PlayerCard from '@/components/player-card'
 import BidAmountStrip from '@/components/bid-amount-strip'
 import { PlayerRevealAnimation } from '@/components/player-reveal-animation'
 import { GoingLiveBanner } from '@/components/going-live-banner'
+import { SoldCelebration } from '@/components/sold-celebration'
 import { extractCricheroesLink } from '@/lib/cricheroes'
 import { extractBattingStats, extractBowlingStats } from '@/lib/cricket-stats'
 import { extractProxyImageUrl } from '@/lib/player-photo'
@@ -201,10 +202,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const [bidHistory, setBidHistory] = useState<BidHistoryEntry[]>([])
   const [highestBidderId, setHighestBidderId] = useState<string | null>(null)
   const [soldAnimation, setSoldAnimation] = useState(false)
-  // Who the SOLD banner should credit - captured off the player-sold event
-  // at the moment it fires, since currentBid/currentPlayer may already have
-  // moved on to the next player by the time the banner is shown.
-  const [soldInfo, setSoldInfo] = useState<{ teamName?: string; bidderName?: string } | null>(null)
+  // Who/what the SOLD celebration should show - captured off the
+  // player-sold event at the moment it fires (including the photo, straight
+  // off the player who was just on the block), since currentBid/currentPlayer
+  // may already have moved on to the next player by the time it's shown.
+  const [soldInfo, setSoldInfo] = useState<{ teamName?: string; bidderName?: string; playerName: string; amount: number; photoUrl?: string | null } | null>(null)
   const [isClient, setIsClient] = useState(false)
   const [showAllPlayerDetails, setShowAllPlayerDetails] = useState(false)
   const [isImageLoading, setIsImageLoading] = useState(false)
@@ -722,12 +724,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         }))
       }
       
-      setSoldInfo({ teamName: data.teamName, bidderName: data.bidderName })
+      setSoldInfo({
+        teamName: data.teamName,
+        bidderName: data.bidderName,
+        playerName: data.playerName,
+        amount: data.amount,
+        photoUrl: extractProxyImageUrl(playerData, 600),
+      })
       setSoldAnimation(true)
-      setTimeout(() => {
-        setSoldAnimation(false)
-        // Don't reload - updates are handled via Pusher
-      }, 3000)
+      // No dismiss timer here - SoldCelebration owns its own auto-dismiss
+      // (and lets a click/Escape end it early), so this only ever needs to
+      // flip back to false, never on a blind delay.
     },
     onNewPlayer: (data) => {
       setPoolExhausted(false)
@@ -981,23 +988,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
 
             {/* Stage */}
             <div className="relative flex-1 flex min-h-0">
-              <AnimatePresence>
-                {soldAnimation && (
-                  <motion.div
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-green-500 text-white"
-                  >
-                    <div className="text-7xl lg:text-8xl font-black">SOLD!</div>
-                    {(soldInfo?.teamName || soldInfo?.bidderName) && (
-                      <div className="text-2xl lg:text-3xl font-extrabold text-white/90">
-                        {[soldInfo.teamName, soldInfo.bidderName].filter(Boolean).join(' · ')}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <SoldCelebration
+                show={soldAnimation}
+                playerName={soldInfo?.playerName || playerName}
+                photoUrl={soldInfo?.photoUrl}
+                amount={soldInfo?.amount ?? 0}
+                teamName={soldInfo?.teamName}
+                bidderName={soldInfo?.bidderName}
+                onDismiss={() => setSoldAnimation(false)}
+              />
 
               <AnimatePresence>
                 {showPlayerReveal && pendingPlayer && (
@@ -1303,18 +1302,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
           <div className="relative grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-3 lg:gap-5 px-2 sm:px-4 pb-3 sm:pb-4">
             {/* Player podium */}
             <div className="relative">
-              <AnimatePresence>
-                {soldAnimation && (
-                  <motion.div
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    className="absolute inset-0 flex items-center justify-center bg-green-500 text-white text-6xl font-bold z-50 rounded-lg"
-                  >
-                    SOLD!
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <SoldCelebration
+                show={soldAnimation}
+                playerName={soldInfo?.playerName || playerName}
+                photoUrl={soldInfo?.photoUrl}
+                amount={soldInfo?.amount ?? 0}
+                teamName={soldInfo?.teamName}
+                bidderName={soldInfo?.bidderName}
+                onDismiss={() => setSoldAnimation(false)}
+              />
 
               {isClient && (
                 <div className="relative">
