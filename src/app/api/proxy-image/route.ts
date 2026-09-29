@@ -79,19 +79,34 @@ async function reencodeImage(buffer: ArrayBuffer, format: 'avif' | 'webp'): Prom
   }
 }
 
+// Drive's thumbnail endpoint is unofficial and unsupported - it doesn't
+// always fail cleanly, it can just stall with no response and no error.
+// Without a bound, that hung fetch's promise never settles, so it never
+// leaves the inFlight map below (cleanup only runs on settle) - every later
+// request for that exact photo, including after a hard refresh, then
+// coalesces onto that same permanently-pending promise and spins forever.
+const UPSTREAM_TIMEOUT_MS = 10000
+
 async function fetchDriveImage(fileId: string, width: number): Promise<{ contentType: string; buffer: ArrayBuffer }> {
   const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w${width}`
-  const response = await fetch(imageUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new UpstreamFetchError(response.status)
     }
-  })
-  if (!response.ok) {
-    throw new UpstreamFetchError(response.status)
+    const contentType = response.headers.get('content-type') || 'image/jpeg'
+    const buffer = await response.arrayBuffer()
+    return { contentType, buffer }
+  } finally {
+    clearTimeout(timeout)
   }
-  const contentType = response.headers.get('content-type') || 'image/jpeg'
-  const buffer = await response.arrayBuffer()
-  return { contentType, buffer }
 }
 
 // Only ever takes a Google Drive file id, never an arbitrary URL - every

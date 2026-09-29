@@ -997,11 +997,42 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // broken-image icon left behind by an <img> whose src never resolved.
   const [presenterPhotoFailed, setPresenterPhotoFailed] = useState(false)
   const [trackedPresenterPhotoUrl, setTrackedPresenterPhotoUrl] = useState(presenterPhotoUrl)
+  // Bumped to cache-bust a manual retry (below) - the proxy route itself has
+  // no per-request identity to force a fresh fetch otherwise, since the
+  // browser (and the immutable Cache-Control this route sends) would
+  // otherwise just replay whatever it already has for this exact URL,
+  // success or failure.
+  const [photoRetryNonce, setPhotoRetryNonce] = useState(0)
   if (presenterPhotoUrl !== trackedPresenterPhotoUrl) {
     setTrackedPresenterPhotoUrl(presenterPhotoUrl)
     setPresenterPhotoLoaded(!presenterPhotoUrl)
     setPresenterPhotoFailed(false)
+    setPhotoRetryNonce(0)
   }
+  const presenterPhotoSrc = presenterPhotoUrl && photoRetryNonce > 0
+    ? `${presenterPhotoUrl}&retry=${photoRetryNonce}`
+    : presenterPhotoUrl
+
+  // A stuck fetch (see the timeout added to /api/proxy-image for the main
+  // fix) still means several seconds of nothing on stage for whoever's
+  // watching - this surfaces a manual way to force a fresh attempt rather
+  // than making the room wait out a hard refresh.
+  const [showPhotoRetryButton, setShowPhotoRetryButton] = useState(false)
+  useEffect(() => {
+    if (!presenterPhotoUrl || presenterPhotoLoaded) {
+      setShowPhotoRetryButton(false)
+      return
+    }
+    const timer = setTimeout(() => setShowPhotoRetryButton(true), 4000)
+    return () => clearTimeout(timer)
+  }, [presenterPhotoUrl, presenterPhotoLoaded, photoRetryNonce])
+
+  const handlePresenterPhotoRetry = useCallback(() => {
+    setPresenterPhotoLoaded(false)
+    setPresenterPhotoFailed(false)
+    setShowPhotoRetryButton(false)
+    setPhotoRetryNonce(n => n + 1)
+  }, [])
 
   // Silently warms this browser's own HTTP cache for every player still
   // eligible to come up on stage (see preload-images/route.ts's server-side
@@ -1142,25 +1173,49 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         whole time the new one is downloading, even though
                         the name/stats beside it have already moved on. */}
                     {presenterPhotoUrl && !presenterPhotoFailed && !presenterPhotoLoaded && (
-                      <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
                         <div className="w-16 h-16 border-4 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+                        {/* Only appears once the load has clearly stalled (4s+) -
+                            a fetch that's merely a bit slow shouldn't show this,
+                            but one that's actually stuck (see the proxy route's
+                            upstream timeout) shouldn't leave the room staring at
+                            a spinner with no way to force a fresh attempt short
+                            of a hard refresh. */}
+                        {showPhotoRetryButton && (
+                          <button
+                            onClick={handlePresenterPhotoRetry}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white/80 text-sm font-bold transition-colors"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            Reload photo
+                          </button>
+                        )}
                       </div>
                     )}
                     {presenterPhotoUrl && !presenterPhotoFailed ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={presenterPhotoUrl}
+                        src={presenterPhotoSrc}
                         alt={playerName}
                         onLoad={() => setPresenterPhotoLoaded(true)}
                         onError={() => { setPresenterPhotoLoaded(true); setPresenterPhotoFailed(true) }}
                         className={`w-full h-full object-contain transition-opacity duration-300 ${presenterPhotoLoaded ? 'opacity-100' : 'opacity-0'}`}
                       />
                     ) : (
-                      <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                        <svg width="220" height="380" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={2.5}>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                        <svg className="opacity-20" width="220" height="380" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={2.5}>
                           <circle cx="110" cy="80" r="55"></circle>
                           <path d="M25 375 C25 235 55 180 110 180 C165 180 195 235 195 375"></path>
                         </svg>
+                        {presenterPhotoFailed && (
+                          <button
+                            onClick={handlePresenterPhotoRetry}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-bold transition-colors"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            Reload photo
+                          </button>
+                        )}
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#05070a]/95" />
