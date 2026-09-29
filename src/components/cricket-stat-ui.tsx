@@ -50,7 +50,7 @@ export function StatTile({ label, value, size = 'sm' }: { label: string; value: 
 		return (
 			<div className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-7 text-center">
 				<div className="text-5xl lg:text-6xl font-black text-white tabular-nums">{value}</div>
-				<div className="text-lg lg:text-2xl font-bold uppercase tracking-wider text-gray-400 mt-2.5 leading-tight">{label}</div>
+				<div className="text-xl lg:text-3xl font-bold uppercase tracking-wider text-gray-300 mt-3 leading-tight">{label}</div>
 			</div>
 		)
 	}

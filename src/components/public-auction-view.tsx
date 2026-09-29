@@ -1131,7 +1131,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       {playerName}
                     </h1>
                     {(presenterBattingStyle || presenterBowlingStyle) && (
-                      <p className="text-sm lg:text-base text-white/50 font-medium mb-4 -mt-2">
+                      <p className="text-xl lg:text-3xl text-white/60 font-bold mb-4 -mt-1">
                         {[presenterBattingStyle, presenterBowlingStyle].filter(Boolean).join('  ·  ')}
                       </p>
                     )}
@@ -1170,7 +1170,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                             <div className="text-4xl lg:text-5xl font-black text-amber-400 tracking-tight">
                               ₹{currentBid.amount.toLocaleString('en-IN')}
                             </div>
-                            <div className="text-sm lg:text-base font-bold text-white/70 mt-1 truncate">
+                            <div className="text-2xl lg:text-4xl font-black text-white/80 mt-1.5 truncate">
                               {[currentBid.teamName, currentBid.bidderName].filter(Boolean).join(' · ')}
                             </div>
                           </>
@@ -1192,8 +1192,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         {presenterBattingStats && (
                           <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
-                              <BatIcon size={20} />
-                              <span className="text-base lg:text-xl font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
+                              <BatIcon size={36} />
+                              <span className="text-xl lg:text-3xl font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               {presenterBattingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBattingStats.matches} />}
@@ -1206,8 +1206,8 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         {presenterBowlingStats && (
                           <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
-                              <BallIcon size={20} />
-                              <span className="text-base lg:text-xl font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
+                              <BallIcon size={36} />
+                              <span className="text-xl lg:text-3xl font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               {presenterBowlingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBowlingStats.matches} />}
