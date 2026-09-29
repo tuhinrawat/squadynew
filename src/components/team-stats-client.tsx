@@ -182,6 +182,24 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
     }
   })
 
+  // The one search box above the tabs, applied to the Overview cards: does
+  // this team's name, its bidder's name, or any player it bought match?
+  // Deliberately NOT used for selectedTeamData below - opening a team's full
+  // detail view should work regardless of whatever's typed in the search box.
+  const filteredTeamsData = (() => {
+    const term = searchQuery.trim().toLowerCase()
+    if (!term) return teamsData
+    return teamsData.filter(team => {
+      const haystack = [
+        team.name,
+        team.bidder?.user?.name,
+        team.bidder?.username,
+        ...team.players.map(p => getPlayerName(p)),
+      ].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(term)
+    })
+  })()
+
   const sortedPlayers = useMemo(() => {
     return [...auction.players].sort((a, b) => getPlayerName(a).localeCompare(getPlayerName(b)))
   }, [auction.players])
@@ -326,11 +344,16 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       return selectedTeamData.players
     }
 
+    const term = searchQuery.trim().toLowerCase()
     switch (activeTab) {
       case 'sold':
         return auction.players.filter(p => p.status === 'SOLD')
-      case 'unsold':
-        return auction.players.filter(p => p.status === 'UNSOLD')
+      case 'unsold': {
+        // No bidder/team concept applies to an unsold player - name is all
+        // there is to search on here.
+        const unsold = auction.players.filter(p => p.status === 'UNSOLD')
+        return term ? unsold.filter(p => getPlayerName(p).toLowerCase().includes(term)) : unsold
+      }
       default:
         return []
     }
@@ -450,6 +473,21 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         {!selectedTeam ? (
           <>
+            {/* One search box, above the tabs, that applies to whichever tab
+                is active - team/bidder name on Overview, player/bidder/team
+                name on Sold, player name on Unsold and Know Your Players.
+                Visible on mobile too, not just desktop. */}
+            <div className="relative mb-3 sm:mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search by team, bidder, or player name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-white/10 border-white/30 text-white placeholder:text-gray-400 text-sm"
+              />
+            </div>
+
             {/* Tabs - Scrollable on mobile */}
             <div className="flex gap-2 mb-4 sm:mb-6 overflow-x-auto pb-2 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
               <Button
@@ -498,36 +536,45 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
 
             {/* Teams Grid/List */}
             {activeTab === 'overview' && (
-              viewMode === 'grid' ? (
+              filteredTeamsData.length === 0 ? (
+                <p className="text-center text-white/50 text-sm py-12">No teams, bidders, or players match &ldquo;{searchQuery}&rdquo;.</p>
+              ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-                  {teamsData.map((team) => (
+                  {filteredTeamsData.map((team) => (
                     <Card key={team.id} className="border-0 shadow-2xl overflow-hidden p-0 gap-0 bg-transparent">
-                      {/* Header: name, purse left, bidder, at-a-glance stat line -
-                          everything you'd otherwise have had to click in to see. */}
+                      {/* Header: identity (name/purse/bidder) up top, then a
+                          clean label-value list for financial status below a
+                          divider - separating "who" from "numbers" instead of
+                          running every figure together at the same weight. */}
                       <div className={`${team.colorScheme.bg} p-3 sm:p-5 text-white`}>
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="font-bold text-base sm:text-xl truncate">{team.name}</h3>
-                          <span className="text-xs sm:text-sm font-bold text-amber-200 whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                          <span className="text-[11px] sm:text-xs font-bold text-amber-100 bg-black/20 rounded-full px-2.5 py-1 whitespace-nowrap flex-shrink-0">
                             ₹{team.remainingPurse.toLocaleString('en-IN')} left
                           </span>
                         </div>
-                        <p className="text-[11px] sm:text-xs text-white/80 truncate mt-0.5">
+                        <p className="text-[11px] sm:text-xs text-white/80 truncate mt-1">
                           Bidder: {team.bidder?.user?.name || team.bidder?.username || 'Unknown'}
                         </p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-[10px] sm:text-xs font-bold">
-                          <span>{team.totalPlayers}/{team.mandatoryTeamSize} bought</span>
-                          <span>₹{team.totalSpent.toLocaleString('en-IN')} spent</span>
-                          <span className="text-lime-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
-                            {team.remainingSlots > 0
-                              ? `max next bid ₹${team.maxSpendableNow.toLocaleString('en-IN')}`
-                              : 'Team full'}
-                          </span>
+
+                        <div className="mt-3 pt-3 border-t border-white/20 space-y-1.5">
+                          <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                            <span className="text-white/70 font-medium">Squad</span>
+                            <span className="font-bold">{team.totalPlayers}/{team.mandatoryTeamSize} bought &middot; ₹{team.totalSpent.toLocaleString('en-IN')} spent</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-white/70 font-medium text-[11px] sm:text-xs">Max Next Bid</span>
+                            <span className="text-sm sm:text-base font-black text-lime-300">
+                              {team.remainingSlots > 0 ? `₹${team.maxSpendableNow.toLocaleString('en-IN')}` : 'Team full'}
+                            </span>
+                          </div>
+                          {team.remainingSlots > 0 && (
+                            <div className="flex items-center justify-between text-[9px] sm:text-[10px] text-orange-200/90">
+                              <span>Reserve for remaining squad</span>
+                              <span className="font-semibold">₹{team.requiredReserve.toLocaleString('en-IN')}</span>
+                            </div>
+                          )}
                         </div>
-                        {team.remainingSlots > 0 && (
-                          <p className="text-[9px] sm:text-[10px] text-orange-200 font-semibold mt-0.5">
-                            Reserve for remaining squad: ₹{team.requiredReserve.toLocaleString('en-IN')}
-                          </p>
-                        )}
                       </div>
 
                       {/* Roster preview - shown inline so nobody has to click
@@ -589,7 +636,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 </div>
               ) : (
                 <div className="space-y-3 sm:space-y-4">
-                  {teamsData.map((team) => (
+                  {filteredTeamsData.map((team) => (
                     <Card
                       key={team.id}
                       className="bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20 transition-colors cursor-pointer"
@@ -647,27 +694,30 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
             {activeTab === 'sold' && (() => {
               const soldPlayers = auction.players.filter(p => p.status === 'SOLD')
               const bidHistory = (auction as any).bidHistory || []
-              
+
+              // The one search box above the tabs, applied here as: does this
+              // player's name, their bidder's name, or their team name match?
+              // playersWon below deliberately keeps using the UNFILTERED
+              // soldPlayers - a bidder's actual squad size shouldn't change
+              // just because a search hid some of their other purchases.
+              const searchTerm = searchQuery.trim().toLowerCase()
+              const matchesSoldPlayer = (player: Player) => {
+                if (!searchTerm) return true
+                const bidder = auction.bidders.find(b => b.id === player.soldTo)
+                const haystack = [getPlayerName(player), bidder?.user?.name, bidder?.username, bidder?.teamName]
+                  .filter(Boolean).join(' ').toLowerCase()
+                return haystack.includes(searchTerm)
+              }
+              const filteredSoldPlayers = soldPlayers.filter(matchesSoldPlayer)
+
               // Calculate categories
-              const topBuys = [...soldPlayers]
+              const topBuys = [...filteredSoldPlayers]
                 .sort((a, b) => (b.soldPrice || 0) - (a.soldPrice || 0))
                 .slice(0, 20)
-              
-              // Top 5 Bidders - bidders who spent the most total
-              const bidderSpending = auction.bidders.map(bidder => {
-                const playersBought = soldPlayers.filter(p => p.soldTo === bidder.id)
-                const totalSpent = playersBought.reduce((sum, p) => sum + (p.soldPrice || 0), 0)
-                const avgSpent = playersBought.length > 0 ? totalSpent / playersBought.length : 0
-                return { bidder, totalSpent, playersBought: playersBought.length, avgSpent }
-              })
-              const topBidders = bidderSpending
-                .filter(b => b.totalSpent > 0)
-                .sort((a, b) => b.totalSpent - a.totalSpent)
-                .slice(0, 5)
-              
+
               // Most competitive - players with most bids
-              const playerBidCounts = soldPlayers.map(player => {
-                const bidsForPlayer = bidHistory.filter((b: any) => 
+              const playerBidCounts = filteredSoldPlayers.map(player => {
+                const bidsForPlayer = bidHistory.filter((b: any) =>
                   b.playerId === player.id && b.type === 'bid'
                 ).length
                 return { player, bidCount: bidsForPlayer }
@@ -676,10 +726,16 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 .filter(p => p.bidCount > 0)
                 .sort((a, b) => b.bidCount - a.bidCount)
                 .slice(0, 5)
-              
-              // Most active bidder
-              const bidderActivity = auction.bidders.map(bidder => {
-                const bidsCount = bidHistory.filter((b: any) => 
+
+              // Most active bidder - filtered by the same search, matched
+              // against the bidder/team themselves rather than a player.
+              const matchesBidder = (bidder: BidderWithUser) => {
+                if (!searchTerm) return true
+                const haystack = [bidder.user?.name, bidder.username, bidder.teamName].filter(Boolean).join(' ').toLowerCase()
+                return haystack.includes(searchTerm)
+              }
+              const bidderActivity = auction.bidders.filter(matchesBidder).map(bidder => {
+                const bidsCount = bidHistory.filter((b: any) =>
                   b.bidderId === bidder.id && b.type === 'bid'
                 ).length
                 const playersWon = soldPlayers.filter(p => p.soldTo === bidder.id).length
@@ -690,84 +746,6 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 .sort((a, b) => b.bidsCount - a.bidsCount)
                 .slice(0, 5)
               
-              const renderBidderPortraitCard = (bidderData: typeof topBidders[0], rank: number) => {
-                const bidder = bidderData.bidder
-                const teamData = teamsData.find(t => t.id === bidder.id)
-                
-                return (
-                  <div key={bidder.id} className="group relative bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 rounded-2xl overflow-hidden border-2 border-white/20 hover:border-purple-400/50 transition-all hover:scale-[1.02] shadow-xl max-w-md mx-auto w-full">
-                    {/* TOP BIDDER Badge */}
-                    <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20">
-                      <div className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-2 py-1 sm:px-4 sm:py-2 rounded-lg font-black text-[10px] sm:text-base shadow-lg rotate-12 border-2 border-white/30">
-                        TOP BIDDER
-                      </div>
-                    </div>
-                    
-                    {/* Rank Badge */}
-                    <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-500 flex items-center justify-center text-white font-black text-lg sm:text-xl border-4 border-slate-900 shadow-lg">
-                      {rank}
-                    </div>
-                    
-                    {/* Bidder Photo/Logo */}
-                    <div className="relative h-56 sm:h-64 bg-gradient-to-b from-purple-700 to-slate-900 flex items-center justify-center">
-                      {teamData?.logo ? (
-                        <img 
-                          src={teamData.logo}
-                          alt={bidder.teamName || bidder.username}
-                          className="w-full h-full object-contain p-2"
-                          loading="lazy"
-                          decoding="async"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement
-                            target.style.display = 'none'
-                          }}
-                        />
-                      ) : (
-                        <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-white/20 flex items-center justify-center">
-                          <UserIcon className="h-14 w-14 sm:h-16 sm:w-16 text-white/50" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
-                    </div>
-                    
-                    {/* Bidder Info */}
-                    <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
-                      {/* Team Name */}
-                      <div>
-                        <h4 className="text-white font-black text-base sm:text-xl truncate">{bidder.teamName || bidder.username}</h4>
-                        <p className="text-purple-400 text-xs sm:text-sm font-bold truncate">{bidder.user?.name || 'Bidder'}</p>
-                      </div>
-                      
-                      {/* Stats Grid */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-purple-500/20 border border-purple-400/30 rounded-lg px-2 py-1.5 sm:py-2">
-                          <p className="text-purple-300 text-[9px] sm:text-[10px] font-semibold">SPENT</p>
-                          <p className="text-white text-xs sm:text-sm font-bold break-words">₹{bidderData.totalSpent.toLocaleString('en-IN')}</p>
-                        </div>
-                        <div className="bg-pink-500/20 border border-pink-400/30 rounded-lg px-2 py-1.5 sm:py-2">
-                          <p className="text-pink-300 text-[9px] sm:text-[10px] font-semibold">PLAYERS</p>
-                          <p className="text-white text-xs sm:text-sm font-bold">{bidderData.playersBought}</p>
-                        </div>
-                      </div>
-                      
-                      {/* Average per Player */}
-                      <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg p-2 sm:p-3 text-center border-2 border-purple-400/30">
-                        <p className="text-purple-200 text-[10px] sm:text-xs font-semibold">AVG PER PLAYER</p>
-                        <p className="text-white font-black text-lg sm:text-2xl break-words">₹{Math.round(bidderData.avgSpent).toLocaleString('en-IN')}</p>
-                      </div>
-                      
-                      {/* Remaining Purse */}
-                      <div className="bg-white/5 rounded-lg p-2 border border-white/10">
-                        <div className="flex items-center justify-between">
-                          <span className="text-white/60 text-[10px] sm:text-xs">Remaining</span>
-                          <span className="text-green-400 font-bold text-xs sm:text-sm break-words">₹{bidder.remainingPurse.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
-
               const renderPortraitCard = (player: Player, showBids: boolean = false, bidCount?: number) => {
                 const bidder = auction.bidders.find(b => b.id === player.soldTo)
                 const playerData = player.data as any
@@ -877,6 +855,9 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               
               return (
                 <div className="space-y-6">
+                  {searchTerm && filteredSoldPlayers.length === 0 && bidderActivity.length === 0 && (
+                    <p className="text-center text-white/50 text-sm py-8">No sold players, bidders, or teams match &ldquo;{searchQuery}&rdquo;.</p>
+                  )}
                   {/* Top 20 Buys */}
                   {topBuys.length > 0 && (
                     <Card className="bg-gradient-to-br from-yellow-600/20 via-orange-600/20 to-red-600/20 backdrop-blur-md border-2 border-yellow-500/30">
@@ -964,31 +945,13 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                     </Card>
                   )}
                   
-                  {/* Top 5 Bidders */}
-                  {topBidders.length > 0 && (
-                    <Card className="bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-rose-600/20 backdrop-blur-md border-2 border-purple-500/30">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-purple-400">
-                          <Trophy className="h-5 w-5" />
-                          <span className="text-lg sm:text-xl">👑 Top 5 Bidders</span>
-                        </CardTitle>
-                        <p className="text-white/60 text-xs sm:text-sm">Biggest spenders of the auction</p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-7xl mx-auto">
-                          {topBidders.map((bidderData, idx) => renderBidderPortraitCard(bidderData, idx + 1))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                  
                   {/* Complete Sold Players Table */}
-                  {soldPlayers.length > 0 && (
+                  {filteredSoldPlayers.length > 0 && (
               <Card className="bg-white/10 backdrop-blur-md border-white/20">
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-white">
                           <List className="h-5 w-5" />
-                          <span className="text-lg sm:text-xl">📋 All Sold Players ({soldPlayers.length})</span>
+                          <span className="text-lg sm:text-xl">📋 All Sold Players ({filteredSoldPlayers.length})</span>
                         </CardTitle>
                         <p className="text-white/60 text-xs sm:text-sm">Complete list of all players sold in this auction</p>
                       </CardHeader>
@@ -1006,7 +969,7 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                         </tr>
                       </thead>
                       <tbody>
-                              {[...soldPlayers]
+                              {[...filteredSoldPlayers]
                                 .sort((a, b) => (b.soldPrice || 0) - (a.soldPrice || 0))
                                 .map((player, idx) => {
                           const bidder = auction.bidders.find(b => b.id === player.soldTo)
@@ -1113,20 +1076,10 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
                 <CardContent className="p-3 sm:p-6">
                   <h3 className="text-white text-sm sm:text-base font-semibold mb-4">Know Your Players</h3>
                   
-                  {/* Search and Filter Section */}
+                  {/* Filter Section - the free-text search itself now lives
+                      in the one search box above the tabs; this is just the
+                      role filter, which is specific to this tab. */}
                   <div className="mb-4 sm:mb-6 space-y-3">
-                    {/* Search Input */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        type="text"
-                        placeholder="Search players by name..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-10 bg-white/10 border-white/30 text-white placeholder:text-gray-400 text-sm"
-                      />
-                    </div>
-                    
                     {/* Mobile Dropdown Filter */}
                     <div className="sm:hidden">
                       <Select value={playerFilter} onValueChange={(value: any) => setPlayerFilter(value)}>
