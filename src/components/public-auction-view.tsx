@@ -338,19 +338,23 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // would flash the old player back on screen until the following poll (or
   // the presenter's reveal-completion) catches up with fresh data. Every id
   // this screen has ever actually displayed and then moved away from gets
-  // recorded here with an expiry comfortably longer than the cache's max
-  // staleness window (s-maxage=2 + stale-while-revalidate=5 = 7s) - widened
-  // with generous margin over that theoretical figure, since real-world
-  // staleness (many viewers hitting different edge PoPs, revalidation
-  // timing) can run longer than the nominal header value suggests - once a
-  // poll's proposed `currentPlayer` shows up in this set, it's treated as an
-  // echo of the past, not news.
+  // recorded here - once a poll's proposed `currentPlayer` shows up in this
+  // set, it's treated as an echo of the past, not news.
+  //
+  // Bounded by COUNT, not a wall-clock TTL (a previous version expired
+  // entries after 60s) - a fixed timer can't be made safe against an
+  // arbitrarily long quiet stretch in the auction. After "certain
+  // inactivity" (a real report: a player flashed back onto the presenter
+  // screen, then out again, after a lull), a 60s-old entry had already
+  // expired by the time a still-stale edge response finally arrived, so the
+  // guard no longer blocked it. Evicting only the OLDEST entry once the set
+  // grows past a generous cap instead means an id stays blocked for as long
+  // as the auction is actually quiet, however long that is, and only ages
+  // out once enough REAL subsequent transitions have happened that any
+  // leftover stale cache entry would be hopelessly old anyway.
   const displayedPlayerIdRef = useRef<string | null>(initialPlayer?.id ?? null)
-  const supersededPlayerIdsRef = useRef<Map<string, number>>(new Map())
-  // Only ever populated from a real Pusher event now (see onNewPlayer) -
-  // never wrongly by a poll's own guess - so a generous window here has no
-  // downside beyond covering genuinely slow edge-cache revalidation.
-  const SUPERSEDED_TTL_MS = 60000
+  const supersededPlayerIdsRef = useRef<Set<string>>(new Set())
+  const MAX_SUPERSEDED_ENTRIES = 30
 
   // Same "don't go backward" idea, applied to the bid amount instead of the
   // player - a stale cached snapshot can correctly name the CURRENT player
@@ -372,15 +376,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   const bestKnownBidTimestampRef = useRef<number>(0)
   const BID_REGRESSION_GRACE_MS = 10000
 
-  const isSupersededPlayerId = useCallback((id: string) => {
-    const expiresAt = supersededPlayerIdsRef.current.get(id)
-    if (expiresAt === undefined) return false
-    if (Date.now() > expiresAt) {
-      supersededPlayerIdsRef.current.delete(id)
-      return false
-    }
-    return true
-  }, [])
+  const isSupersededPlayerId = useCallback((id: string) => supersededPlayerIdsRef.current.has(id), [])
 
   // Deliberately does NOT populate supersededPlayerIdsRef here - that used to
   // fire on ANY currentPlayer change, including one a stale poll itself just
@@ -774,7 +770,17 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       // Pusher event, not a guess from a possibly-stale cached snapshot.
       const leavingPlayerId = displayedPlayerIdRef.current
       if (leavingPlayerId) {
-        supersededPlayerIdsRef.current.set(leavingPlayerId, Date.now() + SUPERSEDED_TTL_MS)
+        const superseded = supersededPlayerIdsRef.current
+        superseded.delete(leavingPlayerId) // re-add so it becomes the newest, not a no-op if seen before
+        superseded.add(leavingPlayerId)
+        // Set iterates in insertion order, so its first key is always the
+        // oldest - evict that one to keep this bounded by real auction
+        // progress instead of the clock.
+        while (superseded.size > MAX_SUPERSEDED_ENTRIES) {
+          const oldest = superseded.values().next().value
+          if (oldest === undefined) break
+          superseded.delete(oldest)
+        }
       }
       setIsImageLoading(true)
       setCurrentPlayer(data.player as Player)
