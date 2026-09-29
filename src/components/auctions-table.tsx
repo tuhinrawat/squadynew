@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
-import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History, WifiOff } from 'lucide-react'
+import { MoreVertical, Users, Edit, Trash2, Play, Globe, UserPlus, Eye, Copy, Share2, Link2, Upload, X, Trophy, TestTube, History, WifiOff, KeyRound } from 'lucide-react'
 import { AuctionStatus } from '@prisma/client'
 import { toast } from 'sonner'
 import Image from 'next/image'
@@ -44,6 +44,7 @@ interface Auction {
   status: AuctionStatus
   isPublished: boolean
   isOfflineMode: boolean
+  syncKey: string
   createdAt: Date
   totalViews: number
   uniqueVisitors: number
@@ -331,6 +332,19 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
     })
   }
 
+  // The token an admin's own standalone offline tool (not the built-in
+  // offline console, which uses the login session instead) pastes into its
+  // own settings to authenticate the "sync results back" call - see
+  // syncKey on the Auction model. Every auction already has one (database-
+  // generated), so this is just a copy action, never a "generate" step.
+  const handleCopySyncKey = (syncKey: string) => {
+    navigator.clipboard.writeText(syncKey).then(() => {
+      toast.success('Sync key copied to clipboard!')
+    }).catch(() => {
+      toast.error('Failed to copy sync key')
+    })
+  }
+
   // Independent of the auction's actual status - for when the live stage
   // itself is broken (a crashed session, a venue connectivity outage) but
   // the auction keeps running some other way (the offline console, or the
@@ -564,6 +578,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                         <Share2 className="mr-2 h-4 w-4" />
                         Copy Presenter Link
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCopySyncKey(auction.syncKey)}>
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        Copy Sync Key
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleToggleOfflineMode(auction.id, auction.isOfflineMode)}>
                         {auction.isOfflineMode ? (
                           <>
@@ -733,6 +751,10 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                       <DropdownMenuItem onClick={() => handleCopyPresenterUrl(auction.id)}>
                         <Share2 className="mr-2 h-4 w-4" />
                         Copy Presenter Link
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleCopySyncKey(auction.syncKey)}>
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        Copy Sync Key
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleToggleOfflineMode(auction.id, auction.isOfflineMode)}>
                         {auction.isOfflineMode ? (

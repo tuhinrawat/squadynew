@@ -75,6 +75,15 @@ model Auction {
   // reads this to swap its stage for a "still running, check Team Stats"
   // message instead of leaving spectators staring at a frozen player card.
   isOfflineMode           Boolean       @default(false)
+  // Bearer token for the external-sync endpoint - lets an admin's own
+  // standalone offline tool (not the built-in offline console, which
+  // authenticates with the admin's login session instead) push sold/unsold
+  // results back in after an outage, without needing that tool to hold a
+  // real Squady login. Database-generated on every insert (see the
+  // migration), so it's never something the app has to remember to create,
+  // and plaintext by design - like any other API key, it needs to be
+  // readable back to the admin to paste into that tool, unlike a password.
+  syncKey                 String        @unique @default(dbgenerated("gen_random_uuid()"))
   customFields            Json? // Store custom field definitions for public registration
   columnOrder             Json? // Store Excel column order as array
   visibleColumns          Json? // Store visible columns for player table
