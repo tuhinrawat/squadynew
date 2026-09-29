@@ -174,11 +174,11 @@ function BidConsolePanel({
 
   return (
     <div className="h-screen w-full bg-[#0b0f16] shadow-[-8px_0_24px_rgba(0,0,0,0.3)] flex flex-col pointer-events-auto overflow-hidden">
-      <div className="p-3 bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg flex flex-col gap-1 flex-shrink-0">
+      <div className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 shadow-lg flex flex-col gap-1.5 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-white" />
-            <div className="text-sm font-bold text-white">Bidding Console</div>
+            <TrendingUp className="h-5 w-5 text-white" />
+            <div className="text-base font-bold text-white">Bidding Console</div>
           </div>
           {showClose && (
             <button
@@ -189,79 +189,88 @@ function BidConsolePanel({
             </button>
           )}
         </div>
-        <div className="flex items-baseline gap-1.5 text-white">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">Current Bid</span>
-          <span className="text-base font-black tabular-nums">₹{currentBidAmount.toLocaleString('en-IN')}</span>
-          {currentBid?.bidderName && <span className="text-xs font-semibold text-white/85">&middot; {currentBid.bidderName}</span>}
+        <div className="flex items-baseline gap-2 text-white">
+          <span className="text-xs font-bold uppercase tracking-wider text-white/70">Current Bid</span>
+          <span className="text-xl font-black tabular-nums">₹{currentBidAmount.toLocaleString('en-IN')}</span>
+          {currentBid?.bidderName && <span className="text-sm font-semibold text-white/85">&middot; {currentBid.bidderName}</span>}
         </div>
       </div>
 
-      {/* Amount composer */}
-      <div className="p-2.5 border-b border-white/10 flex-shrink-0">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Amount Heard</span>
-          {selectedAmount != null && (
-            <button
-              className="text-[10px] font-bold text-gray-500 hover:text-gray-300"
-              onClick={() => onSelectAmount(null)}
-            >
-              Clear &times;
-            </button>
-          )}
-        </div>
-        <div className={`rounded-lg border px-3 py-2 mb-2 text-center ${amountInvalid ? 'border-red-500/50' : 'border-white/10'} bg-white/[0.04]`}>
-          <span className={`text-xl font-black tabular-nums ${selectedAmount == null ? 'text-gray-600' : amountInvalid ? 'text-red-400' : 'text-teal-400'}`}>
-            {selectedAmount != null ? `₹${selectedAmount.toLocaleString('en-IN')}` : 'Tap or type'}
-          </span>
-          {amountInvalid && (
-            <div className="text-[10px] font-bold text-red-400 mt-0.5">Must exceed ₹{(currentBidAmount + minIncrement).toLocaleString('en-IN')}</div>
-          )}
-        </div>
-        <div className="grid grid-cols-6 gap-1">
-          {quickAmounts.map(amt => (
-            <button
-              key={amt}
-              className={`h-7 rounded text-[10px] font-bold ${selectedAmount === amt ? 'bg-teal-500 text-gray-950' : 'bg-white/[0.06] text-gray-200 hover:bg-white/[0.12]'}`}
-              onClick={() => onSelectAmount(amt)}
-            >
-              {amt >= 100000 ? `${amt / 100000}L` : `${amt / 1000}K`}
-            </button>
-          ))}
-        </div>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="Type an exact amount"
-          value={customInput}
-          onChange={(e) => onCustomInputChange(e.target.value)}
-          className="w-full mt-2 bg-white/[0.05] border border-white/15 rounded-md px-2.5 py-1.5 text-xs text-white placeholder:text-gray-500"
-        />
-      </div>
-
-      {/* Bidder - a searchable dropdown instead of a grid to scan by eye.
-          Type a name or team to filter; the current leading bidder is
-          shown but can't be reselected (they're already winning), same
-          rule the old grid enforced by disabling their tile. */}
-      <div className="p-2.5 flex-1 min-h-0">
-        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Bidder &middot; {bidders.length} Bidders</div>
-        <BidderCombobox bidders={bidders} highestBidderId={highestBidderId} selectedBidderId={selectedBidderId} onSelect={onSelectBidder} />
-      </div>
-
-      {/* Confirm bar */}
-      <div className="p-2.5 border-t border-white/10 bg-[#0f141d] flex-shrink-0">
-        {canConfirm && selectedBidder && (
-          <div className="text-[11px] text-gray-400 text-center mb-1.5">
-            Confirm <span className="text-teal-400 font-bold">₹{selectedAmount!.toLocaleString('en-IN')}</span> for{' '}
-            <span className="text-white font-bold">{selectedBidder.user?.name || selectedBidder.username}</span>?
+      {/* Everything below the header scrolls together as one unit, rather
+          than forcing the bidder section to stretch and fill whatever's
+          left - which is what pinned Confirm Bid to the literal bottom of
+          the screen with a big dead gap above it on a typical bidder count.
+          Confirm Bid now just follows the content, wherever that ends up -
+          on a short list it sits right under the bidder search, not stranded
+          at the bottom edge; on an unusually tall one, scrolling reaches it. */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* Amount composer */}
+        <div className="p-4 border-b border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Amount Heard</span>
+            {selectedAmount != null && (
+              <button
+                className="text-xs font-bold text-gray-500 hover:text-gray-300"
+                onClick={() => onSelectAmount(null)}
+              >
+                Clear &times;
+              </button>
+            )}
           </div>
-        )}
-        <Button
-          className={`w-full h-11 font-bold ${canConfirm ? 'bg-teal-500 hover:bg-teal-600 text-gray-950' : 'bg-white/[0.06] text-gray-600'}`}
-          disabled={!canConfirm}
-          onClick={onConfirm}
-        >
-          {isPlacingBid ? 'Placing...' : 'Confirm Bid'}
-        </Button>
+          <div className={`rounded-xl border px-4 py-5 mb-3 text-center ${amountInvalid ? 'border-red-500/50' : 'border-white/10'} bg-white/[0.04]`}>
+            <span className={`text-4xl font-black tabular-nums ${selectedAmount == null ? 'text-gray-600' : amountInvalid ? 'text-red-400' : 'text-teal-400'}`}>
+              {selectedAmount != null ? `₹${selectedAmount.toLocaleString('en-IN')}` : 'Tap or type'}
+            </span>
+            {amountInvalid && (
+              <div className="text-xs font-bold text-red-400 mt-1">Must exceed ₹{(currentBidAmount + minIncrement).toLocaleString('en-IN')}</div>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-2.5">
+            {quickAmounts.map(amt => (
+              <button
+                key={amt}
+                className={`h-16 rounded-lg text-xl font-bold ${selectedAmount === amt ? 'bg-teal-500 text-gray-950' : 'bg-white/[0.06] text-gray-200 hover:bg-white/[0.12]'}`}
+                onClick={() => onSelectAmount(amt)}
+              >
+                {amt >= 100000 ? `${amt / 100000}L` : `${amt / 1000}K`}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="Type an exact amount"
+            value={customInput}
+            onChange={(e) => onCustomInputChange(e.target.value)}
+            className="w-full mt-3 bg-white/[0.05] border border-white/15 rounded-lg px-4 py-4 text-lg text-white placeholder:text-gray-500"
+          />
+        </div>
+
+        {/* Bidder - a searchable dropdown instead of a grid to scan by eye.
+            Type a name or team to filter; the current leading bidder is
+            shown but can't be reselected (they're already winning), same
+            rule the old grid enforced by disabling their tile. */}
+        <div className="p-4">
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Bidder &middot; {bidders.length} Bidders</div>
+          <BidderCombobox bidders={bidders} highestBidderId={highestBidderId} selectedBidderId={selectedBidderId} onSelect={onSelectBidder} />
+        </div>
+
+        {/* Confirm bar */}
+        <div className="p-4 border-t border-white/10 bg-[#0f141d]">
+          {canConfirm && selectedBidder && (
+            <div className="text-sm text-gray-400 text-center mb-2">
+              Confirm <span className="text-teal-400 font-bold">₹{selectedAmount!.toLocaleString('en-IN')}</span> for{' '}
+              <span className="text-white font-bold">{selectedBidder.user?.name || selectedBidder.username}</span>?
+            </div>
+          )}
+          <Button
+            className={`w-full h-16 text-lg font-bold ${canConfirm ? 'bg-teal-500 hover:bg-teal-600 text-gray-950' : 'bg-white/[0.06] text-gray-600'}`}
+            disabled={!canConfirm}
+            onClick={onConfirm}
+          >
+            {isPlacingBid ? 'Placing...' : 'Confirm Bid'}
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -306,19 +315,19 @@ function BidderCombobox({
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => { setQuery(''); setOpen(true) }}
             placeholder="Select bidder — type to search"
-            className="w-full bg-white/[0.05] border border-white/15 rounded-md pl-3 pr-8 py-2 text-sm text-white placeholder:text-gray-500"
+            className="w-full bg-white/[0.05] border border-white/15 rounded-lg pl-4 pr-10 py-4 text-lg text-white placeholder:text-gray-500"
           />
-          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+          <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
         </div>
       </PopoverAnchor>
       <PopoverContent
         align="start"
         sideOffset={4}
-        className="w-[var(--radix-popover-trigger-width)] p-1 max-h-64 overflow-y-auto bg-[#12161f] border-white/10"
+        className="w-[var(--radix-popover-trigger-width)] p-1 max-h-80 overflow-y-auto bg-[#12161f] border-white/10"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {filtered.length === 0 && (
-          <div className="px-3 py-2 text-xs text-gray-500">No bidder or team matches</div>
+          <div className="px-4 py-3 text-sm text-gray-500">No bidder or team matches</div>
         )}
         {filtered.map(bidder => {
           const isLeader = bidder.id === highestBidderId
@@ -330,7 +339,7 @@ function BidderCombobox({
               type="button"
               disabled={isLeader}
               onClick={() => { onSelect(bidder.id); setQuery(''); setOpen(false) }}
-              className={`w-full text-left px-3 py-2 rounded text-sm flex items-center justify-between gap-2 ${
+              className={`w-full text-left px-4 py-3.5 rounded-lg text-lg flex items-center justify-between gap-2 ${
                 isLeader
                   ? 'opacity-40 cursor-not-allowed'
                   : isSelected
@@ -339,7 +348,7 @@ function BidderCombobox({
               }`}
             >
               <span className="truncate">{name}{bidder.teamName ? ` · ${bidder.teamName}` : ''}</span>
-              {isLeader && <span className="text-[9px] font-bold text-green-400 flex-shrink-0 uppercase tracking-wide">Leading</span>}
+              {isLeader && <span className="text-xs font-bold text-green-400 flex-shrink-0 uppercase tracking-wide">Leading</span>}
             </button>
           )
         })}

@@ -1165,7 +1165,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           <span className="text-xs lg:text-sm font-bold uppercase tracking-wide text-amber-200/80">Last Year</span>
                           <span className="text-lg lg:text-2xl font-black text-amber-400 tabular-nums">₹{currentPlayer.lastYearPrice.toLocaleString('en-IN')}</span>
                           {currentPlayer.lastYearTeamName && (
-                            <span className="text-xs lg:text-sm font-bold text-amber-200/70">· {currentPlayer.lastYearTeamName}</span>
+                            <span className="text-lg lg:text-2xl font-black text-amber-400">· {currentPlayer.lastYearTeamName}</span>
                           )}
                         </div>
                       )}
@@ -1240,10 +1240,10 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         survey. Only renders when the player actually has at
                         least one of these three answers. */}
                     {(presenterAbility || presenterLastPlayed || presenterPlays) && (
-                      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 mb-4 text-xs lg:text-sm text-white/50">
-                        {presenterAbility && <span><span className="font-bold text-white/80">Ability:</span> {presenterAbility}</span>}
-                        {presenterLastPlayed && <span><span className="font-bold text-white/80">Last played:</span> {presenterLastPlayed}</span>}
-                        {presenterPlays && <span><span className="font-bold text-white/80">Plays:</span> {presenterPlays}</span>}
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4 text-xl lg:text-3xl text-white/70">
+                        {presenterAbility && <span><span className="font-extrabold text-white">Ability:</span> {presenterAbility}</span>}
+                        {presenterLastPlayed && <span><span className="font-extrabold text-white">Last played:</span> {presenterLastPlayed}</span>}
+                        {presenterPlays && <span><span className="font-extrabold text-white">Plays:</span> {presenterPlays}</span>}
                       </div>
                     )}
 
