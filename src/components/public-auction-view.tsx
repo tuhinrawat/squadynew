@@ -823,6 +823,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
         }))
       }
     },
+    onOfflineModeChanged: (data) => {
+      setIsOfflineMode(data.isOfflineMode)
+    },
   }, isPresenter)
 
   // Extract player data from JSON

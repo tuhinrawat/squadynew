@@ -218,6 +218,7 @@ export interface AuctionEventData {
     players?: any[] // Include player updates to avoid fetch
     bidders?: Array<{ id: string; remainingPurse: number }> // Include bidder updates
   }
+  'offline-mode-changed': { isOfflineMode: boolean }
 }
 
 export type AuctionEventName = keyof AuctionEventData
@@ -235,6 +236,7 @@ export interface UsePusherOptions {
   onAuctionReset?: (data: AuctionEventData['auction-reset']) => void
   onAuctionPoolExhausted?: (data: AuctionEventData['auction-pool-exhausted']) => void
   onPlayersUpdated?: (data: AuctionEventData['players-updated']) => void
+  onOfflineModeChanged?: (data: AuctionEventData['offline-mode-changed']) => void
 }
 
 // Admin-only events - see AdminEventData in src/lib/pusher.ts for why
@@ -303,6 +305,7 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             channelToBind.unbind('auction-reset')
             channelToBind.unbind('auction-pool-exhausted')
             channelToBind.unbind('players-updated')
+            channelToBind.unbind('offline-mode-changed')
 
             // Bind all event handlers
             channelToBind.bind('new-bid', (data: any) => {
@@ -369,6 +372,10 @@ export function usePusher(auctionId: string, options: UsePusherOptions = {}, ena
             
             channelToBind.bind('players-updated', (data: any) => {
               callbacksRef.current.onPlayersUpdated?.(data)
+            })
+
+            channelToBind.bind('offline-mode-changed', (data: AuctionEventData['offline-mode-changed']) => {
+              callbacksRef.current.onOfflineModeChanged?.(data)
             })
           }
       

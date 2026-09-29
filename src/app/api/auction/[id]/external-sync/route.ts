@@ -94,9 +94,12 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid sync payload' }, { status: 400, headers: CORS_HEADERS })
     }
 
-    // Fetched once for the whole batch - this auction's bidder list is
-    // small (a handful of teams), so resolving every result's bidderName
-    // against one prefetched array is cheap and avoids a query per result.
+    // Fetched once purely to resolve each result's bidderName to an id -
+    // this auction's bidder list is small, so matching identity against one
+    // prefetched array avoids a query per result. remainingPurse is NOT
+    // read from this snapshot, though: it's re-fetched fresh per result
+    // below, since a batch can carry more than one sold result for the
+    // same bidder and each one needs to see the previous one's deduction.
     const bidders = await prisma.bidder.findMany({
       where: { auctionId: params.id },
       include: { user: { select: { name: true } } }
@@ -130,13 +133,28 @@ export async function POST(
       const playerData = player.data as Record<string, unknown> | null
       const playerName = (playerData?.name as string) || (playerData?.Name as string) || 'Player'
 
-      const bidder = findBidder(result.bidderName)
-      if (!bidder) {
+      const matchedBidder = findBidder(result.bidderName)
+      if (!matchedBidder) {
         outcomes.push({
           serialNumber: result.serialNumber,
           outcome: 'conflict',
           message: `No single confident match for bidder "${result.bidderName}" among this auction's bidders - resolve manually.`
         })
+        continue
+      }
+
+      // Re-fetched fresh here rather than reused from the `bidders` array
+      // prefetched above - a batch commonly carries multiple sold results
+      // for the same bidder, and remainingPurse must reflect every earlier
+      // deduction already applied THIS batch, not the one-time snapshot
+      // from before the loop started. Mirrors reconcile-offline/route.ts's
+      // own per-result re-fetch for the identical reason.
+      const bidder = await prisma.bidder.findUnique({
+        where: { id: matchedBidder.id },
+        include: { user: { select: { name: true } } }
+      })
+      if (!bidder) {
+        outcomes.push({ serialNumber: result.serialNumber, outcome: 'error', message: 'Bidder no longer exists.' })
         continue
       }
 
