@@ -118,23 +118,50 @@ export async function GET(request: NextRequest) {
     // current player's if set, else the first player that has one). ----
     const candidatePlayers = currentPlayerFull ? [currentPlayerFull, ...fullPlayers] : fullPlayers
     const sampleWithPhoto = candidatePlayers.find(p => extractProfilePhotoValue(p.data as Record<string, unknown> | null | undefined))
-    const imageSizesByWidth: Array<{ width: number; bytes: number | null; error?: string }> = []
+    const imageSizesByWidth: Array<{
+      width: number
+      originalBytes: number | null
+      webpBytes: number | null
+      avifBytes: number | null
+      webpSavingsPercent: number | null
+      avifSavingsPercent: number | null
+      error?: string
+    }> = []
     if (sampleWithPhoto) {
       const origin = request.nextUrl.origin
       const widths = [200, 300, 400, 600, 800, 1000]
+      // Same self-fetch-through-the-real-route approach as before, now once
+      // per Accept header so the re-encoding actually being served to real
+      // browsers is what gets measured, not a guess.
+      const fetchWithAccept = async (relativeUrl: string, accept: string | null) => {
+        const res = await fetch(`${origin}${relativeUrl}`, accept ? { headers: { Accept: accept } } : undefined)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const buf = await res.arrayBuffer()
+        return buf.byteLength
+      }
       for (const w of widths) {
         const relativeUrl = extractProxyImageUrl(sampleWithPhoto.data as Record<string, unknown> | null | undefined, w)
         if (!relativeUrl || !relativeUrl.startsWith('/api/proxy-image')) continue
         try {
-          const res = await fetch(`${origin}${relativeUrl}`)
-          if (!res.ok) {
-            imageSizesByWidth.push({ width: w, bytes: null, error: `HTTP ${res.status}` })
-            continue
-          }
-          const buf = await res.arrayBuffer()
-          imageSizesByWidth.push({ width: w, bytes: buf.byteLength })
+          const [originalBytes, webpBytes, avifBytes] = await Promise.all([
+            fetchWithAccept(relativeUrl, null),
+            fetchWithAccept(relativeUrl, 'image/webp,*/*'),
+            fetchWithAccept(relativeUrl, 'image/avif,image/webp,*/*'),
+          ])
+          imageSizesByWidth.push({
+            width: w,
+            originalBytes,
+            webpBytes,
+            avifBytes,
+            webpSavingsPercent: originalBytes > 0 ? Math.round((1 - webpBytes / originalBytes) * 10000) / 100 : null,
+            avifSavingsPercent: originalBytes > 0 ? Math.round((1 - avifBytes / originalBytes) * 10000) / 100 : null,
+          })
         } catch (err) {
-          imageSizesByWidth.push({ width: w, bytes: null, error: err instanceof Error ? err.message : 'fetch failed' })
+          imageSizesByWidth.push({
+            width: w, originalBytes: null, webpBytes: null, avifBytes: null,
+            webpSavingsPercent: null, avifSavingsPercent: null,
+            error: err instanceof Error ? err.message : 'fetch failed',
+          })
         }
       }
     }
@@ -174,7 +201,7 @@ export async function GET(request: NextRequest) {
       },
       realImageSizes: {
         note: sampleWithPhoto
-          ? 'Real bytes downloaded through this deployment\'s own /api/proxy-image for one real player photo from this auction, at every width the app actually requests.'
+          ? 'Real bytes downloaded through this deployment\'s own /api/proxy-image for one real player photo from this auction, at every width the app actually requests - "original" (no Accept override, i.e. no format request), "webp" and "avif" each self-fetch with the Accept header a real browser advertising that format would send, so these are the actual re-encoded bytes being served, not estimates.'
           : 'No player in this auction has a photo field set - nothing to measure.',
         sampleFrom: sampleWithPhoto ? extractPlayerName(sampleWithPhoto.data as Record<string, unknown> | null | undefined) : null,
         byWidth: imageSizesByWidth,

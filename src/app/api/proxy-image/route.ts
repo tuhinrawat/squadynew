@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import sharp from 'sharp'
 export const dynamic = 'force-dynamic'
 
 // Request coalescing: if N viewers request the same not-yet-cached photo in
@@ -35,6 +36,47 @@ const DEFAULT_WIDTH = 400
 function resolveWidth(param: string | null): number {
   const parsed = param ? Number(param) : NaN
   return ALLOWED_WIDTHS.includes(parsed as typeof ALLOWED_WIDTHS[number]) ? parsed : DEFAULT_WIDTH
+}
+
+// Same visible size and quality, fewer bytes: re-encode Drive's JPEG into
+// whichever modern format the requesting browser already advertises via
+// Accept (AVIF first, then WebP). Vercel's edge partitions its cache by the
+// Accept header automatically, so different visitors safely get different
+// encoded bytes for the same URL without a Vary header or separate cache
+// keys here.
+//
+// The two quality numbers are NOT on the same scale, verified against real
+// photos in this repo (public/*.jpg, public/*.jpeg): sharp/libaom's AVIF
+// "quality" runs much more conservatively than libwebp's - quality:82 on
+// both left AVIF *larger* than WebP, and only at ~quality:60-65 did AVIF
+// pull meaningfully ahead of WebP's own 82, with no visible loss at 3x zoom
+// on the same crop. WebP's 82 is the well-established safe default for
+// JPEG-equivalent quality; AVIF's 63 was picked to land in that same visual
+// range on this data, not by matching the number to WebP's.
+const WEBP_QUALITY = 82
+const AVIF_QUALITY = 63
+
+function negotiateFormat(acceptHeader: string | null): 'avif' | 'webp' | null {
+  if (!acceptHeader) return null
+  if (acceptHeader.includes('image/avif')) return 'avif'
+  if (acceptHeader.includes('image/webp')) return 'webp'
+  return null
+}
+
+async function reencodeImage(buffer: ArrayBuffer, format: 'avif' | 'webp'): Promise<{ buffer: Buffer; contentType: string } | null> {
+  try {
+    const input = Buffer.from(buffer)
+    const image = sharp(input)
+    const output = format === 'avif'
+      ? await image.avif({ quality: AVIF_QUALITY }).toBuffer()
+      : await image.webp({ quality: WEBP_QUALITY }).toBuffer()
+    return { buffer: output, contentType: `image/${format}` }
+  } catch (error) {
+    // Never let a re-encode failure (corrupt/unsupported source bytes) break
+    // the image - fall back to serving the original, unmodified.
+    console.error('Image re-encode failed, serving original:', error)
+    return null
+  }
 }
 
 async function fetchDriveImage(fileId: string, width: number): Promise<{ contentType: string; buffer: ArrayBuffer }> {
@@ -88,10 +130,31 @@ export async function GET(request: NextRequest) {
 
     const { contentType, buffer } = await pending
 
+    // Coalescing above is keyed on fileId:width only (the raw Drive bytes
+    // are format-independent), so re-encoding happens per-request, after
+    // the shared fetch - each viewer's own Accept header picks its own
+    // output format from the same downloaded original.
+    const targetFormat = negotiateFormat(request.headers.get('accept'))
+    let outBuffer: ArrayBuffer = buffer
+    let outContentType = contentType
+    if (targetFormat && !contentType.includes(targetFormat)) {
+      const reencoded = await reencodeImage(buffer, targetFormat)
+      if (reencoded) {
+        // Node's Buffer type isn't a valid fetch BodyInit on its own (its
+        // ArrayBufferLike generic doesn't match DOM's plain ArrayBuffer) -
+        // slice out a real ArrayBuffer covering just these bytes.
+        outBuffer = reencoded.buffer.buffer.slice(
+          reencoded.buffer.byteOffset,
+          reencoded.buffer.byteOffset + reencoded.buffer.byteLength
+        ) as ArrayBuffer
+        outContentType = reencoded.contentType
+      }
+    }
+
     // Return the image with proper headers
-    return new NextResponse(buffer, {
+    return new NextResponse(outBuffer, {
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': outContentType,
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     })

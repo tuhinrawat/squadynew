@@ -30,6 +30,9 @@ const nextConfig = {
   experimental: {
     // Enable optimized package imports
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'framer-motion'],
+    // sharp ships a native binary per platform - without this Next.js tries
+    // to bundle it into the serverless function and it breaks on Vercel.
+    serverComponentsExternalPackages: ['sharp'],
   },
   
   // Compiler optimizations
