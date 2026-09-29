@@ -1183,7 +1183,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       </div>
                       {currentPlayer?.lastYearPrice != null && (
                         <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-4 py-2">
-                          <span className="text-xs lg:text-sm font-bold uppercase tracking-wide text-amber-200/80">Last Year</span>
+                          <span className="text-3xl lg:text-4xl font-black uppercase tracking-wide text-amber-200/80">Last Year</span>
                           <span className="text-lg lg:text-2xl font-black text-amber-400 tabular-nums">₹{currentPlayer.lastYearPrice.toLocaleString('en-IN')}</span>
                           {currentPlayer.lastYearTeamName && (
                             <span className="text-lg lg:text-2xl font-black text-amber-400">· {currentPlayer.lastYearTeamName}</span>
