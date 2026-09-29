@@ -171,6 +171,8 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
       logo: getBidderPhotoUrl(bidder),
       remainingPurse,
       totalPlayers: soldPlayers.length,
+      totalSpent,
+      mandatoryTeamSize,
       players: soldPlayers,
       remainingSlots,
       maxSpendableNow,
@@ -499,59 +501,85 @@ export function TeamStatsClient({ auction: initialAuction }: TeamStatsClientProp
               viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {teamsData.map((team) => (
-                    <Card
-                      key={team.id}
-                      className={`${team.colorScheme.bg} border-0 shadow-2xl hover:scale-105 transition-transform cursor-pointer overflow-hidden`}
-                      onClick={() => setSelectedTeam(team.id)}
-                    >
-                      <CardContent className="p-3 sm:p-6 text-white">
-                        {/* Header: Logo + Team Name */}
-                        <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 pb-2 sm:pb-3 border-b border-white/30">
-                          <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-white flex items-center justify-center shadow-lg flex-shrink-0">
-                            {team.logo ? (
-                              <img src={team.logo} alt={team.name} className="w-7 h-7 sm:w-12 sm:h-12 object-contain" />
-                            ) : (
-                              <span className="text-base sm:text-2xl font-bold text-gray-800">
-                                {team.name.charAt(0)}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-sm sm:text-lg truncate">{team.name}</h3>
-                            <p className="text-[10px] sm:text-xs opacity-75 truncate">
-                              {team.bidder?.user?.name || team.bidder?.username || 'Unknown'}
-                            </p>
-                          </div>
+                    <Card key={team.id} className="border-0 shadow-2xl overflow-hidden">
+                      {/* Header: name, purse left, bidder, at-a-glance stat line -
+                          everything you'd otherwise have had to click in to see. */}
+                      <div className={`${team.colorScheme.bg} p-3 sm:p-5 text-white`}>
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-bold text-base sm:text-xl truncate">{team.name}</h3>
+                          <span className="text-xs sm:text-sm font-bold text-amber-200 whitespace-nowrap flex-shrink-0 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                            ₹{team.remainingPurse.toLocaleString('en-IN')} left
+                          </span>
+                        </div>
+                        <p className="text-[11px] sm:text-xs text-white/80 truncate mt-0.5">
+                          Bidder: {team.bidder?.user?.name || team.bidder?.username || 'Unknown'}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-2 text-[10px] sm:text-xs font-bold">
+                          <span>{team.totalPlayers}/{team.mandatoryTeamSize} bought</span>
+                          <span>₹{team.totalSpent.toLocaleString('en-IN')} spent</span>
+                          <span className="text-lime-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
+                            {team.remainingSlots > 0
+                              ? `max next bid ₹${team.maxSpendableNow.toLocaleString('en-IN')}`
+                              : 'Team full'}
+                          </span>
+                        </div>
+                        {team.remainingSlots > 0 && (
+                          <p className="text-[9px] sm:text-[10px] text-orange-200 font-semibold mt-0.5">
+                            Reserve for remaining squad: ₹{team.requiredReserve.toLocaleString('en-IN')}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Roster preview - shown inline so nobody has to click
+                          into a card just to see who's on the team. */}
+                      <div className="bg-black/40 p-3 sm:p-4">
+                        <div className="flex items-center gap-2 pb-2 mb-2 border-b border-white/10">
+                          {team.logo ? (
+                            <img src={team.logo} alt={team.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0 bg-white/10" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                              <UserIcon className="h-4 w-4 text-white/50" />
+                            </div>
+                          )}
+                          <span className="flex-1 min-w-0 truncate text-white text-xs sm:text-sm font-semibold">
+                            {team.bidder?.user?.name || team.bidder?.username || 'Unknown'}
+                          </span>
+                          <Badge className="bg-amber-500/20 text-amber-300 text-[9px] font-bold px-2 py-0.5 flex-shrink-0">BIDDER</Badge>
                         </div>
 
-                        {/* Key-Value Pairs - Ultra Compact */}
-                        <div className="space-y-1.5 sm:space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] sm:text-sm text-white/90 font-medium">Funds Remaining</span>
-                            <span className="text-sm sm:text-xl font-bold text-white drop-shadow-lg">₹{team.remainingPurse.toLocaleString('en-IN')}</span>
+                        {team.players.length === 0 ? (
+                          <p className="text-center text-white/40 text-xs italic py-3">No players bought yet.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {team.players.slice(0, 5).map((player) => {
+                              const imageUrl = getProfilePhotoUrl(player.data as Record<string, unknown>)
+                              return (
+                                <div key={player.id} className="flex items-center gap-2">
+                                  {imageUrl ? (
+                                    <img src={imageUrl} alt={getPlayerName(player)} className="w-7 h-7 rounded-full object-cover flex-shrink-0 bg-white/10" />
+                                  ) : (
+                                    <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                                      <UserIcon className="h-3.5 w-3.5 text-white/50" />
+                                    </div>
+                                  )}
+                                  <span className="flex-1 min-w-0 truncate text-white/90 text-xs">{getPlayerName(player)}</span>
+                                  <span className="text-amber-300 text-xs font-bold flex-shrink-0">₹{(player.soldPrice || 0).toLocaleString('en-IN')}</span>
+                                </div>
+                              )
+                            })}
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] sm:text-sm text-white/90 font-medium">Total Players</span>
-                            <span className="text-sm sm:text-lg font-semibold text-white drop-shadow-lg">{team.totalPlayers}</span>
-                          </div>
-                          <div className="flex items-center justify-between bg-black/20 -mx-2 px-2 py-1 rounded">
-                            <span className="text-[11px] sm:text-sm text-white font-semibold">Current Player Max Bid Allowed</span>
-                            <span className="text-sm sm:text-lg font-bold text-lime-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                              {team.remainingSlots > 0
-                                ? `₹${team.maxSpendableNow.toLocaleString('en-IN')}`
-                                : 'Team Full'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between bg-black/20 -mx-2 px-2 py-1 rounded">
-                            <span className="text-[11px] sm:text-sm text-white/90 font-medium">Reserve for remaining squad</span>
-                            <span className="text-sm sm:text-base font-semibold text-orange-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
-                              {team.remainingSlots > 0
-                                ? `₹${team.requiredReserve.toLocaleString('en-IN')}`
-                                : 'N/A'}
-                            </span>
-                          </div>
-                        </div>
-                      </CardContent>
+                        )}
+
+                        {/* Full roster + bid history are still one click away,
+                            just no longer required for the at-a-glance view. */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTeam(team.id)}
+                          className="mt-3 w-full text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-white/60 hover:text-white transition-colors"
+                        >
+                          {team.players.length > 5 ? `+${team.players.length - 5} more · ` : ''}View Full Roster
+                        </button>
+                      </div>
                     </Card>
                   ))}
                 </div>
