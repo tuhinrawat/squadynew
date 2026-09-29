@@ -313,19 +313,13 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setBiddersState(bidders)
   }, [bidders])
 
-  // Handler when reveal animation completes
+  // Reveal animation is now purely cosmetic (see onNewPlayer above) - the
+  // underlying player/bid data already updated the instant the event
+  // arrived, so completion just clears the overlay itself.
   const handleRevealComplete = useCallback(() => {
     setShowPlayerReveal(false)
-
-    if (pendingPlayer) {
-      setIsImageLoading(true)
-      setCurrentPlayer(pendingPlayer)
-      setCurrentBid(null)
-      setHighestBidderId(null)
-      setBidHistory([]) // Clear bid history for new player
-      setPendingPlayer(null)
-    }
-  }, [pendingPlayer])
+    setPendingPlayer(null)
+  }, [])
 
   // Guards the background snapshot poll (below) against reverting the screen
   // to a player it has already moved past. The snapshot endpoint is edge-
@@ -739,10 +733,20 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     },
     onNewPlayer: (data) => {
       setPoolExhausted(false)
-      // Store the new player and show reveal animation
+      // The underlying data commits immediately - admin (which drove this
+      // change) already shows the new player the instant it clicked Mark
+      // Sold/Skip, and this view falling behind by the length of a cosmetic
+      // animation is exactly the "presenter shows a stale player" gap that
+      // matters during a live auction. pendingPlayer/showPlayerReveal below
+      // still drive the reveal animation as a purely visual overlay on top
+      // of already-correct data, not as a gate on when that data updates.
+      setIsImageLoading(true)
+      setCurrentPlayer(data.player as Player)
+      setCurrentBid(null)
+      setHighestBidderId(null)
+      setBidHistory([])
       setPendingPlayer(data.player as Player)
       setShowPlayerReveal(true)
-      // Don't update current player yet - wait for animation to complete
     },
     onAuctionStarted: triggerGoingLiveBanner,
     onAuctionPoolExhausted: () => {
