@@ -114,6 +114,14 @@ async function fetchDriveImage(fileId: string, width: number): Promise<{ content
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
       signal: controller.signal,
+      // Explicit, not left implicit: attaching an AbortSignal already makes
+      // this fetch ineligible for Next.js's Data Cache, but that cache would
+      // be the wrong tool here regardless - it would silently keep serving
+      // these exact bytes if a player's photo is ever replaced under the
+      // same Drive file ID. The real caching that matters (fast repeat
+      // requests) already happens at Vercel's edge, via this route's own
+      // outgoing Cache-Control header - that layer is untouched by this.
+      cache: 'no-store',
     })
     if (!response.ok) {
       throw new UpstreamFetchError(response.status)
