@@ -152,7 +152,7 @@ export function PlayerRevealAnimation({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md rounded-xl overflow-hidden"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black backdrop-blur-md rounded-xl overflow-hidden"
       style={{ willChange: 'transform, opacity' }}
     >
       <div className="relative w-full h-full overflow-hidden">
