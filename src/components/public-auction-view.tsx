@@ -1063,11 +1063,26 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // reset effect above) means the sweep's very first request cannot be
   // scheduled until the current photo's own request has already finished,
   // full stop - not a scheduling hint, an ordering guarantee.
+  // Remembers a completed sweep for this auction across refreshes, within
+  // this browser tab's session - the CDN cache this sweep populates is
+  // already good for a full year (see proxy-image/route.ts's Cache-Control),
+  // so repeating all ~140 requests on every single refresh was pure waste:
+  // nothing in the cache had gone anywhere since the last time this same
+  // tab did this. sessionStorage (not localStorage) is deliberate - it
+  // clears on tab close, so a genuinely fresh device/tab still warms its
+  // own cache once, which is the one case this sweep actually exists for.
+  const PRELOAD_SWEEP_SESSION_KEY = `squady-presenter-sweep-${auction.id}`
   const hasStartedPreloadSweepRef = useRef(false)
   useEffect(() => {
     if (!isPresenter || !presenterPhotoLoaded) return
     if (hasStartedPreloadSweepRef.current) return // one-time - later player
     hasStartedPreloadSweepRef.current = true       // changes must not restart this
+    try {
+      if (sessionStorage.getItem(PRELOAD_SWEEP_SESSION_KEY)) return
+    } catch {
+      // Private browsing or storage disabled - fall through and sweep
+      // anyway rather than silently never warming the cache at all.
+    }
     // Excludes the current player - their photo is already being fetched by
     // the dedicated <img> below, which needs to win any bandwidth race, not
     // queue behind (or get duplicated by) this generic sweep.
@@ -1075,7 +1090,9 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       .filter(p => p.status !== 'RETIRED' && p.id !== currentPlayer?.id)
       .map(p => extractProxyImageUrl(p.data as Record<string, unknown>, 800))
       .filter((url): url is string => !!url)
-    preloadImagesSafe(urls)
+    preloadImagesSafe(urls).then(() => {
+      try { sessionStorage.setItem(PRELOAD_SWEEP_SESSION_KEY, '1') } catch {}
+    })
     // Deliberately a one-time background warm-up (the ref guard above, not
     // this dependency array, is what enforces that) - not a live sync kept
     // up to date with every subsequent player/auction change.
