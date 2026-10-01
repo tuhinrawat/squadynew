@@ -1057,8 +1057,11 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // needs to win that race, not queue behind a hundred others.
   useEffect(() => {
     if (!isPresenter) return
+    // Excludes the current player - their photo is already being fetched by
+    // the dedicated <img> below, which needs to win any bandwidth race, not
+    // queue behind (or get duplicated by) this generic sweep.
     const urls = auction.players
-      .filter(p => p.status !== 'RETIRED')
+      .filter(p => p.status !== 'RETIRED' && p.id !== currentPlayer?.id)
       .map(p => extractProxyImageUrl(p.data as Record<string, unknown>, 800))
       .filter((url): url is string => !!url)
     const timer = setTimeout(() => preloadImagesSafe(urls), 2000)

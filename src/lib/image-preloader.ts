@@ -11,6 +11,15 @@ export function preloadImage(url: string): Promise<void> {
     }
 
     const img = new Image()
+    // Every call site of this function is background warming (the next
+    // player, or the whole roster ahead of time) - never the image someone
+    // is actually waiting to see right now. Without this, the browser's own
+    // network scheduler has no way to tell a background warm-up apart from
+    // the current player's own live <img> fetch, and can let a 100+ request
+    // sweep (see public-auction-view.tsx) compete with and delay the one
+    // request that's actually visible on stage. Unsupported in a browser
+    // just falls back to default priority - never an error.
+    img.fetchPriority = 'low'
     img.onload = () => resolve()
     img.onerror = () => reject(new Error(`Failed to load image: ${url}`))
     img.src = url
