@@ -1050,13 +1050,24 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
   // This covers the case that action can't: presenter view opening on a
   // DIFFERENT device than whichever one triggered that dashboard action.
   //
-  // Deliberately delayed and batched (preloadImagesSafe caps concurrency) -
-  // firing every player's photo request at once would itself become the
-  // thundering-herd problem this is meant to prevent, and would compete for
-  // bandwidth with the CURRENT player's own photo, which the <img> below
-  // needs to win that race, not queue behind a hundred others.
+  // Gated on presenterPhotoLoaded, not a blind delay - a fixed 2s timer was
+  // a GUESS at "the current photo should be done by now," not a guarantee.
+  // fetchPriority='low' on the sweep's own images (see image-preloader.ts)
+  // only influences which request a browser picks when it's already
+  // choosing between options - it can't preempt connections the sweep
+  // already grabbed before the current photo's own request even existed,
+  // so a low-priority sweep that starts first can still make a high-
+  // priority request wait its turn (confirmed live: the current photo was
+  // still spinning with the sweep's requests actively in flight around it).
+  // Waiting for presenterPhotoLoaded (true on either load or error - see the
+  // reset effect above) means the sweep's very first request cannot be
+  // scheduled until the current photo's own request has already finished,
+  // full stop - not a scheduling hint, an ordering guarantee.
+  const hasStartedPreloadSweepRef = useRef(false)
   useEffect(() => {
-    if (!isPresenter) return
+    if (!isPresenter || !presenterPhotoLoaded) return
+    if (hasStartedPreloadSweepRef.current) return // one-time - later player
+    hasStartedPreloadSweepRef.current = true       // changes must not restart this
     // Excludes the current player - their photo is already being fetched by
     // the dedicated <img> below, which needs to win any bandwidth race, not
     // queue behind (or get duplicated by) this generic sweep.
@@ -1064,12 +1075,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
       .filter(p => p.status !== 'RETIRED' && p.id !== currentPlayer?.id)
       .map(p => extractProxyImageUrl(p.data as Record<string, unknown>, 800))
       .filter((url): url is string => !!url)
-    const timer = setTimeout(() => preloadImagesSafe(urls), 2000)
-    return () => clearTimeout(timer)
-    // Deliberately run once per mount, not on every player/auction update -
-    // this is a one-time background warm-up, not a live sync.
+    preloadImagesSafe(urls)
+    // Deliberately a one-time background warm-up (the ref guard above, not
+    // this dependency array, is what enforces that) - not a live sync kept
+    // up to date with every subsequent player/auction change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPresenter])
+  }, [isPresenter, presenterPhotoLoaded])
 
   // Presenter mode (?presenter=1) is a dedicated full-screen stage meant to
   // be projected for a room to watch, not the interactive per-viewer page -
