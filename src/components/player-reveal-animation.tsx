@@ -148,8 +148,15 @@ export function PlayerRevealAnimation({
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
+      // Opacity is pinned at 1, never animated - the data underneath this
+      // overlay is already the NEXT player's (committed the instant this
+      // mounts, by design - see onNewPlayer), so even the ~200ms fade-in
+      // this used to have (initial opacity:0 -> animate opacity:1) was a
+      // real window for that player to bleed through before the reveal
+      // "should" show them. Keeping the scale pop for entrance polish
+      // without ever letting opacity leave 1.
+      initial={{ scale: 0.95 }}
+      animate={{ scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
       className="absolute inset-0 z-50 flex items-center justify-center bg-black backdrop-blur-md rounded-xl overflow-hidden"

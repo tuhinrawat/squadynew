@@ -171,6 +171,17 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': outContentType,
         'Cache-Control': 'public, max-age=31536000, immutable',
+        // Response body depends on the request's Accept header (avif vs webp
+        // vs original) - without this, a cache that partitions by URL alone
+        // can serve one visitor's re-encoded format to a different visitor
+        // whose browser doesn't support it. Measured directly against this
+        // app's own live deployment: at one width, a webp-accepting request
+        // and an avif-accepting request for the exact same photo came back
+        // byte-for-byte identical - two different codecs don't produce
+        // identical output by chance, so something was already serving one
+        // cached response for both. This header is the standard, explicit
+        // fix regardless of a CDN's claimed default Accept-partitioning.
+        'Vary': 'Accept',
       },
     })
   } catch (error) {
