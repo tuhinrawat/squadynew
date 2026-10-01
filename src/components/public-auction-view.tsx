@@ -1309,12 +1309,23 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                       // Batting instead, each getting the full column width.
                       <div className={`grid gap-4 mb-4 ${presenterBattingStats && presenterBowlingStats ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                         {presenterBattingStats && (
-                          <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                          // @container: the inner 2x2 grid below needs to know
+                          // THIS PANEL's own width, not the viewport's - once
+                          // the outer grid above went side-by-side (lg:), each
+                          // panel only got half the row, and a plain lg:
+                          // breakpoint on the inner grid had no way to know
+                          // that had already happened, so it kept trying to
+                          // fit 2 StatTile columns into a space only sized for
+                          // one. @sm: below is relative to THIS container, so
+                          // it only goes 2-column once the panel itself is
+                          // actually wide enough, regardless of viewport size
+                          // or how many outer columns there are.
+                          <div className="@container bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <BatIcon size={36} />
                               <span className="text-xl lg:text-3xl font-extrabold uppercase tracking-wider text-teal-400">Batting</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 @sm:grid-cols-2 gap-3">
                               {presenterBattingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBattingStats.matches} />}
                               {presenterBattingStats.runs !== undefined && <StatTile size="lg" label="Runs" value={presenterBattingStats.runs} />}
                               {presenterBattingStats.average !== undefined && <StatTile size="lg" label="Average" value={presenterBattingStats.average.toFixed(2)} />}
@@ -1323,12 +1334,12 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                           </div>
                         )}
                         {presenterBowlingStats && (
-                          <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                          <div className="@container bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
                               <BallIcon size={36} />
                               <span className="text-xl lg:text-3xl font-extrabold uppercase tracking-wider text-teal-400">Bowling</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-1 @sm:grid-cols-2 gap-3">
                               {presenterBowlingStats.matches !== undefined && <StatTile size="lg" label="Matches" value={presenterBowlingStats.matches} />}
                               {presenterBowlingStats.wickets !== undefined && <StatTile size="lg" label="Wickets" value={presenterBowlingStats.wickets} />}
                               {presenterBowlingStats.economy !== undefined && <StatTile size="lg" label="Economy" value={presenterBowlingStats.economy.toFixed(2)} />}
