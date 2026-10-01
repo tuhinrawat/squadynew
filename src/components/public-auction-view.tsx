@@ -1044,6 +1044,28 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     setPhotoRetryNonce(n => n + 1)
   }, [])
 
+  // onLoad alone misses an <img> whose src the browser already has fully
+  // cached (e.g. this exact file:width was warmed earlier by the preload
+  // sweep, or simply shown before in this tab) - a cached image can resolve
+  // to `complete` without the browser ever firing a fresh `load` event for
+  // it, which is exactly the "spinner never clears despite the request
+  // having already succeeded" symptom confirmed live via DevTools (200,
+  // X-Vercel-Cache: HIT, Age: 13 - the bytes were already sitting there).
+  // There's no <img key>, so the same DOM node is reused across players and
+  // this effect re-runs on every src swap to catch that case explicitly
+  // rather than trusting onLoad to always fire.
+  const presenterImgRef = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    const img = presenterImgRef.current
+    if (!img || !img.complete) return
+    if (img.naturalWidth > 0) {
+      setPresenterPhotoLoaded(true)
+    } else {
+      setPresenterPhotoLoaded(true)
+      setPresenterPhotoFailed(true)
+    }
+  }, [presenterPhotoSrc])
+
   // Silently warms this browser's own HTTP cache for every player still
   // eligible to come up on stage (see preload-images/route.ts's server-side
   // equivalent, triggered manually from the dashboard before going live).
@@ -1236,6 +1258,7 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                     {presenterPhotoUrl && !presenterPhotoFailed ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
+                        ref={presenterImgRef}
                         src={presenterPhotoSrc}
                         alt={playerName}
                         onLoad={() => setPresenterPhotoLoaded(true)}
