@@ -234,9 +234,17 @@ export default async function LiveAuctionPage({ params, searchParams }: { params
   }
 
   // If auction is published, allow public viewing without auth (regardless of status)
-  // This allows users to see published auctions even if they're in DRAFT status
+  // This allows users to see published auctions even if they're in DRAFT status.
+  // isPresenterMode also enters this branch for a LOGGED-IN admin/super-admin -
+  // without that, ?presenter=1 was silently ignored for anyone with a session,
+  // forcing the admin running their own auction into AdminAuctionView instead
+  // of the dedicated full-screen presenter stage even when they explicitly
+  // asked for it - the only way to see presenter mode while logged in was a
+  // separate incognito window. Presenter mode shows nothing an anonymous
+  // visitor couldn't already see, so there's no access-control reason to
+  // withhold it from an authenticated admin who asked for it by name.
   if (auction.isPublished) {
-    if (!session) {
+    if (!session || isPresenterMode) {
       // If completed, show results view for public
       if (auction.status === 'COMPLETED') {
         // Need to provide a dummy userId and role for public access
