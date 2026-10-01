@@ -85,7 +85,16 @@ async function reencodeImage(buffer: ArrayBuffer, format: 'avif' | 'webp'): Prom
 // leaves the inFlight map below (cleanup only runs on settle) - every later
 // request for that exact photo, including after a hard refresh, then
 // coalesces onto that same permanently-pending promise and spins forever.
-const UPSTREAM_TIMEOUT_MS = 10000
+//
+// 20s, not 10s: confirmed via a real production request (width=600, this
+// app's own diagnostic route) that Drive can genuinely take close to or
+// past 10s to generate a thumbnail SIZE it hasn't produced for that file
+// before - a real, if occasional, cold-generation cost, not a hang. 10s was
+// cutting those off as failures. Preloading a player's photo ahead of time
+// (preload-images/route.ts, same 800px width presenter actually uses) is
+// what actually avoids paying this cost live - this timeout only bounds the
+// worst case for whichever photo wasn't preloaded in time.
+const UPSTREAM_TIMEOUT_MS = 20000
 
 async function fetchDriveImage(fileId: string, width: number): Promise<{ contentType: string; buffer: ArrayBuffer }> {
   const imageUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w${width}`
