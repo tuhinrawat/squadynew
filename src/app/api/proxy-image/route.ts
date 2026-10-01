@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 export const dynamic = 'force-dynamic'
+// Explicit, not left to Vercel's plan default - the upstream fetch below has
+// its own 20s AbortController timeout, and that logic needs the function
+// itself to still be alive long enough to catch the abort and return a
+// clean error response. Without this, an unstated (and possibly shorter)
+// platform default could kill the function first, which doesn't guarantee
+// the same clean "fail fast with a proper HTTP error" behavior the
+// AbortController is specifically there to produce.
+export const maxDuration = 30
 
 // Request coalescing: if N viewers request the same not-yet-cached photo in
 // the same instant (e.g. 1000 people opening the auction the moment it goes
