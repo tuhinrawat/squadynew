@@ -16,10 +16,27 @@ import { extractPlayerName } from '@/lib/player-name'
 // Cache-Control is what keeps this affordable at any polling frequency: many
 // viewers polling the same auction within the same couple of seconds collapse
 // into effectively one real database read, because Vercel's edge network
-// serves the cached response to everyone else in that window.
+// serves the cached response to everyone else in that window. That trade only
+// makes sense when there's real concurrency to collapse - at audience sizes
+// in the hundreds or thousands, it turns N redundant reads into ~1.
+//
+// The presenter's own safety-net poll (see public-auction-view.tsx) hits this
+// SAME endpoint, but presenter is never more than a handful of connections
+// per auction - there's no concurrency here for caching to collapse, so it
+// buys nothing. What it DOES cost: Vercel's edge serves a stale-but-still-
+// within-window response from stale-while-revalidate, and different polls
+// can land on different edge PoPs each holding their own cached copy at a
+// different point in that window - which is exactly what caused the
+// reported bug (a sold player flickering back in, repeatedly, on the one
+// screen where correctness matters most). A presenter poll passes
+// `?fresh=1` to skip caching entirely and always read the database directly
+// - trivial added load given how few presenter connections exist, in
+// exchange for removing this whole class of staleness bug at the source
+// instead of continuing to patch it with client-side guards.
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const start = Date.now()
+  const skipCache = request.nextUrl.searchParams.get('fresh') === '1'
   // Set once the auction is found, so a failure logged after that point still
   // carries which auction it happened on - a genuinely unattributable error
   // (e.g. the initial lookup itself throws) logs without one instead.
@@ -175,8 +192,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // fixes: viewers stuck on a stale bid/player even through a manual
     // refresh, because the refresh still consulted that same stale
     // browser-cached response instead of hitting the network at all).
+    //
+    // skipCache (presenter's poll, ?fresh=1): no-store instead - this read
+    // already hit the database live above, so the only thing left to
+    // prevent is Vercel's edge or the browser caching THIS response for a
+    // later request to reuse.
     return NextResponse.json(body, {
-      headers: { 'Cache-Control': 'public, max-age=0, must-revalidate, s-maxage=2, stale-while-revalidate=5' },
+      headers: {
+        'Cache-Control': skipCache
+          ? 'private, no-store'
+          : 'public, max-age=0, must-revalidate, s-maxage=2, stale-while-revalidate=5',
+      },
     })
   } catch (error) {
     console.error('Error building auction snapshot:', error)

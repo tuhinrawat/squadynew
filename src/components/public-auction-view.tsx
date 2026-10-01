@@ -606,15 +606,19 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     if (!isPresenter) return
     const interval = setInterval(async () => {
       try {
-        // no-store: without this, some browsers will silently keep reusing
-      // their own cached copy of this URL well past the server's intended
-      // 2s freshness window (s-maxage only governs Vercel's shared edge
-      // cache, not a visitor's own browser cache) - leaving the screen
-      // stuck on stale data through every subsequent poll, and even a
-      // manual refresh, since that still consults the browser's own cache
-      // for this same URL. This forces every poll to actually reach
-      // Vercel's edge, which is where the real freshness policy lives.
-      const response = await fetch(`/api/auction/${auction.id}/snapshot`, { cache: 'no-store' })
+        // fresh=1 + cache: 'no-store': presenter is never more than a
+        // handful of connections, so the edge cache that makes this endpoint
+        // affordable at real (hundreds/thousands-of-viewers) audience sizes
+        // buys presenter nothing - it only risks this poll landing on a
+        // stale cached copy (different Vercel edge PoPs can each be holding
+        // their own cached response within the same stale-while-revalidate
+        // window). That's what caused a sold player to flicker back onto
+        // the presenter screen, repeatedly - not a one-off, but every time a
+        // poll happened to land on a not-yet-revalidated edge node. fresh=1
+        // tells the route to skip Vercel's edge cache and read the database
+        // directly every time; cache: 'no-store' does the same for the
+        // browser's own cache on top.
+        const response = await fetch(`/api/auction/${auction.id}/snapshot?fresh=1`, { cache: 'no-store' })
         if (!response.ok) return
         const data = await response.json()
         applySnapshot({
