@@ -1299,7 +1299,15 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                         projected stage and every other screen read the same
                         stats the same way. */}
                     {(presenterBattingStats || presenterBowlingStats) && (
-                      <div className={`grid gap-4 mb-4 ${presenterBattingStats && presenterBowlingStats ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                      // Side-by-side only once there's actually room (lg:,
+                      // matching every other size breakpoint already used in
+                      // this presenter branch) - forcing 2 columns at any
+                      // width squeezed Batting/Bowling's big StatTile numbers
+                      // into cells too narrow for them, so the text
+                      // overflowed its own column and visually overlapped
+                      // the other one. Below lg:, Bowling stacks under
+                      // Batting instead, each getting the full column width.
+                      <div className={`grid gap-4 mb-4 ${presenterBattingStats && presenterBowlingStats ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                         {presenterBattingStats && (
                           <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
                             <div className="flex items-center gap-2 mb-3">
