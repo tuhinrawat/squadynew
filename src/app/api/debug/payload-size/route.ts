@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { parseBidHistory, filterBidHistoryForCurrentPlayer } from '@/lib/auction-view-data'
 import { extractPlayerName } from '@/lib/player-name'
 import { extractProfilePhotoValue, extractProxyImageUrl } from '@/lib/player-photo'
+import { isLiveStatus } from '@/lib/auction-status'
 
 // One-off diagnostic, not part of the app's real request path: measures
 // ACTUAL byte sizes against a REAL auction's real data, for a direct
@@ -40,6 +41,21 @@ export async function GET(request: NextRequest) {
           take: 10,
         }),
       }, { status: 404 })
+    }
+
+    // Refuses to run against a LIVE/MOCK_RUN auction - this diagnostic fires
+    // up to 18 concurrent requests to Drive's thumbnail endpoint (6 widths x
+    // 3 Accept-header variants) plus several database reads, both drawn from
+    // the exact same shared, rate-limited resources (Drive, Prisma
+    // operations) the real presenter screen depends on mid-auction. Running
+    // this during live bidding would compete with the real presenter for
+    // Drive's bandwidth right where its latency tail already runs longest,
+    // and spend real operations budget on a test instead of the auction.
+    // Safe once the auction isn't actively running (DRAFT/PAUSED/COMPLETED).
+    if (isLiveStatus(auction.status)) {
+      return NextResponse.json({
+        error: `This auction is currently ${auction.status} - this diagnostic is blocked while an auction is live to avoid competing with the real presenter screen for Google Drive bandwidth and database operations. Run it before going live, during a pause, or after the auction ends.`,
+      }, { status: 409 })
     }
 
     // ---- 1. Current (post-optimization) snapshot payload - exact same
