@@ -1137,10 +1137,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
     const presenterBowlingStats = bowlingStats
     const presenterIsBidderChoice = !!(currentPlayer?.isIcon || (currentPlayer?.data as any)?.isIcon)
     const presenterCricherosLink = cricherosLink
-    // Same club intake-survey questions as the fields builder further below.
-    const presenterAbility = playerData?.['How would you rate your current cricketing ability?']
-    const presenterLastPlayed = playerData?.['When did you last play cricket?']
-    const presenterPlays = playerData?.['How frequently do you currently play cricket?']
 
     return (
       <>
@@ -1393,17 +1389,6 @@ export function PublicAuctionView({ auction, currentPlayer: initialPlayer, stats
                             </div>
                           </div>
                         )}
-                      </div>
-                    )}
-
-                    {/* Ability / Last played / Plays - from the club's intake
-                        survey. Only renders when the player actually has at
-                        least one of these three answers. */}
-                    {(presenterAbility || presenterLastPlayed || presenterPlays) && (
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-4 text-xl lg:text-3xl text-white/70">
-                        {presenterAbility && <span><span className="font-extrabold text-white">Ability:</span> {presenterAbility}</span>}
-                        {presenterLastPlayed && <span><span className="font-extrabold text-white">Last played:</span> {presenterLastPlayed}</span>}
-                        {presenterPlays && <span><span className="font-extrabold text-white">Plays:</span> {presenterPlays}</span>}
                       </div>
                     )}
 
