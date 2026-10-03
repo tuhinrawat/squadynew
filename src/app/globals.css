@@ -268,3 +268,21 @@ body {
   animation: heartbeat-glow 1.8s ease-in-out infinite;
 }
 
+/* Presenter stage batting/bowling stats (public-auction-view.tsx,
+   cricket-stat-ui.tsx's size="lg" StatTile) scale continuously with the
+   room's actual screen width instead of jumping once at Tailwind's lg:
+   breakpoint - the same panel runs on anything from a laptop lid to a
+   large projector, and the old two-step size didn't keep growing past
+   1024px even though a much bigger screen still had room for bigger type.
+   clamp(min, preferred, max): the vw term is what makes it continuous;
+   min/max just bound it at the very small/very large ends. */
+.text-fluid-stat-section {
+  font-size: clamp(1.25rem, 1rem + 1vw, 2.25rem);
+}
+.text-fluid-stat-value {
+  font-size: clamp(2.5rem, 2rem + 2vw, 4.5rem);
+}
+.text-fluid-stat-label {
+  font-size: clamp(1rem, 0.85rem + 0.6vw, 1.75rem);
+}
+
