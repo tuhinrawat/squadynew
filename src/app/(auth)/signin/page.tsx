@@ -7,7 +7,6 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function SignIn() {
   const [email, setEmail] = useState('')
@@ -52,90 +51,85 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="dark min-h-screen flex items-center justify-center bg-[#05070a] text-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div className="absolute -top-28 -left-20 w-[420px] h-[420px] rounded-full bg-teal-400/10 blur-3xl" />
+      <div className="absolute -bottom-32 -right-24 w-[460px] h-[460px] rounded-full bg-amber-400/10 blur-3xl" />
+
+      <div className="relative max-w-md w-full space-y-8">
         <div className="text-center">
-          <Link href="/">
-            <Image src="/squady-logo.svg" alt="Squady" width={120} height={40} className="h-12 w-auto mx-auto" />
+          <Link href="/" className="inline-flex">
+            <Image src="/squady-logo.svg" alt="Squady" width={130} height={24} className="h-9 w-auto mx-auto" />
           </Link>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900 dark:text-white">
+          <h2 className="mt-6 text-2xl font-extrabold">
             Sign in to your account
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-sm text-white/50">
             Access your auction management dashboard
           </p>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Sign In</CardTitle>
-            <CardDescription>
-              Enter your credentials to access your account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {message && (
-              <div className="mb-4 text-sm text-green-600 bg-green-50 dark:bg-green-900/20 p-3 rounded-md">
-                {message}
+        <div className="rounded-2xl border border-white/[0.07] bg-[#0c1116] p-8">
+          {message && (
+            <div className="mb-5 text-sm text-teal-300 bg-teal-400/10 border border-teal-400/20 p-3 rounded-lg">
+              {message}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label htmlFor="email" className="block text-sm font-semibold text-white/70 mb-2">
+                Email Address
+              </label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="bg-white/[0.03] border-white/15 text-white placeholder:text-white/30 h-11 focus-visible:ring-teal-400/50"
+                placeholder="Enter your email"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-semibold text-white/70 mb-2">
+                Password
+              </label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="bg-white/[0.03] border-white/15 text-white placeholder:text-white/30 h-11 focus-visible:ring-teal-400/50"
+                placeholder="Enter your password"
+              />
+            </div>
+
+            {error && (
+              <div className="text-sm text-red-300 bg-red-400/10 border border-red-400/20 p-3 rounded-lg">
+                {error}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email Address
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="mt-1"
-                  placeholder="Enter your email"
-                />
-              </div>
+            <Button
+              type="submit"
+              className="w-full h-11 bg-gradient-to-b from-amber-300 to-amber-400 text-amber-950 font-bold hover:brightness-105"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing in...' : 'Sign In'}
+            </Button>
+          </form>
 
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="mt-1"
-                  placeholder="Enter your password"
-                />
-              </div>
-
-              {error && (
-                <div className="text-sm text-red-600 bg-red-50 dark:bg-red-900/20 p-3 rounded-md">
-                  {error}
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Signing in...' : 'Sign In'}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Don&apos;t have an account?{' '}
-                <Link href="/signup" className="font-medium text-teal-600 hover:text-teal-500 dark:text-teal-400">
-                  Sign up
-                </Link>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-white/50">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="font-semibold text-teal-400 hover:text-teal-300">
+                Sign up
+              </Link>
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

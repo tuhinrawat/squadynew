@@ -1,292 +1,176 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Instagram, LogIn } from 'lucide-react'
+import { SiteNav } from '@/components/site-nav'
+import { SiteFooter } from '@/components/site-footer'
+
+// Four features grounded in what this app actually does, not generic SaaS
+// copy - each one maps to a real, shipped mechanic (see the components/
+// routes named below), not an aspirational claim.
+const FEATURES = [
+  {
+    title: 'Projector-ready stage',
+    description: "A dedicated full-screen presenter view for the room to watch — separate from the admin screen, which bidders never see.",
+    accent: 'teal' as const,
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2" />
+        <line x1="8" y1="21" x2="16" y2="21" />
+        <line x1="12" y1="17" x2="12" y2="21" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Fairness, built into the rules',
+    description: 'Icon players go first, every time. A player who goes unsold automatically re-enters the pool for another round instead of vanishing from the auction.',
+    accent: 'amber' as const,
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 014-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 01-4 4H3" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Real stats, not just names',
+    description: "Batting and bowling numbers pulled from each player's Cricheroes profile, shown live on stage while bidding is open.",
+    accent: 'teal' as const,
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Nothing is locked in by accident',
+    description: 'Undo a bid, reverse a sale, or mark a player unsold mid-auction. The admin stays in control, start to finish.',
+    accent: 'amber' as const,
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+      </svg>
+    ),
+  },
+]
 
 export default function Home() {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gradient-to-br from-teal-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Navigation */}
-      <nav className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-14 sm:h-16">
-            <div className="flex items-center flex-shrink-0">
-              <Image src="/squady-logo.svg" alt="Squady" width={100} height={33} className="h-7 sm:h-8 w-auto" />
-            </div>
-            <div className="flex items-center gap-0.5 sm:gap-3">
-              {/* Instagram Icon - Always visible */}
-              <a
-                href="https://www.instagram.com/squady.auction/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors p-1 sm:p-2"
-                aria-label="Follow us on Instagram"
-              >
-                <Instagram className="h-4 w-4 sm:h-5 sm:w-5" />
-              </a>
-              <Link href="/tutorial">
-                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
-                  Tutorial
-                </Button>
-              </Link>
-              <Link href="/fairness">
-                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
-                  Fairness
-                </Button>
-              </Link>
-              <Link href="/register">
-                <Button variant="ghost" size="sm" className="text-[9px] sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-7 sm:h-9 px-1.5 sm:px-3">
-                  <span className="hidden sm:inline">Live Auctions</span>
-                  <span className="sm:hidden">Auctions</span>
-                </Button>
-              </Link>
-              <Link href="/signin" className="hidden md:block">
-                <Button variant="ghost" size="sm" className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 h-9">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/signup">
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700 h-7 sm:h-9 px-1.5 sm:px-4">
-                  <span className="hidden sm:inline text-xs sm:text-sm">Get Started</span>
-                  <LogIn className="h-4 w-4 sm:hidden" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+    <div className="dark min-h-screen overflow-x-hidden bg-[#05070a] text-white flex flex-col">
+      <SiteNav />
 
-      {/* Hero Section */}
-      <section className="relative py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto text-center">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-6">
-            Run Professional Sports
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-blue-600 block sm:inline">
-              {' '}Auctions in Minutes
-            </span>
+      {/* Hero */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20 flex flex-wrap items-center gap-12 lg:gap-16">
+        <div className="flex-1 min-w-[320px]">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-teal-400 mb-4">Live cricket auctions</div>
+          <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-black uppercase leading-[1.03] mb-6">
+            Auctions that feel like<br />
+            <span className="text-amber-400">match day.</span>
           </h1>
-          <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto px-2">
-            The complete auction management platform for sports teams. Upload player data, 
-            manage live bidding, and control every aspect of your auction with professional-grade tools.
+          <p className="text-base sm:text-lg text-white/65 max-w-[480px] mb-8 leading-relaxed">
+            Squady runs the bidding, the projector stage, and the fairness rules — so your players get the auction day they&apos;ve been waiting for, not a spreadsheet with extra steps.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-wrap gap-3.5">
             <Link href="/signup">
-              <Button size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700">
-                Get Started Free
+              <Button size="lg" className="h-12 px-7 bg-gradient-to-b from-amber-300 to-amber-400 text-amber-950 font-bold hover:brightness-105">
+                Start Free
               </Button>
             </Link>
-            <Link href="/signin">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
-                Sign In
+            <Link href="/register">
+              <Button size="lg" variant="ghost" className="h-12 px-7 border border-white/15 text-white hover:bg-white/10 hover:text-white">
+                See Live Auctions
               </Button>
             </Link>
           </div>
         </div>
-      </section>
 
-      {/* Features Section */}
-      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-white/50 dark:bg-gray-800/50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Everything You Need for Professional Auctions
-            </h2>
-            <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300">
-              Powerful features designed for sports auction management
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-teal-100 dark:bg-teal-900 rounded-lg flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <CardTitle>Flexible Player Management</CardTitle>
-                <CardDescription>
-                  Upload any CSV format with dynamic columns. Support for any player data structure.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <CardTitle>Real-Time Bidding</CardTitle>
-                <CardDescription>
-                  Live auction experience with countdown timers and instant bid updates.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                </div>
-                <CardTitle>Multiple Auctions</CardTitle>
-                <CardDescription>
-                  Create unlimited auctions and manage multiple events simultaneously.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            <Card className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <CardTitle>Complete Control</CardTitle>
-                <CardDescription>
-                  Undo bids, reverse sales, and maintain full admin control over your auctions.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Video Posters Section */}
-      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12 sm:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              See Squady in Action
-            </h2>
-            <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300">
-              Watch how Squady transforms your auction experience
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 lg:gap-12">
-            {/* Video 1 */}
-            <div className="relative w-full rounded-lg overflow-hidden shadow-2xl">
-              <video
-                className="w-full h-auto"
-                controls
-                playsInline
-                preload="metadata"
-                style={{ display: 'block' }}
-              >
-                <source src="/poster1.mp4" type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            </div>
-
-            {/* Video 2 */}
-            <div className="relative w-full rounded-lg overflow-hidden shadow-2xl">
-              <video
-                className="w-full h-auto"
-                controls
-                playsInline
-                preload="metadata"
-                style={{ display: 'block' }}
-              >
-                <source src="/poster2.mp4" type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing Section */}
-      <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-            Simple, Transparent Pricing
-          </h2>
-          <p className="text-base sm:text-lg text-gray-600 dark:text-gray-300 mb-8">
-            Contact us for custom pricing based on your organization&apos;s needs
-          </p>
-          <Card className="max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle className="text-2xl">Custom Pricing</CardTitle>
-              <CardDescription>
-                Tailored solutions for your organization
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-teal-600 dark:text-teal-400 mb-4">
-                Contact Us
+        {/* Hero visual - an honest, miniature replica of the real presenter
+            stage card (public-auction-view.tsx's isPresenter branch), not a
+            stock illustration, so the homepage shows the actual product. */}
+        <div className="flex-1 min-w-[320px] max-w-[460px]">
+          <div className="rounded-2xl border border-white/10 bg-[#0c1116] p-5 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.6)]">
+            <div className="flex items-start justify-between mb-4">
+              <div className="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center font-black text-amber-950 text-xl">24</div>
+              <div className="text-right">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-white/40">Current Bid</div>
+                <div className="font-black text-2xl text-teal-400">₹85,000</div>
               </div>
-              <p className="text-gray-600 dark:text-gray-300 mb-6">
-                Get a personalized quote based on your auction volume and requirements
-              </p>
-              <Link href="/contact">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-600 dark:hover:bg-blue-700">
-                  Contact Sales
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="h-[170px] rounded-xl bg-gradient-to-br from-[#1c2b2a] to-[#10181b] flex items-center justify-center mb-4">
+              <svg width="70" height="90" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={3} opacity={0.5}>
+                <circle cx="110" cy="80" r="55" />
+                <path d="M25 375 C25 235 55 180 110 180 C165 180 195 235 195 375" />
+              </svg>
+            </div>
+            <div className="font-black text-xl uppercase mb-1">Rahul Deshmukh</div>
+            <div className="text-[13px] text-white/40 mb-4">All-Rounder · Right-Hand Bat</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white/[0.04] border border-white/10 rounded-lg p-2.5 text-center">
+                <div className="font-black text-lg">342</div>
+                <div className="text-[10px] text-white/40 uppercase">Runs</div>
+              </div>
+              <div className="bg-white/[0.04] border border-white/10 rounded-lg p-2.5 text-center">
+                <div className="font-black text-lg">17</div>
+                <div className="text-[10px] text-white/40 uppercase">Wickets</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gray-900 dark:bg-black text-white py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
-            <div>
-              <h3 className="text-xl font-bold text-teal-400 mb-4">Squady</h3>
-              <p className="text-gray-400">
-                Professional sports auction management platform
-              </p>
+      {/* Features */}
+      <section id="fairness-preview" className="max-w-6xl mx-auto px-5 sm:px-8 py-16">
+        <div className="max-w-[640px] mx-auto text-center mb-12">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-teal-400 mb-3">What Squady actually does</div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold uppercase">Built from running real auctions</h2>
+        </div>
+        <div className="grid gap-5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+          {FEATURES.map((feature) => (
+            <div key={feature.title} className="rounded-2xl border border-white/[0.07] bg-[#0c1116] p-7">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${feature.accent === 'teal' ? 'bg-teal-400/10 text-teal-400' : 'bg-amber-400/10 text-amber-400'}`}>
+                {feature.icon}
+              </div>
+              <h3 className="text-[17px] font-extrabold uppercase mb-2.5">{feature.title}</h3>
+              <p className="text-sm text-white/60 leading-relaxed">{feature.description}</p>
             </div>
-            <div>
-              <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="#" className="hover:text-white transition-colors">Features</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Pricing</Link></li>
-                <li><Link href="/fairness" className="hover:text-white transition-colors">How Player Order Works</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="#" className="hover:text-white transition-colors">About</Link></li>
-                <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Support</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Legal</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link href="#" className="hover:text-white transition-colors">Cookie Policy</Link></li>
-              </ul>
-            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Showcase videos */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-8 py-16">
+        <div className="max-w-[640px] mx-auto text-center mb-10">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-teal-400 mb-3">See it in the room</div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold uppercase">Auction night, as it happens</h2>
+        </div>
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+          <div className="rounded-2xl overflow-hidden border border-white/10 bg-[#0c1116]">
+            <video className="w-full h-auto block" controls playsInline preload="metadata">
+              <source src="/poster1.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-8">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              <p className="text-gray-400 text-sm">&copy; 2025 Squady. All rights reserved.</p>
-              <a 
-                href="https://www.instagram.com/squady.auction/" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-pink-400 hover:text-pink-300 transition-colors"
-                aria-label="Follow us on Instagram"
-              >
-                <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                </svg>
-              </a>
-            </div>
+          <div className="rounded-2xl overflow-hidden border border-white/10 bg-[#0c1116]">
+            <video className="w-full h-auto block" controls playsInline preload="metadata">
+              <source src="/poster2.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
           </div>
         </div>
-      </footer>
+      </section>
+
+      {/* Pricing */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-8 py-16">
+        <div className="max-w-[460px] mx-auto rounded-2xl border border-white/[0.07] bg-[#0c1116] p-9 text-center">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-teal-400 mb-3">Pricing</div>
+          <h2 className="text-2xl font-extrabold mb-2.5">Simple, transparent pricing</h2>
+          <p className="text-sm text-white/60 mb-6">Contact us for custom pricing based on your auction volume and requirements.</p>
+          <Link href="/contact" className="block">
+            <Button className="w-full h-12 bg-gradient-to-b from-amber-300 to-amber-400 text-amber-950 font-bold hover:brightness-105">
+              Contact Sales
+            </Button>
+          </Link>
+        </div>
+      </section>
+
+      <SiteFooter />
     </div>
   )
 }
