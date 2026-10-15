@@ -15,7 +15,17 @@ export function SiteNav({ active }: { active?: 'auctions' | 'fairness' }) {
       <div className="max-w-6xl mx-auto px-5 sm:px-8">
         <div className="flex items-center justify-between h-[76px] gap-3 flex-wrap">
           <Link href="/" className="flex items-center flex-shrink-0">
-            <Image src="/squady-logo.svg" alt="Squady" width={120} height={22} className="h-7 w-auto" priority />
+            {/* squady-logo.svg's paths have no fill attribute, so the
+                browser default (black) is baked into the file - invisible
+                against this dark nav without forcing it white via filter. */}
+            <Image
+              src="/squady-logo.svg"
+              alt="Squady"
+              width={120}
+              height={22}
+              className="h-7 w-auto [filter:brightness(0)_invert(1)]"
+              priority
+            />
           </Link>
 
           <div className="flex items-center gap-4 sm:gap-7 order-last sm:order-none w-full sm:w-auto justify-center sm:justify-start">

@@ -94,9 +94,30 @@ export default function Home() {
               </div>
             </div>
             <div className="h-[170px] rounded-xl bg-gradient-to-br from-[#1c2b2a] to-[#10181b] flex items-center justify-center mb-4">
-              <svg width="70" height="90" viewBox="0 0 220 380" fill="none" stroke="#5eead4" strokeWidth={3} opacity={0.5}>
-                <circle cx="110" cy="80" r="55" />
-                <path d="M25 375 C25 235 55 180 110 180 C165 180 195 235 195 375" />
+              {/* A batsman mid cover-drive, not a generic bust-and-shoulders
+                  silhouette - a bold athletic pictogram (thick rounded limb
+                  strokes, the way Olympic sport icons are built) rather than
+                  fine line art, which held up badly at this card's size -
+                  thin strokes read as a stick-figure sketch, not a crafted
+                  illustration. Verified by screenshotting the actual hero
+                  card before and after this rebuild. */}
+              <svg width="104" height="156" viewBox="0 0 200 300" fill="none" strokeLinecap="round">
+                {/* Back leg, trailing */}
+                <line x1="94" y1="126" x2="64" y2="215" stroke="#5eead4" strokeWidth={15} />
+                {/* Front leg, stepped into the drive */}
+                <line x1="94" y1="126" x2="122" y2="158" stroke="#5eead4" strokeWidth={15} />
+                <line x1="122" y1="158" x2="112" y2="220" stroke="#5eead4" strokeWidth={15} />
+                {/* Torso, leaning into the shot */}
+                <line x1="100" y1="56" x2="94" y2="126" stroke="#5eead4" strokeWidth={17} />
+                {/* Arms, both converging on the grip */}
+                <line x1="90" y1="75" x2="145" y2="90" stroke="#5eead4" strokeWidth={11} />
+                <line x1="100" y1="62" x2="145" y2="90" stroke="#5eead4" strokeWidth={11} />
+                {/* Bat: handle from the grip, blade continuing the same line */}
+                <line x1="145" y1="90" x2="164" y2="34" stroke="#5eead4" strokeWidth={9} />
+                <line x1="164" y1="34" x2="174" y2="6" stroke="#5eead4" strokeWidth={17} />
+                {/* Helmet */}
+                <circle cx="100" cy="40" r="20" fill="#5eead4" />
+                <path d="M83 31 Q100 18 117 29" stroke="#05070a" strokeWidth={4} fill="none" />
               </svg>
             </div>
             <div className="font-black text-xl uppercase mb-1">Rahul Deshmukh</div>

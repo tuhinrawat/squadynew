@@ -12,7 +12,7 @@ export function SiteFooter() {
     <footer className="border-t border-white/[0.07] mt-auto">
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-12 flex flex-wrap gap-10 justify-between">
         <div className="max-w-[280px]">
-          <Image src="/squady-logo.svg" alt="Squady" width={110} height={20} className="h-6 w-auto mb-3" />
+          <Image src="/squady-logo.svg" alt="Squady" width={110} height={20} className="h-6 w-auto mb-3 [filter:brightness(0)_invert(1)]" />
           <p className="text-[13px] text-white/45 leading-relaxed">
             Live cricket auction management — bidding, presenter stage, and fairness, in one place.
           </p>

@@ -58,7 +58,7 @@ export default function SignIn() {
       <div className="relative max-w-md w-full space-y-8">
         <div className="text-center">
           <Link href="/" className="inline-flex">
-            <Image src="/squady-logo.svg" alt="Squady" width={130} height={24} className="h-9 w-auto mx-auto" />
+            <Image src="/squady-logo.svg" alt="Squady" width={130} height={24} className="h-9 w-auto mx-auto [filter:brightness(0)_invert(1)]" />
           </Link>
           <h2 className="mt-6 text-2xl font-extrabold">
             Sign in to your account
