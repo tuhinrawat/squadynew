@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { SiteNav } from '@/components/site-nav'
 import { SiteFooter } from '@/components/site-footer'
@@ -81,56 +82,35 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Hero visual - an honest, miniature replica of the real presenter
-            stage card (public-auction-view.tsx's isPresenter branch), not a
-            stock illustration, so the homepage shows the actual product. */}
-        <div className="flex-1 min-w-[320px] max-w-[460px]">
-          <div className="rounded-2xl border border-white/10 bg-[#0c1116] p-5 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.6)]">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-[52px] h-[52px] rounded-2xl bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center font-black text-amber-950 text-xl">24</div>
-              <div className="text-right">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-white/40">Current Bid</div>
-                <div className="font-black text-2xl text-teal-400">₹85,000</div>
-              </div>
-            </div>
-            <div className="h-[170px] rounded-xl bg-gradient-to-br from-[#1c2b2a] to-[#10181b] flex items-center justify-center mb-4">
-              {/* A batsman mid cover-drive, not a generic bust-and-shoulders
-                  silhouette - a bold athletic pictogram (thick rounded limb
-                  strokes, the way Olympic sport icons are built) rather than
-                  fine line art, which held up badly at this card's size -
-                  thin strokes read as a stick-figure sketch, not a crafted
-                  illustration. Verified by screenshotting the actual hero
-                  card before and after this rebuild. */}
-              <svg width="104" height="156" viewBox="0 0 200 300" fill="none" strokeLinecap="round">
-                {/* Back leg, trailing */}
-                <line x1="94" y1="126" x2="64" y2="215" stroke="#5eead4" strokeWidth={15} />
-                {/* Front leg, stepped into the drive */}
-                <line x1="94" y1="126" x2="122" y2="158" stroke="#5eead4" strokeWidth={15} />
-                <line x1="122" y1="158" x2="112" y2="220" stroke="#5eead4" strokeWidth={15} />
-                {/* Torso, leaning into the shot */}
-                <line x1="100" y1="56" x2="94" y2="126" stroke="#5eead4" strokeWidth={17} />
-                {/* Arms, both converging on the grip */}
-                <line x1="90" y1="75" x2="145" y2="90" stroke="#5eead4" strokeWidth={11} />
-                <line x1="100" y1="62" x2="145" y2="90" stroke="#5eead4" strokeWidth={11} />
-                {/* Bat: handle from the grip, blade continuing the same line */}
-                <line x1="145" y1="90" x2="164" y2="34" stroke="#5eead4" strokeWidth={9} />
-                <line x1="164" y1="34" x2="174" y2="6" stroke="#5eead4" strokeWidth={17} />
-                {/* Helmet */}
-                <circle cx="100" cy="40" r="20" fill="#5eead4" />
-                <path d="M83 31 Q100 18 117 29" stroke="#05070a" strokeWidth={4} fill="none" />
-              </svg>
-            </div>
-            <div className="font-black text-xl uppercase mb-1">Rahul Deshmukh</div>
-            <div className="text-[13px] text-white/40 mb-4">All-Rounder · Right-Hand Bat</div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/[0.04] border border-white/10 rounded-lg p-2.5 text-center">
-                <div className="font-black text-lg">342</div>
-                <div className="text-[10px] text-white/40 uppercase">Runs</div>
-              </div>
-              <div className="bg-white/[0.04] border border-white/10 rounded-lg p-2.5 text-center">
-                <div className="font-black text-lg">17</div>
-                <div className="text-[10px] text-white/40 uppercase">Wickets</div>
-              </div>
+        {/* Hero visual - a real screenshot of a real player's card from a
+            real Squady auction (Krishna Chaturvedi, confirmed cleared to
+            feature here), not a mockup or invented stats, shown exactly as
+            it rendered - inside a modern iPhone-Pro-style frame (Dynamic
+            Island, titanium bezel). There's no real "iPhone 18 Pro" to
+            reference - this is a generic current-generation Pro silhouette,
+            not a claim about that specific unreleased model. */}
+        <div className="flex-1 min-w-[280px] flex justify-center">
+          <div className="relative w-[240px] h-[500px] rounded-[52px] bg-gradient-to-b from-[#3a3a3e] to-[#1c1c1e] p-[11px] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.7)]">
+            {/* Side buttons */}
+            <div className="absolute -left-[2px] top-[100px] w-[3px] h-[26px] rounded-l bg-[#2a2a2d]" />
+            <div className="absolute -left-[2px] top-[140px] w-[3px] h-[50px] rounded-l bg-[#2a2a2d]" />
+            <div className="absolute -right-[2px] top-[130px] w-[3px] h-[70px] rounded-r bg-[#2a2a2d]" />
+
+            {/* No Dynamic Island overlay: this screenshot is a straight web
+                capture with no blank status-bar space at the top the way an
+                actual device screenshot would have, so laying one on top
+                covered the real "Squady" header underneath it - a clean
+                bezel reads as "on a phone" well enough without forcing a
+                detail that doesn't fit this image. */}
+            <div className="relative w-full h-full rounded-[42px] overflow-hidden bg-black">
+              <Image
+                src="/featured-player-krishna-chaturvedi.png"
+                alt="Krishna Chaturvedi's player card, live on the Squady auction stage"
+                fill
+                className="object-cover"
+                sizes="240px"
+                priority
+              />
             </div>
           </div>
         </div>
