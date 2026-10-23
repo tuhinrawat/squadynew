@@ -193,37 +193,50 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
   const handleSaveEdit = async () => {
     if (!selectedAuction) return
 
-    // Ensure all required fields are included, even if they're 0 or empty
-    const rules = {
-      minBidIncrement: editFormData.minBidIncrement || 1000,
-      countdownSeconds: editFormData.countdownSeconds || 15,
-      maxTeamSize: editFormData.maxTeamSize ? Number(editFormData.maxTeamSize) : null,
-      enforcePurse: editFormData.enforcePurse !== undefined ? editFormData.enforcePurse : true,
-      iconPlayerCount: editFormData.iconPlayerCount !== undefined ? Number(editFormData.iconPlayerCount) : 10,
-      mandatoryTeamSize: editFormData.mandatoryTeamSize || 12,
-      bidderCount: editFormData.bidderCount !== undefined ? Number(editFormData.bidderCount) : 10
-    }
-
     try {
-      // Prepare request body
-      const requestBody: any = {
-        name: editFormData.name,
-        description: editFormData.description,
-        image: editFormData.image || null,
-        rules: rules
-      }
-
-      // Only include scheduledStartDate if both date and time are provided
-      if (editFormData.scheduledStartDate && editFormData.scheduledStartTime) {
-        try {
-          requestBody.scheduledStartDate = new Date(`${editFormData.scheduledStartDate}T${editFormData.scheduledStartTime}`).toISOString()
-        } catch (dateError) {
-          console.error('Error creating date:', dateError)
-          // If date creation fails, don't include it
+      // A COMPLETED auction only allows editing the cosmetic metadata - the
+      // API enforces this too (it's the real guarantee), but there's no
+      // reason to even send rules/schedule reconstructed from editFormData
+      // for an auction whose actual rules this dialog doesn't let anyone
+      // touch.
+      let requestBody: any
+      if (selectedAuction.status === 'COMPLETED') {
+        requestBody = {
+          name: editFormData.name,
+          description: editFormData.description,
+          image: editFormData.image || null,
         }
-      } else if (editFormData.scheduledStartDate || editFormData.scheduledStartTime) {
-        // If only one is provided, clear it by sending null
-        requestBody.scheduledStartDate = null
+      } else {
+        // Ensure all required fields are included, even if they're 0 or empty
+        const rules = {
+          minBidIncrement: editFormData.minBidIncrement || 1000,
+          countdownSeconds: editFormData.countdownSeconds || 15,
+          maxTeamSize: editFormData.maxTeamSize ? Number(editFormData.maxTeamSize) : null,
+          enforcePurse: editFormData.enforcePurse !== undefined ? editFormData.enforcePurse : true,
+          iconPlayerCount: editFormData.iconPlayerCount !== undefined ? Number(editFormData.iconPlayerCount) : 10,
+          mandatoryTeamSize: editFormData.mandatoryTeamSize || 12,
+          bidderCount: editFormData.bidderCount !== undefined ? Number(editFormData.bidderCount) : 10
+        }
+
+        requestBody = {
+          name: editFormData.name,
+          description: editFormData.description,
+          image: editFormData.image || null,
+          rules: rules
+        }
+
+        // Only include scheduledStartDate if both date and time are provided
+        if (editFormData.scheduledStartDate && editFormData.scheduledStartTime) {
+          try {
+            requestBody.scheduledStartDate = new Date(`${editFormData.scheduledStartDate}T${editFormData.scheduledStartTime}`).toISOString()
+          } catch (dateError) {
+            console.error('Error creating date:', dateError)
+            // If date creation fails, don't include it
+          }
+        } else if (editFormData.scheduledStartDate || editFormData.scheduledStartTime) {
+          // If only one is provided, clear it by sending null
+          requestBody.scheduledStartDate = null
+        }
       }
 
       const response = await fetch(`/api/auctions/${selectedAuction.id}`, {
@@ -1069,11 +1082,130 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
                 </div>
               </div>
             </div>
+          ) : selectedAuction && selectedAuction.status === 'COMPLETED' ? (
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  This auction is completed - its rules, schedule and results are locked in. You can still update the name, description, and cover image.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Auction Name *</Label>
+                <Input
+                  id="edit-name"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                  placeholder="Enter auction name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                  rows={3}
+                  placeholder="Enter auction description (optional)"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-image">Auction Logo</Label>
+
+                {!editFormData.image ? (
+                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+                    <input
+                      id="edit-image"
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={isUploadingImage}
+                    />
+                    <label
+                      htmlFor="edit-image"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      {isUploadingImage ? (
+                        <>
+                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-gray-100"></div>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Uploading...</p>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-12 w-12 text-gray-400" />
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-500">
+                            PNG, JPG, GIF or WebP (max 2MB)
+                          </p>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                ) : (
+                  <div className="relative border-2 border-gray-300 dark:border-gray-600 rounded-lg p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="relative w-32 h-32 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                        <Image
+                          src={editFormData.image}
+                          alt="Auction logo"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          Auction Logo
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          This logo will appear on the timer page and in social media previews
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={removeImage}
+                        className="flex-shrink-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {imageUploadError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{imageUploadError}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-md text-sm">
+                  {selectedAuction.status}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Statistics</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-md">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Players</div>
+                    <div className="text-lg font-semibold">{selectedAuction._count.players}</div>
+                  </div>
+                  <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-md">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Bidders</div>
+                    <div className="text-lg font-semibold">{selectedAuction._count.bidders}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : selectedAuction ? (
             <div className="space-y-4">
               <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
                 <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                  You can only edit auctions that are in DRAFT status. This auction has already been started or published.
+                  You can only edit a DRAFT auction&apos;s full details. A COMPLETED auction can still have its name, description, and image updated. This auction is currently {selectedAuction.status}.
                 </p>
               </div>
               <div className="space-y-2">
@@ -1115,7 +1247,7 @@ export function AuctionsTable({ auctions }: AuctionsTableProps) {
             </Button>
             <Button 
               onClick={handleSaveEdit}
-              disabled={selectedAuction?.status !== 'DRAFT'}
+              disabled={selectedAuction?.status !== 'DRAFT' && selectedAuction?.status !== 'COMPLETED'}
             >
               Save Changes
             </Button>

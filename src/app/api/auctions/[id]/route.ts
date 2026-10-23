@@ -87,9 +87,18 @@ export async function PUT(
       )
     }
 
+    // A completed auction is a historical record - its rules, schedule,
+    // publish/registration flags and status are what actually happened and
+    // must stay frozen. Only the cosmetic metadata (name, description,
+    // cover image) can still be touched, e.g. to fix a typo or swap the
+    // photo, same as the dashboard's own edit dialog now allows for a
+    // COMPLETED auction. This is the enforcement point - the dialog not
+    // sending the other fields is only a convenience, not the guarantee.
+    const isCompletedAuction = existingAuction.status === 'COMPLETED'
+
     // Prepare update data
     const updateData: any = {}
-    
+
     if (name) {
       updateData.name = name
       // Regenerate slug if name changes
@@ -114,34 +123,37 @@ export async function PUT(
     }
     if (description !== undefined) updateData.description = description
     if (image !== undefined) updateData.image = image
-    if (rules) {
-      // Merge rules with existing rules to preserve any fields not being updated
-      const existingRules = (existingAuction.rules as any) || {}
-      updateData.rules = { ...existingRules, ...rules } as any
-    }
-    if (status) updateData.status = status
-    if (isPublished !== undefined) updateData.isPublished = isPublished
-    if (registrationOpen !== undefined) updateData.registrationOpen = registrationOpen
-    if (customFields !== undefined) updateData.customFields = customFields as any
-    if (columnOrder !== undefined) updateData.columnOrder = columnOrder as any
-    if (visibleColumns !== undefined) updateData.visibleColumns = visibleColumns as any
-    if (analyticsVisibleColumns !== undefined) updateData.analyticsVisibleColumns = analyticsVisibleColumns as any
-    
-    // Handle scheduledStartDate safely - only include if column exists
-    if (scheduledStartDate !== undefined) {
-      try {
-        // Only try to set if we have a valid date string or null
-        if (scheduledStartDate === null || scheduledStartDate === '') {
-          updateData.scheduledStartDate = null
-        } else {
-          const date = new Date(scheduledStartDate)
-          if (!isNaN(date.getTime())) {
-            updateData.scheduledStartDate = date
+
+    if (!isCompletedAuction) {
+      if (rules) {
+        // Merge rules with existing rules to preserve any fields not being updated
+        const existingRules = (existingAuction.rules as any) || {}
+        updateData.rules = { ...existingRules, ...rules } as any
+      }
+      if (status) updateData.status = status
+      if (isPublished !== undefined) updateData.isPublished = isPublished
+      if (registrationOpen !== undefined) updateData.registrationOpen = registrationOpen
+      if (customFields !== undefined) updateData.customFields = customFields as any
+      if (columnOrder !== undefined) updateData.columnOrder = columnOrder as any
+      if (visibleColumns !== undefined) updateData.visibleColumns = visibleColumns as any
+      if (analyticsVisibleColumns !== undefined) updateData.analyticsVisibleColumns = analyticsVisibleColumns as any
+
+      // Handle scheduledStartDate safely - only include if column exists
+      if (scheduledStartDate !== undefined) {
+        try {
+          // Only try to set if we have a valid date string or null
+          if (scheduledStartDate === null || scheduledStartDate === '') {
+            updateData.scheduledStartDate = null
+          } else {
+            const date = new Date(scheduledStartDate)
+            if (!isNaN(date.getTime())) {
+              updateData.scheduledStartDate = date
+            }
           }
+        } catch (dateError) {
+          console.error('Error parsing scheduledStartDate:', dateError)
+          // Don't include scheduledStartDate in update if parsing fails
         }
-      } catch (dateError) {
-        console.error('Error parsing scheduledStartDate:', dateError)
-        // Don't include scheduledStartDate in update if parsing fails
       }
     }
 
